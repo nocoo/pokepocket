@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1 accepted; B2 is next. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1 accepted; B2 assigned. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -187,7 +187,7 @@ findings through additional atomic fixes, and commits the final implementation/e
 | Batch | State    | Implementation commits | Review and evidence                                                                                       |
 | ----- | -------- | ---------------------- | --------------------------------------------------------------------------------------------------------- |
 | B1    | Accepted | `59bbfa2`, `d89ff9d`   | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below |
-| B2    | Pending  | —                      | —                                                                                                         |
+| B2    | Assigned | —                      | Snapshot/modal state and cartridge orchestration assigned after B1 acceptance                             |
 | B3    | Pending  | —                      | —                                                                                                         |
 | B4    | Pending  | —                      | —                                                                                                         |
 | B5    | Pending  | —                      | —                                                                                                         |
