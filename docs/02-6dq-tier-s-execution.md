@@ -138,8 +138,8 @@ blocks the gate; measure the combined hook runtime. **Milestone: Tier B.**
     - Test endpoint inventory completeness, occupied-port failure, readiness failure, and cleanup.
 
 Review: inspect runtime configuration and every request path, proving no direct handler/`SELF.fetch`
-substitution or development bypass. L2 owns loopback 17047; refuse conflicts with the existing preview
-instead of reusing/killing it. Isolate runtime state in temporary directories. Retain development
+substitution or development bypass. L2 owns loopback 17048; refuse any listener conflict rather than
+reusing/killing it. Keep the existing preview on 17047. Isolate runtime state in temporary directories. Retain development
 plugin HTTP regressions separately.
 
 ### B6 — security and pre-push enforcement
@@ -304,3 +304,6 @@ ordering, and preserve cancelled-picker and modal resume behavior. Keep existing
   snapshot intact. B3 must abort this transaction and verify a clean retry. The probe closed its
   browser context and listener and never used the daily development origin or user browser profile.
 - No work estimates are stored in this numbered implementation document.
+- 2026-09-06, B5 preparation: the original L2 port 17047 is occupied by an existing Vite preview.
+  Reserve 17048 for L2, preserving the preview, dev/Caddy on 7047, and L3 on 27047. This supersedes
+  the port choice in the historical assessment; it does not relax ownership or occupied-port guards.
