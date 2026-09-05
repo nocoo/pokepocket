@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. No implementation batch has been accepted yet.
+Status: in progress. B1 accepted; B2 is next. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -26,6 +26,8 @@ reviewing every batch, maintaining numbered documentation, and independently val
   While implementation runs, prepare the next review and independent verification work.
 - Preserve the daily development server on 7047 and its Caddy domain. Test runners own only their own
   temporary processes, ports, directories, and browser contexts.
+- Browser verification starts only after the implementer has explicitly stopped. Use a separate
+  output directory for independent review; B7 must reject concurrent runs before clearing artifacts.
 
 Documentation is committed before implementation begins. After each accepted batch, Codex updates
 the ledger and any changed design decisions in a separate documentation commit. Final documentation
@@ -43,10 +45,9 @@ must describe the implemented files and measured evidence, not leave proposed wo
 | D1        | Cloud persistence rules remain N/A while no remote state exists; local tests use owned loopback services and isolated storage/context instances        |
 
 The four coverage metrics are the project convention adopted from the assessment; nmem itself states
-
-> =90% without naming metrics. Do not reduce thresholds, omit uncovered modules, or add broad ignores
-> to obtain a green result. A view exclusion requires extracted behavior and a recorded file-level
-> justification. Third-party WASM, generated declarations, fixtures, and build output are outside L1.
+`>=90%` without naming metrics. Do not reduce thresholds, omit uncovered modules, or add broad ignores
+to obtain a green result. A view exclusion requires extracted behavior and a recorded file-level
+justification. Third-party WASM, generated declarations, fixtures, and build output are outside L1.
 
 Application-owned authorization must be tested with real signature verification and through an
 authorized browser load. Cloudflare's hosted identity provider is a separate boundary: verify the
@@ -183,16 +184,50 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State    | Implementation commits | Review and evidence                                  |
-| ----- | -------- | ---------------------- | ---------------------------------------------------- |
-| B1    | Assigned | —                      | Baseline and strict G1 implementation assigned to pi |
-| B2    | Pending  | —                      | —                                                    |
-| B3    | Pending  | —                      | —                                                    |
-| B4    | Pending  | —                      | —                                                    |
-| B5    | Pending  | —                      | —                                                    |
-| B6    | Pending  | —                      | —                                                    |
-| B7    | Pending  | —                      | —                                                    |
-| B8    | Pending  | —                      | —                                                    |
+| Batch | State    | Implementation commits | Review and evidence                                                                                       |
+| ----- | -------- | ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| B1    | Accepted | `59bbfa2`, `d89ff9d`   | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below |
+| B2    | Pending  | —                      | —                                                                                                         |
+| B3    | Pending  | —                      | —                                                                                                         |
+| B4    | Pending  | —                      | —                                                                                                         |
+| B5    | Pending  | —                      | —                                                                                                         |
+| B6    | Pending  | —                      | —                                                                                                         |
+| B7    | Pending  | —                      | —                                                                                                         |
+| B8    | Pending  | —                      | —                                                                                                         |
+
+### B1 review evidence
+
+Reviewed implementation: `d89ff9d`. The explicit coverage inventory in
+[vitest.config.ts](../vitest.config.ts) includes all 25 first-party executable files in `src/`,
+`worker/`, and maintained `scripts/`, including unimported modules. Only declarations are excluded;
+there are no logic or view exemptions. Coverage remains diagnostic until B4.
+
+| Revision                            | Statements | Branches | Functions | Lines  |
+| ----------------------------------- | ---------- | -------- | --------- | ------ |
+| Initial inventory, `59bbfa2`        | 20.76%     | 19.70%   | 15.40%    | 20.81% |
+| After strict-check fixes, `d89ff9d` | 20.87%     | 19.55%   | 15.36%    | 21.13% |
+
+Independent checks on 2026-09-06:
+
+- `bun run test:coverage`: 74 tests across eight files pass; 0.54 seconds wall time.
+- `bun run quality:g1`: Biome 2.5.12 checks 51 files, with zero errors/warnings; strict TypeScript 7
+  and Prettier pass. Combined wall time: 1.42 seconds. No hook is active yet.
+- `bun run build`: production Worker/client build and both no-ROM distribution checks pass.
+- Existing core browser review: 11 passed, zero failed/skipped, in 36.0 seconds. This covers key
+  bindings/preferences, import/reload, invalid ROMs, mobile layout, snapshot confirmation/CRUD/retry,
+  native save previews, GB/GBC 1080p export, and catalog navigation. The reviewed command was
+  `bun run test:e2e --grep-invert 'selects bundled|runs the real Emerald|importing a battery save|runs real Pokémon|keeps each platform' --reporter=line --output=/tmp/pokepocket-b1-independent-20260906`.
+  This is a B1 regression checkpoint; mandatory, fully fixture-owned L3 remains B7 work.
+
+Review corrections retained Cancel autofocus, reset new fieldset geometry, removed the broad
+`noFocusedTests` override by renaming the console resize callback, and restored browser-side
+`page.evaluate` in keyboard preference assertions. The two explained local lint exceptions cover
+whole-page file dropping and the confirmation dialog's deliberate Cancel autofocus.
+
+An overlapping implementation/review browser run initially collided in `test-results` and produced
+a trace cleanup error. Both runners stopped; the independent run above used a separate output
+directory and passed. The working agreement now requires an explicit browser handoff, and B7 owns
+the automated port/concurrency guards. This incident is not counted as passing evidence.
 
 ## 5. Final acceptance record
 
