@@ -320,6 +320,27 @@ export class PocketEmulator {
     if (this.state.status === 'paused') this.resume();
   }
 
+  async deleteSlot(snapshot: Snapshot) {
+    const pending = this.saveQueue.then(async () => {
+      const core = this.core;
+      const cartridge = this.state.cartridge;
+      if (!core || snapshot.romId !== cartridge?.id)
+        throw new Error('这份即时存档不属于当前卡带。');
+      if (![1, 2, 3].includes(snapshot.slot)) throw new Error('只能清除手动即时存档。');
+
+      const key = `${cartridge.id}:${snapshot.slot}`;
+      await storage.deleteSnapshot(key);
+      this.update({ snapshots: this.state.snapshots.filter((item) => item.key !== key) });
+
+      // Remove the core's persisted copy too, so clearing a slot survives a reload.
+      const path = `${core.filePaths().saveStatePath}/${cartridge.id}.ss${snapshot.slot}`;
+      if (core.FS.analyzePath(path).exists) core.FS.unlink(path);
+      await core.FSSync();
+    });
+    this.saveQueue = pending.catch(() => {});
+    return pending;
+  }
+
   async exportBattery(): Promise<ArrayBuffer> {
     await this.persist();
     const battery = this.state.cartridge ? await storage.getBattery(this.state.cartridge.id) : null;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 export function Modal({
@@ -7,14 +7,19 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  dismissible = true,
+  descriptionId,
 }: {
   title: string;
   eyebrow: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  dismissible?: boolean;
+  descriptionId?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const element = dialog.current;
     element?.showModal();
@@ -24,22 +29,28 @@ export function Modal({
     <dialog
       ref={dialog}
       className={`modal ${wide ? 'modal-wide' : ''}`}
-      aria-labelledby="modal-title"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        if (dismissible) onClose();
       }}
       onClick={(event) => {
-        if (event.target === dialog.current) onClose();
+        if (dismissible && event.target === dialog.current) onClose();
       }}
     >
       <div className="modal-content">
         <div className="modal-heading">
           <div>
             <span className="eyebrow">{eyebrow}</span>
-            <h2 id="modal-title">{title}</h2>
+            <h2 id={titleId}>{title}</h2>
           </div>
-          <button className="icon-button" aria-label="关闭窗口" onClick={onClose}>
+          <button
+            className="icon-button"
+            aria-label="关闭窗口"
+            disabled={!dismissible}
+            onClick={onClose}
+          >
             <X size={20} />
           </button>
         </div>

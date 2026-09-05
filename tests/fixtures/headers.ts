@@ -29,9 +29,23 @@ export function gbaFixture(code = 'BPEE') {
   return bytes;
 }
 
-/** Original GB instructions draw a repeating tile. No game ROM is used by CI. */
-export function playableFixture() {
-  const bytes = gbFixture();
+/** Original GB/GBC instructions draw a repeating tile. No game ROM is used by CI. */
+export function playableFixture(color = false) {
+  const bytes = gbFixture('POKEMON RED', color);
+  const palette = color
+    ? [
+        0x3e,
+        0x80,
+        0xe0,
+        0x68, // Select the CGB background palette with auto-increment.
+        ...[0xff, 0x7f, 0x00, 0x00, 0xff, 0x7f, 0x00, 0x00].flatMap((value) => [
+          0x3e,
+          value,
+          0xe0,
+          0x69, // Write alternating white/black RGB555 colors.
+        ]),
+      ]
+    : [];
   bytes.set([0xc3, 0x50, 0x01, 0x00], 0x100); // JP $0150
   bytes.set(
     [
@@ -42,6 +56,7 @@ export function playableFixture() {
       0xaf,
       0xe0,
       0x40, // XOR A; turn LCD off
+      ...palette,
       0x3e,
       0xe4,
       0xe0,

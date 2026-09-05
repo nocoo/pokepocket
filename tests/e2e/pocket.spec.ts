@@ -75,6 +75,7 @@ test('runs the real Emerald ROM and restores an actual state after reloading', a
   await expect(page.getByRole('status')).toContainText('已继续上次的冒险');
   await expect(page.getByAltText('即时存档 1 的游戏画面')).toHaveAttribute('src', thumbnail!);
   await page.getByRole('button', { name: '读取即时存档 1', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '确认读取', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('欢迎回来');
   await expect
     .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0'))
@@ -111,8 +112,8 @@ test('runs the real Emerald ROM and restores an actual state after reloading', a
   const png = await downloaded;
   const data = await readFile((await png.path())!);
   expect(data.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
-  expect(data.readUInt32BE(16)).toBe(240);
-  expect(data.readUInt32BE(20)).toBe(160);
+  expect(data.readUInt32BE(16)).toBe(1620);
+  expect(data.readUInt32BE(20)).toBe(1080);
   expect(errors).toEqual([]);
 });
 

@@ -6,7 +6,7 @@ import {
   LoaderCircle,
   Play,
 } from 'lucide-react';
-import type { CSSProperties, ReactNode, RefObject } from 'react';
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import type { PokemonEdition } from '../lib/catalog';
 import type { GameSystem } from '../lib/rom-header';
 import type { EmulatorStatus } from '../lib/emulator';
@@ -21,6 +21,7 @@ interface ConsoleProps {
   input: InputController;
   pressed: Set<GameButton>;
   hasCartridge: boolean;
+  expanded: boolean;
   onStart: () => void;
   onResume: () => void;
 }
@@ -86,14 +87,44 @@ export function Console({
   input,
   pressed,
   hasCartridge,
+  expanded,
   onStart,
   onResume,
 }: ConsoleProps) {
+  const consoleRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const device = consoleRef.current;
+    const viewport = device?.parentElement;
+    if (!expanded || !device || !viewport) return;
+
+    const fit = () => {
+      const padding = getComputedStyle(viewport);
+      const width =
+        viewport.clientWidth - parseFloat(padding.paddingLeft) - parseFloat(padding.paddingRight);
+      const height =
+        viewport.clientHeight - parseFloat(padding.paddingTop) - parseFloat(padding.paddingBottom);
+      if (width <= 0 || height <= 0 || !device.offsetWidth || !device.offsetHeight) return;
+
+      // Measure before transforms so resizing cannot feed back into the scale.
+      const scale = Math.min(width / device.offsetWidth, height / device.offsetHeight);
+      device.style.setProperty('--console-scale', String(scale));
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(viewport);
+    observer.observe(device);
+    fit();
+    return () => {
+      observer.disconnect();
+      device.style.removeProperty('--console-scale');
+    };
+  }, [expanded]);
+
   const active = status === 'running';
   const controls = { input, pressed, active };
   const showBoot = status === 'idle' || status === 'error' || status === 'loading';
   return (
     <div
+      ref={consoleRef}
       className={`console-wrap system-${system.toLowerCase()}`}
       style={{ '--edition-color': edition?.color ?? '#5b8858' } as CSSProperties}
     >

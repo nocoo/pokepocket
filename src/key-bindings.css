@@ -68,21 +68,21 @@
   white-space: nowrap;
   box-shadow: 0 1px 2px #4861360d;
 }
-.binding-key:hover {
+.binding-key:where(:hover, :focus-visible):not(:disabled) {
   background: #f7f6e9;
   border-color: #a6b68f;
 }
 .binding-key.empty-key {
-  color: #a3af96;
+  color: #5b6e49;
   background: #e9eedf;
   border-style: dashed;
   border-bottom-width: 1px;
 }
 .binding-key.is-listening {
   color: #fffef5;
-  border-color: #617c4f;
-  background: #718e60;
-  box-shadow: 0 0 0 3px #718e6026;
+  border-color: #3b5730;
+  background: #48663b;
+  box-shadow: 0 0 0 3px #48663b26;
 }
 .remove-binding {
   position: absolute;
@@ -98,7 +98,7 @@
   height: 15px;
   padding: 0;
 }
-.remove-binding:hover {
+.remove-binding:is(:hover, :focus-visible):not(:disabled) {
   background: #eee6d8;
   color: #8b5845;
 }

@@ -54,6 +54,7 @@ import {
 } from './lib/catalog';
 import { Modal } from './components/Modal';
 import { SaveSlots } from './components/SaveSlots';
+import { SnapshotConfirmation, type SnapshotAction } from './components/SnapshotConfirmation';
 import {
   cartridgeTitle,
   readCartridge,
@@ -65,9 +66,15 @@ import { BUTTONS, InputController, gamepadButtons, isEditing, type GameButton } 
 import { bindingText, keyLabel, keyMap } from './lib/key-bindings';
 import { loadSettings, type Settings } from './lib/settings';
 import { download, storage, type Snapshot } from './lib/storage';
+import { upscaleScreenshot } from './lib/screenshot';
 
-type ModalName = 'settings' | 'saves' | 'help' | 'restart' | 'import-save' | null;
+type ModalName = 'settings' | 'saves' | 'help' | 'restart' | 'import-save' | 'snapshot' | null;
 type Toast = { text: string; error: boolean; id: number };
+type PendingSnapshot = {
+  action: SnapshotAction;
+  snapshot: Snapshot;
+  returnTo: 'saves' | null;
+};
 
 function playTime(seconds: number) {
   const h = Math.floor(seconds / 3600)
@@ -130,6 +137,8 @@ export default function App() {
   const [fullscreen, setFullscreen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [pendingSave, setPendingSave] = useState<{ data: ArrayBuffer; name: string } | null>(null);
+  const [pendingSnapshot, setPendingSnapshot] = useState<PendingSnapshot | null>(null);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLElement>(null);
   const romInput = useRef<HTMLInputElement>(null);
@@ -529,16 +538,60 @@ export default function App() {
     };
   }, [emulator, input, modal, view]);
 
+  const requestSnapshotAction = (action: SnapshotAction, snapshot: Snapshot) => {
+    if (busy || !active) return;
+    setPendingSnapshot({ action, snapshot, returnTo: modal === 'saves' ? 'saves' : null });
+    setSnapshotError(null);
+    // The saves manager already paused and checkpointed the game. Keep its
+    // original resume intent when moving between it and a confirmation dialog.
+    if (modal === 'saves') setModal('snapshot');
+    else openModal('snapshot');
+  };
+
+  const closeSnapshotConfirmation = () => {
+    if (busy) return;
+    setPendingSnapshot(null);
+    setSnapshotError(null);
+    if (pendingSnapshot?.returnTo === 'saves') setModal('saves');
+    else closeModal();
+  };
+
+  const confirmSnapshotAction = async () => {
+    if (busy || !pendingSnapshot) return;
+    const { action, snapshot, returnTo } = pendingSnapshot;
+    setBusy(true);
+    setSnapshotError(null);
+    try {
+      if (snapshot.romId !== emulator.getSnapshot().cartridge?.id)
+        throw new Error('当前卡带已切换，请重新选择即时存档。');
+      if (action === 'load') await emulator.loadSlot(snapshot);
+      else if (action === 'replace') await emulator.saveSlot(snapshot.slot);
+      else await emulator.deleteSlot(snapshot);
+
+      setPendingSnapshot(null);
+      if (action !== 'load' && returnTo === 'saves') setModal('saves');
+      else closeModal();
+      if (action === 'load') setView('play');
+      notify(
+        action === 'load'
+          ? '欢迎回来，接着冒险吧。'
+          : `即时存档 0${snapshot.slot} 已${action === 'replace' ? '替换为当前进度' : '清除'}`,
+      );
+    } catch (error) {
+      setSnapshotError(message(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const saveSlot = (slot: number) => {
-    void run(() => emulator.saveSlot(slot), `冒险已记录在存档 0${slot}`);
+    if (busy || !active) return;
+    const snapshot = game.snapshots.find((item) => item.slot === slot);
+    if (snapshot) requestSnapshotAction('replace', snapshot);
+    else void run(() => emulator.saveSlot(slot), `冒险已记录在存档 0${slot}`);
   };
-  const loadSlot = (snapshot: Snapshot) => {
-    void run(async () => {
-      await emulator.loadSlot(snapshot);
-      closeModal();
-      setView('play');
-    }, '欢迎回来，接着冒险吧。');
-  };
+  const loadSlot = (snapshot: Snapshot) => requestSnapshotAction('load', snapshot);
+  const deleteSlot = (snapshot: Snapshot) => requestSnapshotAction('delete', snapshot);
   const exportSave = () => {
     void run(async () => {
       const data = await emulator.exportBattery();
@@ -550,9 +603,9 @@ export default function App() {
   const screenshot = () => {
     void run(async () => {
       const url = emulator.screenshot();
-      const blob = await (await fetch(url)).blob();
+      const blob = await upscaleScreenshot(url);
       download(blob, `pocket-${new Date().toISOString().replace(/[:.]/g, '-')}.png`, 'image/png');
-    }, '这一刻，已经留下了。');
+    }, '1080p 截图已保存，这一刻留下了。');
   };
 
   return (
@@ -777,18 +830,21 @@ export default function App() {
                 </span>
               </div>
             </div>
-            <Console
-              edition={edition}
-              system={current?.header.system ?? preferredEdition.system}
-              canvasRef={canvasRef}
-              status={!active && busy ? 'loading' : game.status}
-              filter={settings.filter}
-              input={input}
-              pressed={pressed}
-              hasCartridge={Boolean(selected || localAvailable)}
-              onStart={startAdventure}
-              onResume={() => emulator.resume()}
-            />
+            <div className="console-viewport">
+              <Console
+                edition={edition}
+                system={current?.header.system ?? preferredEdition.system}
+                canvasRef={canvasRef}
+                status={!active && busy ? 'loading' : game.status}
+                filter={settings.filter}
+                input={input}
+                pressed={pressed}
+                hasCartridge={Boolean(selected || localAvailable)}
+                expanded={fullscreen || focusMode}
+                onStart={startAdventure}
+                onResume={() => emulator.resume()}
+              />
+            </div>
             <div className="stage-toolbar">
               <div className="toolbar-group">
                 <button
@@ -869,7 +925,7 @@ export default function App() {
                   onClick={screenshot}
                   disabled={!active || busy}
                   aria-label="保存游戏截图"
-                  title="保存截图"
+                  title="保存 1080p 截图"
                 >
                   <Download size={17} />
                 </button>
@@ -953,6 +1009,7 @@ export default function App() {
                 busy={busy}
                 onSave={saveSlot}
                 onLoad={loadSlot}
+                onDelete={deleteSlot}
               />
               <div className="saves-footnote">
                 <span>
@@ -1087,6 +1144,7 @@ export default function App() {
             busy={busy}
             onSave={saveSlot}
             onLoad={loadSlot}
+            onDelete={deleteSlot}
           />
           <div className="autosave-row">
             <span className="autosave-icon">
@@ -1134,6 +1192,18 @@ export default function App() {
             <span>进度保存在当前浏览器。换设备或清理浏览器数据前，请导出 .sav 存档。</span>
           </div>
         </Modal>
+      )}
+
+      {modal === 'snapshot' && pendingSnapshot && (
+        <SnapshotConfirmation
+          action={pendingSnapshot.action}
+          snapshot={pendingSnapshot.snapshot}
+          gameTitle={title}
+          busy={busy}
+          error={snapshotError}
+          onClose={closeSnapshotConfirmation}
+          onConfirm={() => void confirmSnapshotAction()}
+        />
       )}
 
       {modal === 'help' && (

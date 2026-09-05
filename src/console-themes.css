@@ -15,7 +15,7 @@
   --shell-edge: color-mix(in srgb, var(--edition-color) 75%, #8b9b80);
   --shell-ink: color-mix(in srgb, var(--edition-color) 65%, #5b6e59);
   --bezel: color-mix(in srgb, var(--edition-color) 25%, #28352f);
-  --button-face: color-mix(in srgb, var(--edition-color) 78%, #6a7f57);
+  --button-face: color-mix(in srgb, var(--edition-color) 60%, #203626);
   --button-edge: color-mix(in srgb, var(--edition-color) 60%, #203626);
 }
 .console-wrap .console-shell {
@@ -44,7 +44,7 @@
 .console-wrap .shoulder {
   background: linear-gradient(#f2f0e5, var(--shell-shade));
   border-color: var(--shell-edge);
-  color: var(--shell-ink);
+  color: #294138;
 }
 .console-wrap .shoulder:disabled {
   opacity: 1;
@@ -84,7 +84,7 @@
     var(--button-face),
     color-mix(in srgb, var(--button-face) 87%, #263826)
   );
-  color: color-mix(in srgb, var(--edition-color) 20%, #f7f5e4);
+  color: #f7f5e4;
   border-color: var(--button-edge);
   text-shadow: 0 1px 0 #19322180;
   box-shadow:
@@ -138,17 +138,14 @@
 .pocket-app .region-stamp {
   color: color-mix(in srgb, var(--edition-color) 60%, #88977b);
 }
-.pocket-app .play-toggle {
-  color: var(--deep);
-  background: color-mix(in srgb, var(--edition-color) 13%, #f7f7ed);
-}
 .pocket-app .mobile-controls .action-a,
 .pocket-app .mobile-controls .action-b {
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--edition-color) 75%, #e5e8d0),
-    var(--edition-color)
+    color-mix(in srgb, var(--edition-color) 60%, #203626),
+    color-mix(in srgb, var(--edition-color) 55%, #203626)
   );
+  color: #f7f5e4;
   border-color: color-mix(in srgb, var(--edition-color) 75%, #203a2b);
   box-shadow:
     inset 1px 1px #ffffff3d,
@@ -444,22 +441,5 @@
   }
   .console-wrap:is(.system-gb, .system-gbc) .screen-frame-top {
     font-size: 3px;
-  }
-}
-.game-stage:is(:fullscreen, .focus-mode) .console-wrap:is(.system-gb, .system-gbc) {
-  max-width: min(358px, calc((100dvh - 120px) * 0.62));
-  margin: 44px auto 0;
-}
-@media (max-height: 700px) {
-  .game-stage:is(:fullscreen, .focus-mode)
-    .console-wrap:is(.system-gb, .system-gbc)
-    .console-shell {
-    grid-template-rows: auto;
-  }
-  .game-stage:is(:fullscreen, .focus-mode) .console-wrap:is(.system-gb, .system-gbc) .console-left,
-  .game-stage:is(:fullscreen, .focus-mode)
-    .console-wrap:is(.system-gb, .system-gbc)
-    .console-right {
-    display: none;
   }
 }

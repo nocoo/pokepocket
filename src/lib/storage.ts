@@ -115,6 +115,14 @@ export const storage = {
       db.close();
     }
   },
+  async deleteSnapshot(key: string) {
+    const db = await database();
+    try {
+      await db.delete('snapshots', key);
+    } finally {
+      db.close();
+    }
+  },
 };
 
 export function copyBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -128,7 +136,7 @@ export function download(data: BlobPart, name: string, type = 'application/octet
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = name;
-  document.body.append(anchor);
+  document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);

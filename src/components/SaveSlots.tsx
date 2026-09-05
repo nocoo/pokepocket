@@ -7,12 +7,14 @@ export function SaveSlots({
   busy,
   onSave,
   onLoad,
+  onDelete,
 }: {
   snapshots: Snapshot[];
   active: boolean;
   busy: boolean;
   onSave: (slot: number) => void;
   onLoad: (snapshot: Snapshot) => void;
+  onDelete: (snapshot: Snapshot) => void;
 }) {
   return (
     <div className="save-slots">
@@ -51,20 +53,30 @@ export function SaveSlots({
                     })
                   : '空白存档'}
               </span>
-              {snapshot ? (
+              {snapshot ? <Save size={12} /> : <Bookmark size={12} />}
+            </div>
+            {snapshot && (
+              <div className="save-slot-actions">
                 <button
-                  className="tiny-icon"
+                  className="save-slot-action"
                   disabled={!active || busy}
                   onClick={() => onSave(slot)}
-                  aria-label={`覆盖即时存档 ${slot}`}
-                  title="更新这份即时存档"
+                  aria-label={`替换即时存档 ${slot}`}
+                  title="用当前游戏进度替换这份即时存档"
                 >
-                  <Save size={13} />
+                  替换
                 </button>
-              ) : (
-                <Bookmark size={12} />
-              )}
-            </div>
+                <button
+                  className="save-slot-action save-slot-delete"
+                  disabled={!active || busy}
+                  onClick={() => onDelete(snapshot)}
+                  aria-label={`清除即时存档 ${slot}`}
+                  title="清除这份即时存档"
+                >
+                  清除
+                </button>
+              </div>
+            )}
           </div>
         );
       })}

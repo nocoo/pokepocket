@@ -869,8 +869,8 @@
   padding: 16px 20px;
   background: linear-gradient(
     125deg,
-    color-mix(in srgb, var(--edition-color) 84%, #4c6450),
-    color-mix(in srgb, var(--edition-color) 70%, #203e30)
+    color-mix(in srgb, var(--edition-color) 70%, #203e30),
+    color-mix(in srgb, var(--edition-color) 60%, #172e23)
   );
   border: 1px solid color-mix(in srgb, var(--edition-color) 70%, #173421);
   border-top-color: color-mix(in srgb, var(--edition-color) 76%, #c6d8a5);
@@ -884,8 +884,12 @@
   font-weight: 500;
   letter-spacing: 1px;
 }
-.gallery-start:hover:not(:disabled) {
-  filter: brightness(1.06);
+.gallery-start:is(:hover, :focus-visible):not(:disabled) {
+  background: linear-gradient(
+    125deg,
+    color-mix(in srgb, var(--edition-color) 65%, #203e30),
+    color-mix(in srgb, var(--edition-color) 55%, #172e23)
+  );
   transform: translateY(-1px);
 }
 .gallery-start:active:not(:disabled) {
@@ -950,7 +954,7 @@
   letter-spacing: 1.2px;
   color: #9aa48a;
 }
-.back-to-gallery:hover {
+.back-to-gallery:is(:hover, :focus-visible):not(:disabled) {
   color: var(--deep);
 }
 

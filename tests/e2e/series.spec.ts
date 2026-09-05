@@ -33,8 +33,14 @@ for (const edition of EDITIONS) {
     await expect
       .poll(
         async () => {
-          const save = page.getByRole('button', { name: /^(保存到位置|覆盖即时存档) 1$/ });
+          const save = page.getByRole('button', { name: /^(保存到位置|替换即时存档) 1$/ });
+          const replacing = (await save.getAttribute('aria-label')) === '替换即时存档 1';
           await save.click();
+          if (replacing)
+            await page
+              .getByRole('dialog')
+              .getByRole('button', { name: '确认替换', exact: true })
+              .click();
           await expect(save).toBeEnabled();
           await expect(preview).toBeVisible();
           pixels = await preview.evaluate(async (img: HTMLImageElement) => {
@@ -66,8 +72,8 @@ for (const edition of EDITIONS) {
     await page.getByRole('button', { name: '保存游戏截图', exact: true }).click();
     const screenshot = await download;
     const data = await readFile((await screenshot.path())!);
-    expect(data.readUInt32BE(16)).toBe(pixels.width);
-    expect(data.readUInt32BE(20)).toBe(pixels.height);
+    expect(data.readUInt32BE(16)).toBe(Math.round((pixels.width / pixels.height) * 1080));
+    expect(data.readUInt32BE(20)).toBe(1080);
     await screenshot.saveAs(`artifacts/series-${edition.id}.png`);
     expect(errors).toEqual([]);
   });
