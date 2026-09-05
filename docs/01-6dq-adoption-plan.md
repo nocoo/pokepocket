@@ -1,6 +1,7 @@
 # 6DQ adoption plan
 
-Status: proposed; implementation has not started.
+Status: accepted baseline assessment. Implementation is tracked in the
+[Tier S execution document](02-6dq-tier-s-execution.md).
 
 Audit date: 2026-09-06. Baseline: v1.1.0, commit
 [`8a43e3c`](https://github.com/nocoo/pokepocket/commit/8a43e3cc6b4035d26808e739d21883dc329b2642).
@@ -27,9 +28,9 @@ Tier B requires L1 and G1. Tier A adds L2 and D1, plus at least one of L3/G2. Ti
 applicable dimension. An applicable N/A counts as satisfied. Failure of either foundational dimension
 (L1/G1) results in Tier C.
 
-## 2. Current assessment
+## 2. Baseline assessment
 
-**Current tier: C.** G1 lacks strict lint. L1 has passing tests but no measured coverage or enforced
+**Baseline tier: C.** G1 lacks strict lint. L1 has passing tests but no measured coverage or enforced
 90% threshold. Existing CI success does not establish 6DQ compliance.
 
 | Dimension | nmem requirement                                                                | Current evidence                                                                                       | Gap                                                                                                               |
@@ -263,7 +264,7 @@ Suggested commit boundaries; split further when a change becomes difficult to re
 6. `test(l2): exercise worker over http` — production harness, API matrix, target guards, and CI L2.
 7. `chore(quality): enforce pre-push checks` — scanner entry points and L2/G2 hooks.
 8. `test(e2e): cover core flows with fixtures` — runnable GBA fixture, mandatory browser matrix, auth boundary.
-9. `ci: require full quality before release` — artifacts and consistent deployment gating.
+9. `chore: require full quality before release` — artifacts and consistent deployment gating.
 
 Do not claim a dimension complete based on added configuration alone. At each milestone attach the
 actual results, measure the hook runtime, and verify one representative failure blocks the relevant

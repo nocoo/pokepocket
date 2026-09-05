@@ -148,8 +148,9 @@ bun run check:distribution
 
 ## Documentation
 
-See the [documentation index](docs/README.md) and the proposed
-[6DQ adoption plan](docs/01-6dq-adoption-plan.md) for the quality assessment and implementation stages.
+See the [documentation index](docs/README.md), [6DQ assessment](docs/01-6dq-adoption-plan.md), and
+[Tier S execution record](docs/02-6dq-tier-s-execution.md) for the quality requirements, implementation
+batches, and current review evidence.
 
 ## 来源与许可
 

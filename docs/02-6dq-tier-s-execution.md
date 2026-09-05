@@ -1,0 +1,219 @@
+# 6DQ Tier S execution
+
+Status: in progress. No implementation batch has been accepted yet.
+
+Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
+The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
+This document is the current implementation contract, review ledger, and acceptance record.
+
+## 1. Ownership and working agreement
+
+The user requested staged implementation by the existing pi agent in Herdr, with Codex coordinating,
+reviewing every batch, maintaining numbered documentation, and independently validating the result.
+
+- **pi owns implementation:** work only on the assigned batch; implement behavior and its meaningful
+  tests together; make atomic commits; report commit hashes, commands, results, and remaining issues.
+- **Codex owns review and documentation:** inspect the complete changed modules, reproduce relevant
+  checks, return concrete findings, and accept the batch only after every finding is resolved.
+- Both agents share the existing checkout and branch. Codex does not edit pi-owned code while pi is
+  working. pi does not edit this document, the assessment, or documentation indexes.
+- Each logical change gets a separate Conventional Commit with a lowercase subject of at most
+  50 characters. Stage explicit paths. Do not amend/rewrite accepted commits or bypass active hooks.
+- pi stops at the batch boundary and notifies the coordinating pane through `herdr agent prompt`,
+  without waiting for the coordinator. It must not start the next batch without review acceptance.
+- Codex uses bounded lifecycle waits and a 45-second progress timer. On timeout, inspect the agent's
+  current output and repository progress; on an error or blocked state, diagnose it before resuming.
+  While implementation runs, prepare the next review and independent verification work.
+- Preserve the daily development server on 7047 and its Caddy domain. Test runners own only their own
+  temporary processes, ports, directories, and browser contexts.
+
+Documentation is committed before implementation begins. After each accepted batch, Codex updates
+the ledger and any changed design decisions in a separate documentation commit. Final documentation
+must describe the implemented files and measured evidence, not leave proposed work marked complete.
+
+## 2. Acceptance contract
+
+| Dimension | Required result                                                                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| L1        | Reviewed first-party logic scope, including unimported files; statements, branches, functions, and lines each >=90%; pre-commit L1/G1 under 30 seconds |
+| L2        | Real inbound TCP/HTTP to the production Worker build; all four API endpoints covered; pre-push L2/G2 under 3 minutes                                   |
+| L3        | Required browser journeys run without local commercial ROMs and without conditional skips; real browser storage and executable GB/GBC/GBA fixtures     |
+| G1        | Strict TypeScript and strict JavaScript/TypeScript lint; zero errors and warnings; formatting checked separately                                       |
+| G2        | OSV scans the actual lockfile and Gitleaks scans relevant committed changes; both fail closed locally and in CI                                        |
+| D1        | Cloud persistence rules remain N/A while no remote state exists; local tests use owned loopback services and isolated storage/context instances        |
+
+The four coverage metrics are the project convention adopted from the assessment; nmem itself states
+
+> =90% without naming metrics. Do not reduce thresholds, omit uncovered modules, or add broad ignores
+> to obtain a green result. A view exclusion requires extracted behavior and a recorded file-level
+> justification. Third-party WASM, generated declarations, fixtures, and build output are outside L1.
+
+Application-owned authorization must be tested with real signature verification and through an
+authorized browser load. Cloudflare's hosted identity provider is a separate boundary: verify the
+Access redirect contract and record the exact scope of login evidence. A locally signed fixture token
+does not demonstrate a live Cloudflare SSO login.
+
+## 3. Batch and atomic commit plan
+
+Commit subjects below describe intended boundaries. Small corrections to earlier work receive their
+own fix commits and must pass the same review gate. If a batch needs a materially different design,
+pi reports the reason before expanding scope; Codex updates the contract.
+
+### B1 — coverage baseline and strict static checks
+
+1. `test: record complete coverage baseline`
+   - Add compatible coverage tooling and an explicit executable-source inventory in `vitest.config.ts`.
+   - Include logic in `src/`, `worker/`, and maintained `scripts/`; record all four baseline metrics.
+   - Keep the diagnostic command distinct from the eventual enforced L1 gate.
+2. `chore: enforce strict static checks`
+   - Add `eslint.config.mjs`, exact development dependencies, and project-owned G1 commands.
+   - Cover `.mjs` scripts, TypeScript, and React hook correctness; retain strict typecheck and Prettier.
+   - Fix violations without broad suppressions or unrelated behavior changes.
+
+Review: coverage denominator, dependency/lockfile integrity, lint rule scope, existing unit tests,
+strict checks, and production build. Capture the baseline honestly; B1 alone does not imply Tier B.
+
+### B2 — application state boundaries
+
+3. `refactor: extract snapshot action state`
+   - Extract snapshot command/confirmation and modal pause ownership from `src/App.tsx`.
+   - Add unit tests for request, confirm, cancel, busy state, failed mutation, and retry.
+4. `refactor: isolate cartridge orchestration`
+   - Extract load/switch/import/restore state behind a small observable controller or equivalent hook.
+   - Keep view wiring thin and test cartridge changes, loading/error recovery, and persistence ordering.
+
+Review: compare user-visible state transitions against the original App, including paused games,
+closing nested modals, cancelled actions, failed imports, and switching while a save is pending.
+Run relevant unit and existing fixture-based browser regressions. Do not introduce a general MVVM
+framework or change storage schema.
+
+### B3 — emulator and storage correctness
+
+5. `refactor: inject emulator boundary dependencies`
+   - Introduce only needed mGBA/browser/storage/clock seams in `src/lib/emulator.ts` and its adapter.
+   - Test startup, reset, pause/resume, restore, cleanup, and core failures.
+6. `test: verify serialized emulator persistence`
+   - Assert concurrent autosave/manual operations and cartridge switches preserve write ordering.
+   - Cover snapshot compatibility, create/load/replace/delete, failed writes, and queue recovery.
+7. `test: verify isolated storage transactions`
+   - Test IndexedDB CRUD, isolation by ROM hash, open/transaction errors, and `replaceBattery` atomicity.
+   - Verify rollback, automatic snapshot removal, and preservation of manual slots.
+
+Review: meaningful behavioral assertions, realistic core doubles, isolated fake IndexedDB instances,
+and preservation of browser IDBFS/IndexedDB behavior. Real WASM and browser storage remain covered by L3.
+
+### B4 — complete L1 and activate pre-commit
+
+8. `test: cover remaining application logic`
+   - Cover settings, screenshot errors, inputs, maintained script policies, and remaining React logic.
+   - Move true HTTP developer-plugin tests out of the fast unit suite, retaining discovery units.
+   - Document justified thin-view exclusions after extraction, not before it.
+9. `chore: enforce unit and static commit gates`
+   - Enforce all four >=90% thresholds and install versioned hooks.
+   - Run L1 and G1 concurrently with correct failure propagation and child-process cleanup.
+
+Review: independently regenerate the full coverage report; verify an injected unit/static failure
+blocks the gate; measure the combined hook runtime. **Milestone: Tier B.**
+
+### B5 — production Worker over HTTP
+
+10. `test: add production worker http harness`
+    - Use the production build, real workerd/Miniflare, built assets, and ephemeral test JWT/JWKS keys.
+    - Prove valid and invalid authenticated `/api/runtime` calls through real loopback HTTP first.
+    - Keep production authentication intact; supply only the expected JWKS outbound response.
+11. `test: cover every worker api over http`
+    - Cover `/api/live`, `/api/catalog`, `/api/cartridge`, and `/api/runtime` with GET/HEAD contracts.
+    - Add shared token, method precedence, 403/404/405, static assets, WASM, and response-header cases.
+    - Test endpoint inventory completeness, occupied-port failure, readiness failure, and cleanup.
+
+Review: inspect runtime configuration and every request path, proving no direct handler/`SELF.fetch`
+substitution or development bypass. L2 owns loopback 17047; refuse conflicts with the existing preview
+instead of reusing/killing it. Isolate runtime state in temporary directories. Retain development
+plugin HTTP regressions separately.
+
+### B6 — security and pre-push enforcement
+
+12. `chore: add local security quality gates`
+    - Use version-pinned OSV/Gitleaks and scan the real `bun.lock` plus outgoing committed changes.
+    - Handle new branches conservatively; missing tools and scanner errors fail, rather than skip.
+13. `chore: enforce integration push gates`
+    - Run L2 and G2 concurrently from the pre-push hook; propagate either failure.
+    - Enable the same L2 entry point in CI and preserve both existing security scans.
+
+Review: scanner versions and scope, outgoing Git ranges, argument quoting, installation guidance,
+negative gate probes, isolation guards, and combined runtime under 3 minutes. **Milestone: Tier A.**
+
+### B7 — required browser coverage
+
+14. `test: add an executable gba fixture`
+    - Add an original runnable GBA program with observable rendering and save behavior.
+    - Verify actual execution; a valid header alone does not satisfy this fixture contract.
+15. `test: require core cartridge and save journeys`
+    - Make import/start/pause/resume/reload and cross-platform switching mandatory for GB/GBC/GBA.
+    - Assert snapshot CRUD/confirmation/cancellation/retry and meaningful `.sav` import/export results.
+    - Keep local 12-ROM compatibility tests in an explicitly optional suite.
+16. `test: verify browser authorization and isolation`
+    - Test anonymous denial and authorized application load against the production harness.
+    - Reject non-owned test targets, development/production origins, and server reuse; clean contexts.
+17. `test: verify console layout and export behavior`
+    - Cover fullscreen centering, proportional fonts/buttons, mobile/modals, and button contrast states.
+    - Verify 1080-pixel-high PNG exports with the correct aspect ratio across all three platforms.
+
+Review: every required browser test executes without commercial ROM availability, failure artifacts
+are usable, assertions validate behavior rather than implementation details, and shared storage stays
+isolated. Record the precise authentication/login boundary. No required core test may silently skip.
+
+### B8 — CI, release gating, and final sign-off
+
+18. `chore: align ci with local quality commands`
+    - Use the same project-owned L1/G1/L2/G2/L3 entry points in CI; publish coverage and failure artifacts.
+    - Ensure required browser failures or skips block acceptance.
+19. `chore: require tested commits for every release`
+    - Resolve an immutable target SHA for main-CI, tag, and manual release paths.
+    - Require all quality results for that SHA before deployment, running missing checks when needed.
+    - Preserve Access checks, version/tag checks, serialized deployment, and post-deploy version checks.
+
+Review: actual reusable workflow inputs, checkout refs, job dependencies/conditions, token permissions,
+and negative cases for failed, missing, skipped, or unrelated-SHA results. Validate delivery logic
+without redeploying the already-released v1.1.0 merely as a test.
+
+Codex then runs the complete final acceptance matrix from a clean committed tree, resolves any final
+findings through additional atomic fixes, and commits the final implementation/evidence documentation.
+**Milestone: Tier S only when every applicable check below has recorded passing evidence.**
+
+## 4. Review ledger
+
+| Batch | State    | Implementation commits | Review and evidence                                  |
+| ----- | -------- | ---------------------- | ---------------------------------------------------- |
+| B1    | Assigned | —                      | Baseline and strict G1 implementation assigned to pi |
+| B2    | Pending  | —                      | —                                                    |
+| B3    | Pending  | —                      | —                                                    |
+| B4    | Pending  | —                      | —                                                    |
+| B5    | Pending  | —                      | —                                                    |
+| B6    | Pending  | —                      | —                                                    |
+| B7    | Pending  | —                      | —                                                    |
+| B8    | Pending  | —                      | —                                                    |
+
+## 5. Final acceptance record
+
+| Check                   | State   | Evidence to record                                                            |
+| ----------------------- | ------- | ----------------------------------------------------------------------------- |
+| Full L1 coverage        | Pending | Commit, command, included/excluded files, statements/branches/functions/lines |
+| G1 strict checks        | Pending | Lint/typecheck/format results with zero warnings                              |
+| Pre-commit gate         | Pending | Installed hook, measured runtime, unit/static failure probes                  |
+| L2 production HTTP      | Pending | Endpoint inventory, passing contracts, authentication and asset checks        |
+| G2 security             | Pending | Scanner versions, dependency/secrets results, committed-change scope          |
+| Pre-push gate           | Pending | Measured runtime, API/scanner failure probes, new-branch behavior             |
+| Required L3             | Pending | Executed/passed/failed/skipped counts, platform and journey matrix            |
+| D1 local isolation      | Pending | Target/port guards, temporary runtime/browser state, cleanup proof            |
+| Authentication boundary | Pending | Local authorization evidence and exact hosted Access/login evidence           |
+| Build/distribution      | Pending | Production build, type generation, no-ROM distribution checks                 |
+| CI/release paths        | Pending | Static/workflow checks and target-SHA gate regression results                 |
+| Documentation           | Pending | Current file/command links, no stale completion claims, clean committed tree  |
+
+## 6. Decisions and follow-ups
+
+- Cloud databases and buckets remain unnecessary while the application has no remote persistence.
+  Future cloud saves must reopen D1 applicability before automated tests access those resources.
+- Application behavior and save compatibility are regression requirements throughout the work.
+- No work estimates are stored in this numbered implementation document.
