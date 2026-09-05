@@ -169,9 +169,12 @@ negative gate probes, isolation guards, and combined runtime under 3 minutes. **
 
 ### B7 — required browser coverage
 
-16. `test: add an executable gba fixture`
-    - Add an original runnable GBA program with observable rendering and save behavior.
+16. `test: add executable cartridge fixtures`
+    - Add original runnable GB/GBC/GBA programs with observable rendering and save behavior.
     - Verify actual execution; a valid header alone does not satisfy this fixture contract.
+    - Keep reviewable source/instructions in the repository and construct ROM bytes in tests.
+      Do not commit ROM binaries or require a cross-compiler in CI. Use original cartridge
+      identifiers so mGBA's commercial-game save overrides cannot change the fixture hardware.
 17. `test: require core cartridge and save journeys`
     - Make import/start/pause/resume/reload and cross-platform switching mandatory for GB/GBC/GBA.
     - Assert snapshot CRUD/confirmation/cancellation/retry and meaningful `.sav` import/export results.
@@ -414,3 +417,18 @@ The current TypeScript test configuration already includes `tests/`; extend Vite
 - 2026-09-06, B5 preparation: the original L2 port 17047 is occupied by an existing Vite preview.
   Reserve 17048 for L2, preserving the preview, dev/Caddy on 7047, and L3 on 27047. This supersedes
   the port choice in the historical assessment; it does not relax ownership or occupied-port guards.
+- 2026-09-06, B6 preparation: use OSV Scanner 2.5.1 and Gitleaks 8.30.1 for the project-owned local
+  and CI security gates. Both versions are available locally. The historical shared workflow pins
+  OSV 2.3.5, so CI must explicitly adopt the project pin; silently retaining different versions does
+  not meet final acceptance.
+- 2026-09-06, B7 preparation: temporary original GB/GBC/GBA programs executed in real mGBA WASM,
+  changed their frame after an A press, changed the first battery byte from 1 to 2, and restored 2
+  after a core reload. Every battery was 32768 bytes. Wait for observable save bytes: mGBA's filesystem
+  does not reflect a new SRAM write immediately. The original GBA code is `ZPPE`; reusing `BPEE`
+  incorrectly selects Emerald's FLASH1M override. These isolated prototypes are design evidence;
+  committed fixtures and mandatory browser regressions remain B7 deliverables.
+- The same preparation loaded the production Worker over an owned ephemeral HTTP listener with
+  a locally signed RS256 token. Fresh browser contexts observed native fullscreen and fallback mode
+  centered for all three platforms at 1440x1000; text and buttons shared the device scale. This
+  confirms the expected geometry for B7 assertions and does not replace its required test gate or
+  demonstrate a hosted SSO login.
