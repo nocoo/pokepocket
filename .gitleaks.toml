@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public Cloudflare Access application audience, published in its login URL"
+regexTarget = "secret"
+regexes = ['''^7dcaf6fb44b1245dfec144db9df69cc1335a526cd9a29829f33e35f78aa306dd$''']
