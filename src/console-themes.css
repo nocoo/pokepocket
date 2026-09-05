@@ -1,0 +1,465 @@
+.pocket-app .game-stage {
+  background:
+    radial-gradient(
+        color-mix(in srgb, var(--edition-color) 23%, transparent) 0.6px,
+        transparent 0.6px
+      )
+      0 0 / 10px 10px,
+    color-mix(in srgb, var(--edition-color) 9%, #f6f5ec);
+  border-color: color-mix(in srgb, var(--edition-color) 20%, #e6e7d8);
+}
+.console-wrap {
+  --shell-light: color-mix(in srgb, var(--edition-color) 23%, #f4f1db);
+  --shell-mid: color-mix(in srgb, var(--edition-color) 40%, #e9e7d0);
+  --shell-shade: color-mix(in srgb, var(--edition-color) 57%, #c9ccb9);
+  --shell-edge: color-mix(in srgb, var(--edition-color) 75%, #8b9b80);
+  --shell-ink: color-mix(in srgb, var(--edition-color) 65%, #5b6e59);
+  --bezel: color-mix(in srgb, var(--edition-color) 25%, #28352f);
+  --button-face: color-mix(in srgb, var(--edition-color) 78%, #6a7f57);
+  --button-edge: color-mix(in srgb, var(--edition-color) 60%, #203626);
+}
+.console-wrap .console-shell {
+  background: linear-gradient(
+    150deg,
+    var(--shell-light) 4%,
+    var(--shell-mid) 40%,
+    var(--shell-mid) 62%,
+    var(--shell-shade)
+  );
+  border-color: var(--shell-edge);
+  border-top-color: var(--shell-light);
+  box-shadow:
+    inset 0 2px 0 #ffffeb80,
+    inset 3px 0 4px #ffffff26,
+    inset -3px 0 3px #1831221f,
+    inset 0 -6px 0 var(--shell-shade),
+    0 5px 0 var(--shell-edge),
+    0 7px 0 1px var(--shell-mid),
+    0 17px 22px -9px #32463540,
+    0 30px 38px -19px #32463530;
+}
+.console-wrap .console-shell:after {
+  border-color: color-mix(in srgb, var(--edition-color) 20%, transparent);
+}
+.console-wrap .shoulder {
+  background: linear-gradient(#f2f0e5, var(--shell-shade));
+  border-color: var(--shell-edge);
+  color: var(--shell-ink);
+}
+.console-wrap .shoulder:disabled {
+  opacity: 1;
+}
+.console-wrap .shell-brand,
+.console-wrap .power-light,
+.console-wrap .small-buttons > div > span {
+  color: var(--shell-ink);
+}
+.console-wrap .screen-frame {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--bezel) 94%, white), var(--bezel));
+  border-color: color-mix(in srgb, var(--bezel) 85%, black);
+  box-shadow:
+    0 1px 0 #ffffed88,
+    inset 0 1px 4px #071e1655,
+    0 0 0 4px var(--shell-shade);
+}
+.console-wrap .screen-frame-top {
+  color: color-mix(in srgb, var(--edition-color) 20%, #b5bbaa);
+}
+.console-wrap .console-wordmark {
+  color: #d1d7c3;
+}
+.console-wrap .game-screen {
+  background: #19251d;
+  border-color: #1c2821;
+}
+.console-wrap .ab-buttons:before {
+  background: color-mix(in srgb, var(--edition-color) 25%, transparent);
+  border-color: var(--shell-shade);
+  border-bottom-color: var(--shell-light);
+}
+.console-wrap .action-a,
+.console-wrap .action-b {
+  background: linear-gradient(
+    135deg,
+    var(--button-face),
+    color-mix(in srgb, var(--button-face) 87%, #263826)
+  );
+  color: color-mix(in srgb, var(--edition-color) 20%, #f7f5e4);
+  border-color: var(--button-edge);
+  text-shadow: 0 1px 0 #19322180;
+  box-shadow:
+    inset 1px 1px 1px #f5f1c859,
+    0 3px 0 var(--button-edge),
+    0 6px 6px #1d3a3033;
+}
+.console-wrap .dpad .console-button,
+.console-wrap .dpad-center {
+  background: color-mix(in srgb, var(--edition-color) 20%, #465144);
+  color: color-mix(in srgb, var(--edition-color) 20%, #bcc4a8);
+  box-shadow:
+    inset 0 1px #ffffff26,
+    inset 0 -1px #16251966;
+}
+.console-wrap .dpad-center {
+  box-shadow: none;
+}
+.console-wrap .dpad-center span {
+  background: color-mix(in srgb, var(--edition-color) 22%, #495840);
+  border-color: #263b2f99;
+}
+.console-wrap .small-console-button {
+  background: var(--shell-ink);
+  border-color: var(--shell-shade);
+  box-shadow:
+    inset 0 1px #ffffff20,
+    0 2px 0 var(--shell-edge);
+}
+.console-wrap .speaker i {
+  background: var(--shell-ink);
+  border-color: var(--shell-edge);
+  box-shadow:
+    1px 0 #ffffff45,
+    inset 0 0 1px #1b2a2440;
+}
+.console-wrap .shell-screw {
+  border-color: var(--shell-edge);
+  background: var(--shell-mid);
+}
+.console-wrap .console-button.is-pressed {
+  filter: brightness(0.8);
+  box-shadow:
+    inset 0 2px 5px #14281d80,
+    0 1px 0 var(--button-edge);
+}
+.pocket-app .stage-edition {
+  color: var(--edition-color);
+  border-color: color-mix(in srgb, var(--edition-color) 28%, #e6e8d8);
+}
+.pocket-app .region-stamp {
+  color: color-mix(in srgb, var(--edition-color) 60%, #88977b);
+}
+.pocket-app .play-toggle {
+  color: var(--deep);
+  background: color-mix(in srgb, var(--edition-color) 13%, #f7f7ed);
+}
+.pocket-app .mobile-controls .action-a,
+.pocket-app .mobile-controls .action-b {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--edition-color) 75%, #e5e8d0),
+    var(--edition-color)
+  );
+  border-color: color-mix(in srgb, var(--edition-color) 75%, #203a2b);
+  box-shadow:
+    inset 1px 1px #ffffff3d,
+    0 3px 0 color-mix(in srgb, var(--edition-color) 65%, #203a2b),
+    0 6px 6px #1d3a3033;
+}
+.pocket-app .mobile-controls {
+  background: color-mix(in srgb, var(--edition-color) 11%, #f2f3e6);
+  border-color: color-mix(in srgb, var(--edition-color) 18%, #dfe5d1);
+}
+.mobile-controls:not([data-system='GBA']) .mobile-shoulder {
+  display: none;
+}
+
+/* The classic and Color shells have an actual portrait control layout. */
+.console-wrap:is(.system-gb, .system-gbc) {
+  width: min(358px, calc(100% - 42px));
+  max-width: 358px;
+  margin: 26px auto 0;
+  padding-top: 0;
+}
+.console-wrap.system-gb {
+  --shell-light: color-mix(in srgb, var(--edition-color) 6%, #f0efdf);
+  --shell-mid: color-mix(in srgb, var(--edition-color) 12%, #dcdccc);
+  --shell-shade: color-mix(in srgb, var(--edition-color) 21%, #bbbfaf);
+  --shell-edge: color-mix(in srgb, var(--edition-color) 30%, #9da695);
+  --shell-ink: color-mix(in srgb, var(--edition-color) 62%, #6d755f);
+  --bezel: #6e746c;
+}
+.console-wrap.system-gbc {
+  --shell-light: color-mix(in srgb, var(--edition-color) 62%, #d5ddca);
+  --shell-mid: color-mix(in srgb, var(--edition-color) 85%, #c6cebb);
+  --shell-shade: color-mix(in srgb, var(--edition-color) 83%, #566451);
+  --shell-edge: color-mix(in srgb, var(--edition-color) 72%, #34492f);
+  --shell-ink: color-mix(in srgb, var(--edition-color) 40%, #f3f4df);
+  --button-face: #50594e;
+  --button-edge: #2e3e2f;
+  --bezel: #28312f;
+}
+.console-wrap:is(.system-gb, .system-gbc) .console-shoulders {
+  display: none;
+}
+.console-wrap:is(.system-gb, .system-gbc) .console-shell {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 162px;
+  padding: 24px 21px 31px;
+  border-width: 2px;
+  border-radius: 15px 15px 65px 15px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .console-shell:after {
+  inset: 6px 5px 7px;
+  border-radius: 10px 10px 56px 10px;
+}
+.console-wrap.system-gb .console-shell:before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 13px;
+  height: 2px;
+  background: #9caa8f33;
+  box-shadow: 0 1px #ffffec80;
+}
+.console-wrap.system-gbc .console-shell {
+  border-radius: 31px 31px 70px 70px;
+  padding: 22px 20px 34px;
+}
+.console-wrap.system-gbc .console-shell:after {
+  border-radius: 25px 25px 62px 62px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .screen-frame {
+  grid-area: 1 / 1 / 2 / 3;
+  padding: 11px 17px 14px;
+  border-radius: 10px 10px 33px 10px;
+  box-shadow:
+    inset 0 1px 4px #091a1640,
+    0 1px 0 #ffffe975,
+    0 0 0 3px var(--shell-shade);
+}
+.console-wrap.system-gbc .screen-frame {
+  border-radius: 15px 15px 28px 28px;
+  padding: 13px 16px 16px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .screen-frame-top {
+  margin-bottom: 10px;
+  font-size: 4px;
+  letter-spacing: 1px;
+}
+.console-wrap.system-gb .screen-frame-top:before,
+.console-wrap.system-gb .screen-frame-top:after {
+  border-color: var(--edition-color);
+  border-width: 2px;
+  opacity: 0.8;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--edition-color) 50%, #87927c);
+}
+.console-wrap:is(.system-gb, .system-gbc) .game-screen {
+  aspect-ratio: 10 / 9;
+}
+.console-wrap.system-gb .game-screen {
+  background: #8b9b69;
+}
+.console-wrap:is(.system-gb, .system-gbc) .console-wordmark {
+  font-size: 15px;
+  margin-top: 13px;
+  gap: 6px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .console-wordmark b {
+  font-size: 12px;
+}
+.console-wrap.system-gbc .console-wordmark b {
+  background: linear-gradient(
+    90deg,
+    #e17478 0 21%,
+    #9186c7 21% 42%,
+    #83b776 42% 62%,
+    #e6c964 62% 81%,
+    #699bb8 81%
+  );
+  background-clip: text;
+  color: transparent;
+  letter-spacing: 1px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .console-left {
+  grid-area: 2 / 1;
+}
+.console-wrap:is(.system-gb, .system-gbc) .console-right {
+  grid-area: 2 / 2;
+}
+.console-wrap:is(.system-gb, .system-gbc) .shell-brand {
+  position: absolute;
+  top: 15px;
+  left: 3px;
+  transform: none;
+  font-size: 9px;
+  letter-spacing: 0.8px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .console-left > .dpad {
+  top: 82px;
+  width: 99px;
+  max-width: 99px;
+  left: 42%;
+}
+.console-wrap:is(.system-gb, .system-gbc) .dpad .console-button svg {
+  width: 17px;
+  height: 17px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .dpad-center span {
+  width: 13px;
+  height: 13px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .console-right > .ab-buttons {
+  top: 68px;
+  left: 57%;
+  width: 114px;
+  max-width: 114px;
+  transform: translate(-50%, -50%) rotate(-8deg);
+}
+.console-wrap:is(.system-gb, .system-gbc) .action-a,
+.console-wrap:is(.system-gb, .system-gbc) .action-b {
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .small-buttons {
+  bottom: -2px;
+  left: 30px;
+  width: 150px;
+  gap: 16px;
+  transform: rotate(-20deg);
+}
+.console-wrap:is(.system-gb, .system-gbc) .small-console-button {
+  width: 34px;
+  height: 11px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .small-buttons > div {
+  gap: 8px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .small-buttons > div > span {
+  font-size: 6px;
+  letter-spacing: 0.6px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .power-light {
+  top: 16px;
+  left: auto;
+  right: 6px;
+  transform: none;
+  flex-direction: row;
+  gap: 5px;
+  font-size: 5px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .power-light i {
+  width: 6px;
+  height: 6px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .speaker {
+  bottom: -5px;
+  left: 72%;
+  height: 44px;
+  gap: 5px;
+  transform: translateX(-50%) rotate(-27deg);
+}
+.console-wrap:is(.system-gb, .system-gbc) .speaker i {
+  width: 4px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .speaker i:first-child,
+.console-wrap:is(.system-gb, .system-gbc) .speaker i:last-child {
+  height: 31px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .shell-screw {
+  bottom: 12px;
+  width: 4px;
+  height: 4px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .console-caption {
+  font-size: 5px;
+  letter-spacing: 1.3px;
+  padding: 23px 0 20px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .boot-title {
+  font-size: 26px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .boot-subtitle {
+  font-size: 5px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .boot-rayquaza {
+  width: 88px;
+  height: 88px;
+}
+.console-wrap:is(.system-gb, .system-gbc) .boot-footnote {
+  font-size: 4px;
+}
+
+@media (max-width: 540px) {
+  .console-wrap .screen-frame {
+    box-shadow:
+      0 1px 0 #ffffed88,
+      inset 0 1px 4px #071e1655,
+      0 0 0 2px var(--shell-shade);
+  }
+  .console-wrap:is(.system-gb, .system-gbc) {
+    width: min(320px, calc(100% - 30px));
+    margin-top: 23px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .console-shell {
+    padding: 23px 18px 31px;
+    grid-template-rows: auto 156px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .screen-frame {
+    padding: 10px 14px 13px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .screen-frame-top {
+    font-size: 3.5px;
+    letter-spacing: 0.5px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .console-wordmark {
+    font-size: 13px;
+    margin-top: 11px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .console-wordmark b {
+    font-size: 11px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .console-left > .dpad {
+    width: 96px;
+    max-width: 96px;
+    left: 43%;
+    top: 80px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .console-right > .ab-buttons {
+    width: 103px;
+    left: 58%;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .small-buttons {
+    left: 13px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .console-caption {
+    font-size: 4.5px;
+    letter-spacing: 0.8px;
+  }
+}
+@media (max-width: 365px) {
+  .console-wrap:is(.system-gb, .system-gbc) .console-shell {
+    padding-inline: 14px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .console-right > .ab-buttons {
+    width: 93px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .small-buttons {
+    left: 3px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .console-left > .dpad {
+    width: 87px;
+    max-width: 87px;
+  }
+  .console-wrap:is(.system-gb, .system-gbc) .screen-frame-top {
+    font-size: 3px;
+  }
+}
+.game-stage:is(:fullscreen, .focus-mode) .console-wrap:is(.system-gb, .system-gbc) {
+  max-width: min(358px, calc((100dvh - 120px) * 0.62));
+  margin: 44px auto 0;
+}
+@media (max-height: 700px) {
+  .game-stage:is(:fullscreen, .focus-mode)
+    .console-wrap:is(.system-gb, .system-gbc)
+    .console-shell {
+    grid-template-rows: auto;
+  }
+  .game-stage:is(:fullscreen, .focus-mode) .console-wrap:is(.system-gb, .system-gbc) .console-left,
+  .game-stage:is(:fullscreen, .focus-mode)
+    .console-wrap:is(.system-gb, .system-gbc)
+    .console-right {
+    display: none;
+  }
+}

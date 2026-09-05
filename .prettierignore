@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.cache/
+.wrangler/
+public/emulator/
+public/licenses/
+worker-configuration.d.ts
+artifacts/
+test-results/
+playwright-report/
+package-lock.json
+bun.lock
+rom/
+roms/
+coverage/

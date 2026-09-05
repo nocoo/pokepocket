@@ -1,0 +1,145 @@
+{
+  "rgbds": "1.0.3",
+  "agbcc": {
+    "repository": "pret/agbcc",
+    "commit": "da598c1d918402c42c0c0d7128ba14567f3175e9"
+  },
+  "projects": [
+    {
+      "id": "pokered",
+      "repository": "pret/pokered",
+      "commit": "a1a22aaf84d1675bcdbaeb194592379d586d838e",
+      "toolchain": "rgbds",
+      "roms": [
+        {
+          "id": "red",
+          "target": "red",
+          "output": "pokered.gbc",
+          "sha1": "ea9bcae617fdf159b045185467ae58b2e4a48b9a"
+        },
+        {
+          "id": "blue",
+          "target": "blue",
+          "output": "pokeblue.gbc",
+          "sha1": "d7037c83e1ae5b39bde3c30787637ba1d4c48ce2"
+        }
+      ]
+    },
+    {
+      "id": "pokegreen",
+      "repository": "Narishma-gb/pokegreen",
+      "commit": "953f41b34108621b2bf13c3b1e53abfc9c3e5aec",
+      "toolchain": "rgbds",
+      "roms": [
+        {
+          "id": "green",
+          "target": "green",
+          "output": "pokegreen.gb",
+          "sha1": "82c0eef40a5e2423699d9fd8ba15dfaa8b51d196"
+        }
+      ]
+    },
+    {
+      "id": "pokeyellow",
+      "repository": "pret/pokeyellow",
+      "commit": "e89ead154b9968aa50eed9328ff2b38b6c194382",
+      "toolchain": "rgbds",
+      "roms": [
+        {
+          "id": "yellow",
+          "target": "yellow",
+          "output": "pokeyellow.gbc",
+          "sha1": "cc7d03262ebfaf2f06772c1a480c7d9d5f4a38e1"
+        }
+      ]
+    },
+    {
+      "id": "pokegold",
+      "repository": "pret/pokegold",
+      "commit": "656583c939d30f920a316177311a502dd222b57c",
+      "toolchain": "rgbds",
+      "roms": [
+        {
+          "id": "gold",
+          "target": "gold",
+          "output": "pokegold.gbc",
+          "sha1": "d8b8a3600a465308c9953dfa04f0081c05bdcb94"
+        },
+        {
+          "id": "silver",
+          "target": "silver",
+          "output": "pokesilver.gbc",
+          "sha1": "49b163f7e57702bc939d642a18f591de55d92dae"
+        }
+      ]
+    },
+    {
+      "id": "pokecrystal",
+      "repository": "pret/pokecrystal",
+      "commit": "7a7881d0d62e0ddbd82dcf10e7116807487ac651",
+      "toolchain": "rgbds",
+      "roms": [
+        {
+          "id": "crystal",
+          "target": "crystal",
+          "output": "pokecrystal.gbc",
+          "sha1": "f4cd194bdee0d04ca4eac29e09b8e4e9d818c133"
+        }
+      ]
+    },
+    {
+      "id": "pokeruby",
+      "repository": "pret/pokeruby",
+      "commit": "63a8cbf0016b351a4e68f7036fa0b77e23d2f2c1",
+      "toolchain": "agbcc",
+      "roms": [
+        {
+          "id": "ruby",
+          "target": "ruby",
+          "output": "pokeruby.gba",
+          "sha1": "f28b6ffc97847e94a6c21a63cacf633ee5c8df1e"
+        },
+        {
+          "id": "sapphire",
+          "target": "sapphire",
+          "output": "pokesapphire.gba",
+          "sha1": "3ccbbd45f8553c36463f13b938e833f652b793e4"
+        }
+      ]
+    },
+    {
+      "id": "pokeemerald",
+      "repository": "pret/pokeemerald",
+      "commit": "5eff78649e7170a877b961ef0b3da13b81a16038",
+      "toolchain": "agbcc",
+      "roms": [
+        {
+          "id": "emerald",
+          "target": "compare",
+          "output": "pokeemerald.gba",
+          "sha1": "f3ae088181bf583e55daf962a92bb46f4f1d07b7"
+        }
+      ]
+    },
+    {
+      "id": "pokefirered",
+      "repository": "pret/pokefirered",
+      "commit": "c75f352304d529f6ba92d4f74b9cf8b5c3810788",
+      "toolchain": "agbcc",
+      "roms": [
+        {
+          "id": "firered",
+          "target": "firered",
+          "output": "pokefirered.gba",
+          "sha1": "41cb23d8dccc8ebd7c649cd8fbb58eeace6e2fdc"
+        },
+        {
+          "id": "leafgreen",
+          "target": "leafgreen",
+          "output": "pokeleafgreen.gba",
+          "sha1": "574fa542ffebb14be69902d1d36f1ec0a4afd71e"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+worker-configuration.d.ts linguist-generated=true whitespace=-blank-at-eol
+public/licenses/* linguist-vendored=true whitespace=-blank-at-eol
+public/art/* linguist-vendored=true
+docs/*.png binary

@@ -1,0 +1,1318 @@
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from 'react';
+import {
+  ArrowDownToLine,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpFromLine,
+  AudioLines,
+  Bookmark,
+  Check,
+  CheckCheck,
+  ChevronRight,
+  CircleHelp,
+  Clock3,
+  Download,
+  ExternalLink,
+  FolderOpen,
+  Gamepad2,
+  HardDrive,
+  Heart,
+  Keyboard,
+  Maximize,
+  Minimize,
+  Pause,
+  Play,
+  RotateCcw,
+  Save,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  Upload,
+  Volume2,
+  VolumeX,
+  X,
+  Zap,
+} from 'lucide-react';
+import { Console, MobileControls } from './components/Console';
+import { SeriesLibrary } from './components/SeriesLibrary';
+import { CartridgeGallery } from './components/CartridgeGallery';
+import { KeyBindings } from './components/KeyBindings';
+import {
+  DEFAULT_EDITION,
+  getEdition,
+  type AvailableEdition,
+  type PokemonEdition,
+} from './lib/catalog';
+import { Modal } from './components/Modal';
+import { SaveSlots } from './components/SaveSlots';
+import {
+  cartridgeTitle,
+  readCartridge,
+  validateBatterySave,
+  type Cartridge,
+} from './lib/cartridge';
+import { CORE_VERSION, PocketEmulator, message } from './lib/emulator';
+import { BUTTONS, InputController, gamepadButtons, isEditing, type GameButton } from './lib/input';
+import { bindingText, keyLabel, keyMap } from './lib/key-bindings';
+import { loadSettings, type Settings } from './lib/settings';
+import { download, storage, type Snapshot } from './lib/storage';
+
+type ModalName = 'settings' | 'saves' | 'help' | 'restart' | 'import-save' | null;
+type Toast = { text: string; error: boolean; id: number };
+
+function playTime(seconds: number) {
+  const h = Math.floor(seconds / 3600)
+    .toString()
+    .padStart(2, '0');
+  const m = Math.floor((seconds % 3600) / 60)
+    .toString()
+    .padStart(2, '0');
+  const s = Math.floor(seconds % 60)
+    .toString()
+    .padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+function relativeTime(timestamp: number | null) {
+  if (!timestamp) return '等待你的第一次冒险';
+  const minutes = Math.floor((Date.now() - timestamp) / 60000);
+  return minutes < 1
+    ? '刚刚保存在此设备'
+    : minutes < 60
+      ? `${minutes} 分钟前已保存`
+      : new Date(timestamp).toLocaleString('zh-CN', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+}
+
+export default function App() {
+  const [emulator] = useState(() => new PocketEmulator());
+  const game = useSyncExternalStore(emulator.subscribe, emulator.getSnapshot);
+  const [pressed, setPressed] = useState<Set<GameButton>>(new Set());
+  const [input] = useState(
+    () =>
+      new InputController((button, down) => {
+        emulator.button(button, down);
+        setPressed((current) => {
+          const next = new Set(current);
+          if (down) next.add(button);
+          else next.delete(button);
+          return next;
+        });
+      }),
+  );
+  const [library, setLibrary] = useState<Cartridge[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [available, setAvailable] = useState<AvailableEdition[]>([]);
+  const [catalogReady, setCatalogReady] = useState(false);
+  const [view, setView] = useState<'library' | 'play'>('library');
+  const [selectedEditionId, setSelectedEditionId] = useState(DEFAULT_EDITION.id);
+  const [storageReady, setStorageReady] = useState(false);
+  const [settings, setSettings] = useState(loadSettings);
+  const keyboardMap = useMemo(() => keyMap(settings.bindings), [settings.bindings]);
+  const [modal, setModal] = useState<ModalName>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [gamepad, setGamepad] = useState('');
+  const [fullscreen, setFullscreen] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [pendingSave, setPendingSave] = useState<{ data: ArrayBuffer; name: string } | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLElement>(null);
+  const romInput = useRef<HTMLInputElement>(null);
+  const saveInput = useRef<HTMLInputElement>(null);
+  const wasRunning = useRef(false);
+  const pickerWasRunning = useRef(false);
+  const dragDepth = useRef(0);
+  const preferredEdition = getEdition(selectedEditionId) ?? DEFAULT_EDITION;
+  const selected =
+    library.find((item) => item.id === selectedId) ??
+    library.find((item) => item.header.editionId === preferredEdition.id) ??
+    null;
+  const current = game.cartridge ?? selected;
+  const selectedEdition = selected ? getEdition(selected.header.editionId) : preferredEdition;
+  const edition = current ? getEdition(current.header.editionId) : preferredEdition;
+  const active = game.status === 'running' || game.status === 'paused';
+  const localAvailable = available.some(
+    (item) => item.id === preferredEdition.id && item.available,
+  );
+  const title = current ? cartridgeTitle(current) : `宝可梦 ${preferredEdition.name}`;
+  const autoSnapshot = game.snapshots.find((item) => item.slot === 0);
+
+  const notify = useCallback(
+    (text: string, error = false) => setToast({ text, error, id: Date.now() }),
+    [],
+  );
+  const run = useCallback(
+    async (action: () => Promise<unknown>, success?: string) => {
+      setBusy(true);
+      try {
+        await action();
+        if (success) notify(success);
+      } catch (error) {
+        notify(message(error), true);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [notify],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void storage
+      .listCartridges()
+      .then((items) => {
+        if (cancelled) return;
+        setLibrary(items);
+        setStorageReady(true);
+        try {
+          const previous = items.find(
+            (item) => item.id === localStorage.getItem('pocket-last-cartridge'),
+          );
+          setSelectedId(previous?.id ?? null);
+          setSelectedEditionId(
+            previous?.header.editionId ??
+              localStorage.getItem('pocket-last-edition') ??
+              DEFAULT_EDITION.id,
+          );
+        } catch {
+          /* The library still works without preferences. */
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) notify(`无法访问本地存储：${message(error)}`, true);
+      });
+    void fetch('/api/catalog')
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data: { editions: AvailableEdition[] } = await response.json();
+        if (!cancelled) setAvailable(data.editions);
+      })
+      .catch(() => {
+        /* Previously cached cartridges remain available. */
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [notify]);
+
+  useEffect(() => {
+    emulator.setVolume(settings.muted ? 0 : settings.volume);
+    try {
+      localStorage.setItem('pocket-settings', JSON.stringify(settings));
+    } catch {
+      /* Settings remain in memory. */
+    }
+  }, [settings, emulator]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), toast.error ? 7500 : 3800);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
+    if (game.error) notify(game.error, true);
+  }, [game.error, notify]);
+  useEffect(() => {
+    if (game.resumedAutomatically) notify('已继续上次的冒险，欢迎回来。');
+  }, [game.resumedAutomatically, notify]);
+  useEffect(() => {
+    if (game.status !== 'running') input.releaseAll();
+  }, [game.status, input]);
+
+  const openModal = useCallback(
+    (name: ModalName) => {
+      wasRunning.current = emulator.getSnapshot().status === 'running';
+      input.releaseAll();
+      emulator.pause();
+      if (emulator.getSnapshot().cartridge)
+        void emulator.persist(true).catch((error) => notify(message(error), true));
+      setModal(name);
+    },
+    [emulator, input, notify],
+  );
+
+  const closeModal = useCallback(() => {
+    setModal(null);
+    if (wasRunning.current && view === 'play') emulator.resume();
+    wasRunning.current = false;
+  }, [emulator, view]);
+
+  const rememberSelection = useCallback((id: string, editionId: string | null) => {
+    setSelectedId(id);
+    if (editionId) setSelectedEditionId(editionId);
+    try {
+      localStorage.setItem('pocket-last-cartridge', id);
+      if (editionId) localStorage.setItem('pocket-last-edition', editionId);
+    } catch {
+      /* Optional preference. */
+    }
+  }, []);
+
+  const insertCartridge = useCallback(
+    async (file: File) => {
+      const incoming = await readCartridge(file);
+      const existing = (await storage.listCartridges()).find((item) => item.id === incoming.id);
+      const cartridge = existing ?? incoming;
+      await storage.putCartridge(cartridge);
+      setLibrary(await storage.listCartridges());
+      rememberSelection(cartridge.id, cartridge.header.editionId);
+      setView('play');
+      if (!canvasRef.current) throw new Error('游戏画面尚未就绪，请重试。');
+      await emulator.load(cartridge, canvasRef.current);
+      canvasRef.current.focus({ preventScroll: true });
+      if (navigator.storage?.persist) void navigator.storage.persist().catch(() => false);
+    },
+    [emulator, rememberSelection],
+  );
+
+  const loadLocalCartridge = useCallback(
+    async (edition: PokemonEdition) => {
+      const url = available.find((item) => item.id === edition.id && item.available)?.url;
+      if (!url) throw new Error('本地目录中未找到这枚卡带，请导入你的 ROM。');
+      const response = await fetch(url);
+      if (!response.ok || response.headers.get('Content-Type')?.includes('text/html'))
+        throw new Error('无法读取本地卡带，请检查文件后刷新页面。');
+      await insertCartridge(new File([await response.blob()], edition.fileName));
+    },
+    [available, insertCartridge],
+  );
+
+  const openCartridgePicker = useCallback(() => {
+    pickerWasRunning.current = emulator.getSnapshot().status === 'running';
+    input.releaseAll();
+    emulator.pause();
+    romInput.current?.click();
+  }, [emulator, input]);
+
+  const finishCartridgePicker = useCallback(() => {
+    if (pickerWasRunning.current && emulator.getSnapshot().status === 'paused') emulator.resume();
+    pickerWasRunning.current = false;
+  }, [emulator]);
+
+  useEffect(() => {
+    const picker = romInput.current;
+    picker?.addEventListener('cancel', finishCartridgePicker);
+    return () => picker?.removeEventListener('cancel', finishCartridgePicker);
+  }, [finishCartridgePicker]);
+
+  const startAdventure = useCallback(() => {
+    if (busy || game.status === 'loading') return;
+    if (!selected && !localAvailable) return openCartridgePicker();
+    setView('play');
+    void run(async () => {
+      if (selected?.id === game.cartridge?.id && game.status === 'paused') emulator.resume();
+      else if (selected && canvasRef.current) await emulator.load(selected, canvasRef.current);
+      else await loadLocalCartridge(preferredEdition);
+      canvasRef.current?.focus({ preventScroll: true });
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    });
+  }, [
+    busy,
+    game.status,
+    game.cartridge,
+    selected,
+    localAvailable,
+    run,
+    emulator,
+    loadLocalCartridge,
+    openCartridgePicker,
+    preferredEdition,
+  ]);
+
+  const chooseCartridge = (cartridge: Cartridge) => {
+    rememberSelection(cartridge.id, cartridge.header.editionId);
+    if (view === 'play' && active && game.cartridge?.id !== cartridge.id && canvasRef.current) {
+      input.releaseAll();
+      void run(() => emulator.load(cartridge, canvasRef.current!));
+    }
+  };
+
+  const chooseEdition = (next: PokemonEdition) => {
+    if (busy) return;
+    const owned = library.find((item) => item.header.editionId === next.id);
+    setSelectedEditionId(next.id);
+    setSelectedId(owned?.id ?? null);
+    try {
+      localStorage.setItem('pocket-last-edition', next.id);
+      if (owned) localStorage.setItem('pocket-last-cartridge', owned.id);
+      else localStorage.removeItem('pocket-last-cartridge');
+    } catch {
+      /* Selection also works without preferences. */
+    }
+    if (view === 'play' && active && game.cartridge?.id !== owned?.id) {
+      input.releaseAll();
+      if (owned && canvasRef.current) void run(() => emulator.load(owned, canvasRef.current!));
+      else if (available.some((item) => item.id === next.id && item.available))
+        void run(() => loadLocalCartridge(next));
+      else openCartridgePicker();
+    }
+  };
+
+  const returnToGallery = useCallback(() => {
+    if (busy || game.status === 'loading' || view === 'library') return;
+    input.releaseAll();
+    emulator.pause();
+    setFocusMode(false);
+    void run(async () => {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      if (emulator.getSnapshot().cartridge) await emulator.persist(true);
+      setLibrary(await storage.listCartridges());
+      setView('library');
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    });
+  }, [busy, game.status, view, input, emulator, run]);
+
+  const toggleFullscreen = useCallback(() => {
+    if (focusMode) {
+      setFocusMode(false);
+      return;
+    }
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch((error) => notify(message(error), true));
+      return;
+    }
+    if (stageRef.current?.requestFullscreen)
+      void stageRef.current.requestFullscreen().catch(() => setFocusMode(true));
+    else setFocusMode(true);
+  }, [focusMode, notify]);
+
+  useEffect(() => {
+    const changed = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', changed);
+    return () => document.removeEventListener('fullscreenchange', changed);
+  }, []);
+
+  useEffect(() => {
+    let heldSpeed: number | null = null;
+    const keydown = (event: KeyboardEvent) => {
+      if (
+        view !== 'play' ||
+        modal ||
+        isEditing(event.target) ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey
+      )
+        return;
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('button, a') &&
+        ['Enter', 'Space'].includes(event.code)
+      )
+        return;
+      const state = emulator.getSnapshot();
+      const button = keyboardMap[event.code];
+      if (button && state.status === 'running') {
+        event.preventDefault();
+        input.set(`key:${event.code}`, button, true);
+        return;
+      }
+      if (event.repeat) return;
+      if (event.code === 'Space' && ['running', 'paused'].includes(state.status)) {
+        event.preventDefault();
+        if (state.status === 'running') {
+          emulator.pause();
+          void emulator.persist(true).catch((error) => notify(message(error), true));
+        } else emulator.resume();
+      }
+      if (event.code === 'KeyM')
+        setSettings((currentSettings) => ({ ...currentSettings, muted: !currentSettings.muted }));
+      if (event.code === 'KeyF') toggleFullscreen();
+      if (event.code === 'Escape' && focusMode) setFocusMode(false);
+      if (event.code === 'Backquote' && state.status === 'running') {
+        event.preventDefault();
+        heldSpeed = state.speed;
+        emulator.setSpeed(3);
+      }
+    };
+    const keyup = (event: KeyboardEvent) => {
+      const button = keyboardMap[event.code];
+      if (button) input.set(`key:${event.code}`, button, false);
+      if (event.code === 'Backquote' && heldSpeed !== null) {
+        emulator.setSpeed(heldSpeed);
+        heldSpeed = null;
+      }
+    };
+    const blur = () => {
+      input.releaseAll();
+      if (heldSpeed !== null) {
+        emulator.setSpeed(heldSpeed);
+        heldSpeed = null;
+      }
+    };
+    const visibility = () => {
+      if (document.hidden) {
+        blur();
+        if (settings.autoPause) emulator.pause();
+        if (emulator.getSnapshot().cartridge)
+          void emulator.persist(true).catch((error) => notify(message(error), true));
+      }
+    };
+    const pagehide = () => {
+      blur();
+      if (emulator.getSnapshot().cartridge) void emulator.persist(true).catch(() => {});
+    };
+    window.addEventListener('keydown', keydown);
+    window.addEventListener('keyup', keyup);
+    window.addEventListener('blur', blur);
+    window.addEventListener('pagehide', pagehide);
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      blur();
+      window.removeEventListener('keydown', keydown);
+      window.removeEventListener('keyup', keyup);
+      window.removeEventListener('blur', blur);
+      window.removeEventListener('pagehide', pagehide);
+      document.removeEventListener('visibilitychange', visibility);
+    };
+  }, [
+    emulator,
+    input,
+    modal,
+    settings.autoPause,
+    toggleFullscreen,
+    focusMode,
+    notify,
+    keyboardMap,
+    view,
+  ]);
+
+  useEffect(() => {
+    let frame = 0;
+    let previousPads = new Set<number>();
+    let lastName = '';
+    const poll = () => {
+      const pads = Array.from(navigator.getGamepads?.() ?? []).filter((pad): pad is Gamepad =>
+        Boolean(pad?.connected),
+      );
+      const name = pads[0]?.id ?? '';
+      if (name !== lastName) {
+        setGamepad(name);
+        lastName = name;
+      }
+      const enabled = view === 'play' && !modal && emulator.getSnapshot().status === 'running';
+      const currentPads = new Set(pads.map((pad) => pad.index));
+      for (const pad of pads) {
+        const down = enabled ? gamepadButtons(pad) : new Set<GameButton>();
+        for (const button of BUTTONS) input.set(`pad:${pad.index}`, button, down.has(button));
+      }
+      for (const index of previousPads)
+        if (!currentPads.has(index))
+          for (const button of BUTTONS) input.set(`pad:${index}`, button, false);
+      previousPads = currentPads;
+      frame = requestAnimationFrame(poll);
+    };
+    frame = requestAnimationFrame(poll);
+    return () => {
+      cancelAnimationFrame(frame);
+      for (const index of previousPads)
+        for (const button of BUTTONS) input.set(`pad:${index}`, button, false);
+    };
+  }, [emulator, input, modal, view]);
+
+  const saveSlot = (slot: number) => {
+    void run(() => emulator.saveSlot(slot), `冒险已记录在存档 0${slot}`);
+  };
+  const loadSlot = (snapshot: Snapshot) => {
+    void run(async () => {
+      await emulator.loadSlot(snapshot);
+      closeModal();
+      setView('play');
+    }, '欢迎回来，接着冒险吧。');
+  };
+  const exportSave = () => {
+    void run(async () => {
+      const data = await emulator.exportBattery();
+      download(data, `${current?.fileName.replace(/\.(gba|gbc|gb)$/i, '') ?? 'game'}.sav`);
+    }, '游戏存档已导出');
+  };
+  const patchSettings = (patch: Partial<Settings>) =>
+    setSettings((previous) => ({ ...previous, ...patch }));
+  const screenshot = () => {
+    void run(async () => {
+      const url = emulator.screenshot();
+      const blob = await (await fetch(url)).blob();
+      download(blob, `pocket-${new Date().toISOString().replace(/[:.]/g, '-')}.png`, 'image/png');
+    }, '这一刻，已经留下了。');
+  };
+
+  return (
+    <div
+      className={`pocket-app view-${view}`}
+      style={
+        {
+          '--edition-color':
+            (view === 'library' ? preferredEdition : edition)?.color ?? DEFAULT_EDITION.color,
+        } as CSSProperties
+      }
+      onDragEnter={(event) => {
+        if (event.dataTransfer.types.includes('Files')) {
+          event.preventDefault();
+          dragDepth.current++;
+          setDragging(true);
+        }
+      }}
+      onDragLeave={(event) => {
+        event.preventDefault();
+        dragDepth.current--;
+        if (dragDepth.current <= 0) setDragging(false);
+      }}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        dragDepth.current = 0;
+        setDragging(false);
+        const file = event.dataTransfer.files[0];
+        if (file && !busy) void run(() => insertCartridge(file));
+      }}
+    >
+      <a href={view === 'library' ? '#cartridge-gallery' : '#game-stage'} className="skip-link">
+        {view === 'library' ? '跳转到卡带盘' : '跳转到游戏'}
+      </a>
+      <input
+        type="file"
+        ref={romInput}
+        tabIndex={-1}
+        accept=".gb,.gbc,.gba"
+        className="file-input"
+        aria-label="载入 GB / GBC / GBA 卡带"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file)
+            void run(async () => {
+              try {
+                await insertCartridge(file);
+              } finally {
+                finishCartridgePicker();
+              }
+            });
+          else finishCartridgePicker();
+        }}
+      />
+      <input
+        type="file"
+        ref={saveInput}
+        tabIndex={-1}
+        accept=".sav"
+        className="file-input"
+        aria-label="导入游戏存档"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file && current)
+            void run(async () => {
+              if (!/\.sav$/i.test(file.name)) throw new Error('请选择 .sav 格式的游戏存档。');
+              validateBatterySave(file.size, current.header);
+              setPendingSave({ data: await file.arrayBuffer(), name: file.name });
+              setModal('import-save');
+            });
+        }}
+      />
+
+      <header className="site-header">
+        <div className="header-inner">
+          <a
+            className="brand"
+            href="/"
+            aria-label="Poké Pocket 首页"
+            onClick={(event) => {
+              event.preventDefault();
+              returnToGallery();
+            }}
+          >
+            <img src="/favicon.svg" width="36" height="36" alt="" />
+            <span>
+              poké<span className="brand-light">pocket</span>
+              <small>小小口袋，大大冒险。</small>
+            </span>
+          </a>
+          <nav className="header-nav" aria-label="主导航">
+            <button
+              aria-label="卡带收藏"
+              className={!modal && view === 'library' ? 'nav-item active' : 'nav-item'}
+              disabled={busy}
+              onClick={returnToGallery}
+            >
+              <Gamepad2 size={17} />
+              <span>卡带收藏</span>
+            </button>
+            <button
+              aria-label="我的存档"
+              disabled={busy || game.status === 'loading'}
+              className={modal === 'saves' ? 'nav-item active' : 'nav-item'}
+              onClick={() => openModal('saves')}
+            >
+              <Bookmark size={16} />
+              <span>我的存档</span>
+            </button>
+            <button
+              aria-label="游玩指南"
+              disabled={busy || game.status === 'loading'}
+              className={modal === 'help' ? 'nav-item active' : 'nav-item'}
+              onClick={() => openModal('help')}
+            >
+              <CircleHelp size={17} />
+              <span>游玩指南</span>
+            </button>
+          </nav>
+          <div className="header-right">
+            <span className={`local-status ${storageReady ? 'ready' : ''}`}>
+              <i />
+              {storageReady ? '本地存储已就绪' : '正在连接存储'}
+            </span>
+            <button
+              className="icon-button settings-button"
+              disabled={busy || game.status === 'loading'}
+              onClick={() => openModal('settings')}
+              aria-label="打开设置"
+            >
+              <Settings2 size={19} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {view === 'library' && (
+        <CartridgeGallery
+          edition={preferredEdition}
+          library={library}
+          available={available}
+          catalogReady={catalogReady}
+          busy={busy}
+          onEdition={chooseEdition}
+          onStart={startAdventure}
+        />
+      )}
+
+      {/* mGBA owns this canvas for its lifetime. Hide the stage; never remount it when browsing. */}
+      <div className="app-layout" hidden={view !== 'play'}>
+        <SeriesLibrary
+          edition={selectedEdition}
+          cartridge={selected}
+          library={library}
+          available={available}
+          busy={busy}
+          onEdition={chooseEdition}
+          onCartridge={chooseCartridge}
+        />
+
+        <main className="main-column">
+          <div className="page-heading">
+            <div>
+              <button
+                className="back-to-gallery"
+                aria-label="返回卡带盘"
+                onClick={returnToGallery}
+                disabled={busy}
+              >
+                <ArrowLeft size={14} />
+                返回卡带盘<span>THE POKÉMON COLLECTION</span>
+              </button>
+              <h1>
+                把冒险，装进口袋<span>。</span>
+              </h1>
+              <p>从关都到丰缘，选一枚卡带，继续你的冒险。</p>
+            </div>
+            <div className="region-stamp">
+              <Sun size={21} strokeWidth={1.4} />
+              <span>
+                {edition?.regionEn ?? 'POKÉMON'} REGION
+                <small>
+                  {edition
+                    ? `${edition.region}地区 · 第 ${edition.generation} 世代`
+                    : '今天也是冒险的好日子'}
+                </small>
+              </span>
+            </div>
+          </div>
+          <section
+            ref={stageRef}
+            id="game-stage"
+            className={`game-stage ${focusMode ? 'focus-mode' : ''}`}
+            aria-label="掌机模拟器"
+          >
+            <div className="stage-heading">
+              <div>
+                <span className={`live-dot ${game.status === 'running' ? 'is-live' : ''}`} />
+                <h2>{title}</h2>
+                <span className="stage-edition">
+                  {edition?.english.toUpperCase() ?? current?.header.gameCode}
+                </span>
+              </div>
+              <div className="stage-status">
+                <span>
+                  {game.status === 'running'
+                    ? '正在冒险'
+                    : game.status === 'paused'
+                      ? '已暂停'
+                      : game.status === 'loading'
+                        ? '正在载入'
+                        : '准备就绪'}
+                </span>
+                <i />
+                <span className="fps" data-testid="fps">
+                  {game.fps === null ? '—' : game.fps} FPS
+                </span>
+              </div>
+            </div>
+            <Console
+              edition={edition}
+              system={current?.header.system ?? preferredEdition.system}
+              canvasRef={canvasRef}
+              status={!active && busy ? 'loading' : game.status}
+              filter={settings.filter}
+              input={input}
+              pressed={pressed}
+              hasCartridge={Boolean(selected || localAvailable)}
+              onStart={startAdventure}
+              onResume={() => emulator.resume()}
+            />
+            <div className="stage-toolbar">
+              <div className="toolbar-group">
+                <button
+                  className="play-toggle"
+                  disabled={!active || busy}
+                  aria-label={game.status === 'paused' ? '继续游戏' : '暂停游戏'}
+                  onClick={() => {
+                    if (game.status === 'paused') emulator.resume();
+                    else {
+                      emulator.pause();
+                      void run(() => emulator.persist(true));
+                    }
+                  }}
+                >
+                  {game.status === 'paused' ? (
+                    <Play size={15} fill="currentColor" />
+                  ) : (
+                    <Pause size={15} fill="currentColor" />
+                  )}
+                  <span>{game.status === 'paused' ? '继续' : '暂停'}</span>
+                </button>
+                <button
+                  className="toolbar-button"
+                  disabled={!active || busy}
+                  onClick={() => openModal('restart')}
+                  aria-label="重新启动游戏"
+                  title="重新启动"
+                >
+                  <RotateCcw size={17} />
+                </button>
+                <span className="toolbar-divider" />
+                <button
+                  className="toolbar-button"
+                  aria-label={settings.muted ? '开启声音' : '静音'}
+                  title="声音 · M"
+                  onClick={() => {
+                    patchSettings({ muted: !settings.muted });
+                    emulator.resumeAudio();
+                  }}
+                >
+                  {settings.muted || settings.volume === 0 ? (
+                    <VolumeX size={18} />
+                  ) : (
+                    <Volume2 size={18} />
+                  )}
+                </button>
+                <input
+                  className="volume-slider"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={settings.muted ? 0 : settings.volume}
+                  aria-label="音量"
+                  onChange={(event) => {
+                    patchSettings({ volume: Number(event.target.value), muted: false });
+                    emulator.resumeAudio();
+                  }}
+                />
+              </div>
+              <div className="session-clock">
+                <Clock3 size={13} />
+                <span data-testid="play-time">{playTime(game.seconds)}</span>
+              </div>
+              <div className="toolbar-group right-tools">
+                <button
+                  className={`speed-button ${game.speed !== 1 ? 'is-fast' : ''}`}
+                  onClick={() => emulator.setSpeed(game.speed === 1 ? 2 : game.speed === 2 ? 3 : 1)}
+                  aria-label={`游戏速度 ${game.speed} 倍，点击切换`}
+                  title="切换倍速"
+                >
+                  <Zap size={14} />
+                  <span>{game.speed}×</span>
+                </button>
+                <span className="toolbar-divider" />
+                <button
+                  className="toolbar-button screenshot-button"
+                  onClick={screenshot}
+                  disabled={!active || busy}
+                  aria-label="保存游戏截图"
+                  title="保存截图"
+                >
+                  <Download size={17} />
+                </button>
+                <button
+                  className="toolbar-button"
+                  onClick={toggleFullscreen}
+                  aria-label={fullscreen || focusMode ? '退出全屏' : '全屏游戏'}
+                  title="全屏 · F"
+                >
+                  {fullscreen || focusMode ? <Minimize size={17} /> : <Maximize size={17} />}
+                </button>
+              </div>
+            </div>
+            <MobileControls
+              status={game.status}
+              input={input}
+              pressed={pressed}
+              system={current?.header.system ?? preferredEdition.system}
+            />
+          </section>
+
+          <div className="below-grid">
+            <section className="info-card controls-card">
+              <div className="card-heading">
+                <h2>
+                  <Keyboard size={17} />
+                  操作指南
+                </h2>
+                <button className="text-button" onClick={() => openModal('help')}>
+                  全部按键
+                  <ArrowRight size={13} />
+                </button>
+              </div>
+              <div className="control-grid">
+                <div>
+                  <span>移动</span>
+                  <span className="key-group">
+                    {(['Up', 'Down', 'Left', 'Right'] as const).map((button) => (
+                      <kbd key={button}>{keyLabel(settings.bindings[button][0]!)}</kbd>
+                    ))}
+                  </span>
+                </div>
+                <div>
+                  <span>确认 / 取消</span>
+                  <span className="key-group">
+                    <kbd>{keyLabel(settings.bindings.A[0]!)}</kbd>
+                    <i>/</i>
+                    <kbd>{keyLabel(settings.bindings.B[0]!)}</kbd>
+                  </span>
+                </div>
+                <div>
+                  <span>开始</span>
+                  <kbd className="wide-key">{keyLabel(settings.bindings.Start[0]!)}</kbd>
+                </div>
+                <div>
+                  <span>选择</span>
+                  <kbd className="wide-key">{keyLabel(settings.bindings.Select[0]!)}</kbd>
+                </div>
+              </div>
+              <div className="controls-footnote">
+                <Gamepad2 size={14} />
+                <span title={gamepad}>
+                  {gamepad ? '手柄已连接，准备出发' : '设置中可调整键位 · 也支持触屏与手柄'}
+                </span>
+              </div>
+            </section>
+            <section className="info-card saves-card">
+              <div className="card-heading">
+                <h2>
+                  <Save size={16} />
+                  即时存档
+                </h2>
+                <span className="save-location">
+                  <HardDrive size={11} />
+                  保存在此设备
+                </span>
+              </div>
+              <SaveSlots
+                snapshots={game.snapshots}
+                active={active}
+                busy={busy}
+                onSave={saveSlot}
+                onLoad={loadSlot}
+              />
+              <div className="saves-footnote">
+                <span>
+                  <CheckCheck size={13} />
+                  {relativeTime(game.lastSavedAt)}
+                </span>
+                <button className="text-button" onClick={() => openModal('saves')}>
+                  管理
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+            </section>
+          </div>
+          <footer className="main-footer">
+            <span>
+              <Heart size={12} /> 为每一个舍不得结束的冒险。
+            </span>
+            <span>
+              POKÉ POCKET <i>·</i> EST. 2026
+            </span>
+          </footer>
+        </main>
+      </div>
+
+      {modal === 'settings' && (
+        <Modal title="让掌机，更像你的。" eyebrow="MAKE IT YOURS" onClose={closeModal} wide>
+          <KeyBindings
+            bindings={settings.bindings}
+            onChange={(bindings) => patchSettings({ bindings })}
+          />
+          <div className="setting-row">
+            <div>
+              <strong>
+                <AudioLines size={17} />
+                游戏音量
+              </strong>
+              <p>让熟悉的旋律，再次响起。</p>
+            </div>
+            <button
+              className="icon-button"
+              onClick={() => patchSettings({ muted: !settings.muted })}
+              aria-label={settings.muted ? '取消静音' : '静音游戏'}
+            >
+              {settings.muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+            </button>
+          </div>
+          <div className="setting-volume">
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={settings.volume}
+              aria-label="设置游戏音量"
+              onChange={(event) =>
+                patchSettings({ volume: Number(event.target.value), muted: false })
+              }
+            />
+            <span>{Math.round(settings.volume * 100)}%</span>
+          </div>
+          <div className="setting-row">
+            <div>
+              <strong>屏幕风格</strong>
+              <p>原生像素，或记忆中的液晶纹理。</p>
+            </div>
+          </div>
+          <div className="filter-options">
+            <button
+              className={settings.filter === 'crisp' ? 'selected' : ''}
+              onClick={() => patchSettings({ filter: 'crisp' })}
+            >
+              <span className="filter-preview crisp-preview" />
+              清晰像素{settings.filter === 'crisp' && <Check size={14} />}
+            </button>
+            <button
+              className={settings.filter === 'lcd' ? 'selected' : ''}
+              onClick={() => patchSettings({ filter: 'lcd' })}
+            >
+              <span className="filter-preview lcd-preview" />
+              复古液晶{settings.filter === 'lcd' && <Check size={14} />}
+            </button>
+          </div>
+          <div className="setting-row">
+            <div>
+              <strong>离开时自动暂停</strong>
+              <p>切换标签页时，帮你按下暂停。</p>
+            </div>
+            <button
+              className={`toggle-switch ${settings.autoPause ? 'on' : ''}`}
+              role="switch"
+              aria-checked={settings.autoPause}
+              aria-label="离开时自动暂停"
+              onClick={() => patchSettings({ autoPause: !settings.autoPause })}
+            >
+              <span />
+            </button>
+          </div>
+          <div className="settings-about">
+            <img src="/favicon.svg" alt="" width="30" height="30" />
+            <div>
+              <strong>Poké Pocket 1.0</strong>
+              <span>{game.coreVersion || `mGBA WASM ${CORE_VERSION}`} · 冒险始于一枚卡带</span>
+              <a
+                className="text-button"
+                href="/licenses/NOTICE.txt"
+                target="_blank"
+                rel="noreferrer"
+              >
+                开源组件与许可
+                <ExternalLink size={10} />
+              </a>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {modal === 'saves' && (
+        <Modal
+          title="把这一刻，好好收起来。"
+          eyebrow="YOUR ADVENTURE, SAVED"
+          onClose={closeModal}
+          wide
+        >
+          <p className="modal-intro">
+            {active
+              ? `${title} · ${playTime(game.seconds)} 的冒险时光`
+              : '启动卡带后，就可以在这里管理你的游戏进度。'}
+          </p>
+          <SaveSlots
+            snapshots={game.snapshots}
+            active={active}
+            busy={busy}
+            onSave={saveSlot}
+            onLoad={loadSlot}
+          />
+          <div className="autosave-row">
+            <span className="autosave-icon">
+              <Clock3 size={19} />
+            </span>
+            <div>
+              <strong>自动记录</strong>
+              <p>
+                {autoSnapshot
+                  ? relativeTime(autoSnapshot.updatedAt)
+                  : '游戏中每 30 秒，以及暂停时，自动记录进度。'}
+              </p>
+            </div>
+            <button
+              className="secondary-button"
+              disabled={!active || !autoSnapshot || busy}
+              onClick={() => autoSnapshot && loadSlot(autoSnapshot)}
+            >
+              恢复进度
+              <ArrowRight size={14} />
+            </button>
+          </div>
+          <div className="save-transfer">
+            <div>
+              <h3>游戏存档 · .sav</h3>
+              <p>与游戏内的 SAVE 对应，也可在其他模拟器中继续。</p>
+            </div>
+            <div>
+              <button
+                className="secondary-button"
+                disabled={!active || busy}
+                onClick={() => saveInput.current?.click()}
+              >
+                <ArrowUpFromLine size={15} />
+                导入
+              </button>
+              <button className="primary-button" disabled={!active || busy} onClick={exportSave}>
+                <ArrowDownToLine size={15} />
+                导出存档
+              </button>
+            </div>
+          </div>
+          <div className="modal-tip">
+            <ShieldCheck size={17} />
+            <span>进度保存在当前浏览器。换设备或清理浏览器数据前，请导出 .sav 存档。</span>
+          </div>
+        </Modal>
+      )}
+
+      {modal === 'help' && (
+        <Modal title="你好，训练家。" eyebrow="A SMALL FIELD GUIDE" onClose={closeModal} wide>
+          <p className="modal-intro">载入卡带，按下开始。剩下的，交给你的冒险精神。</p>
+          <div className="help-steps">
+            <div>
+              <span>01</span>
+              <strong>插入你的卡带</strong>
+              <p>
+                选择喜欢的版本，导入你的 GB、GBC 或 GBA 卡带。卡带只保存在当前浏览器，
+                下次回来直接开始；已就绪的卡带无需再次导入。
+              </p>
+            </div>
+            <div>
+              <span>02</span>
+              <strong>从熟悉的地方出发</strong>
+              <p>游戏内选择 CONTINUE 读取 .sav，或通过「我的存档」恢复即时进度。</p>
+            </div>
+          </div>
+          <div className="full-keyboard">
+            {[
+              [
+                '向上 / 向下',
+                `${bindingText(settings.bindings, 'Up')} · ${bindingText(settings.bindings, 'Down')}`,
+              ],
+              [
+                '向左 / 向右',
+                `${bindingText(settings.bindings, 'Left')} · ${bindingText(settings.bindings, 'Right')}`,
+              ],
+              ['A · 确认 / 互动', bindingText(settings.bindings, 'A')],
+              ['B · 取消 / 返回', bindingText(settings.bindings, 'B')],
+              ['START · 游戏菜单', bindingText(settings.bindings, 'Start')],
+              ['SELECT · 选择', bindingText(settings.bindings, 'Select')],
+              [
+                'L / R · 肩键',
+                `${bindingText(settings.bindings, 'L')} · ${bindingText(settings.bindings, 'R')}`,
+              ],
+              ['暂停 / 继续', 'Space'],
+              ['静音 / 全屏', 'M / F'],
+              ['按住加速至 3×', '`'],
+            ].map(([label, keys]) => (
+              <div key={label}>
+                <span>{label}</span>
+                <kbd>{keys}</kbd>
+              </div>
+            ))}
+          </div>
+          <div className="modal-tip">
+            <Gamepad2 size={19} />
+            <span>
+              {gamepad
+                ? `已连接：${gamepad}`
+                : '连接标准游戏手柄后，按任意键即可启用。手机也可使用画面下方的触摸按键。'}
+            </span>
+          </div>
+          {current && (
+            <details className="cartridge-details">
+              <summary>
+                查看当前卡带信息
+                <ChevronRight size={14} />
+              </summary>
+              <dl>
+                <div>
+                  <dt>文件</dt>
+                  <dd>{current.fileName}</dd>
+                </div>
+                <div>
+                  <dt>游戏代码</dt>
+                  <dd>
+                    {current.header.gameCode} · v{current.header.version}
+                  </dd>
+                </div>
+                <div>
+                  <dt>容量 / 存储</dt>
+                  <dd>
+                    {(current.header.size / 1048576).toFixed(2)} MB · {current.header.saveType}
+                  </dd>
+                </div>
+                <div>
+                  <dt>实时时钟</dt>
+                  <dd>{current.header.rtc ? '已识别，使用设备时间' : '卡带未声明 RTC'}</dd>
+                </div>
+                <div>
+                  <dt>ROM SHA-256</dt>
+                  <dd className="hash-value">{current.id}</dd>
+                </div>
+              </dl>
+            </details>
+          )}
+          <div className="help-note">
+            <Sparkles size={15} />
+            <p>
+              GB / GBC 游戏画面为 160 × 144，支持的初代卡带会显示 Super Game Boy 原生边框；GBA 为
+              240 × 160。暂不支持联机交换与对战。
+            </p>
+          </div>
+        </Modal>
+      )}
+
+      {modal === 'restart' && (
+        <Modal title="重新开启这段冒险？" eyebrow="BACK TO THE TITLE" onClose={closeModal}>
+          <p className="modal-intro">
+            掌机会回到游戏标题画面。当前进度会先记录为自动存档，也可以继续读取游戏内的 SAVE。
+          </p>
+          <div className="modal-actions">
+            <button className="secondary-button" onClick={closeModal}>
+              再玩一会儿
+            </button>
+            <button
+              className="primary-button"
+              disabled={busy}
+              onClick={() => {
+                void run(async () => {
+                  await emulator.reset();
+                  closeModal();
+                  setView('play');
+                }, '掌机已重新启动');
+              }}
+            >
+              <RotateCcw size={15} />
+              重新启动
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {modal === 'import-save' && (
+        <Modal title="从这份存档继续？" eyebrow="WELCOME BACK" onClose={closeModal}>
+          <p className="modal-intro">
+            <strong>{pendingSave?.name}</strong>
+            <br />
+            将替换当前卡带的游戏存档并重新启动。已有的即时存档仍会保留。
+          </p>
+          <div className="modal-actions">
+            <button className="secondary-button" onClick={closeModal}>
+              取消
+            </button>
+            <button
+              className="primary-button"
+              disabled={busy || !pendingSave}
+              onClick={() => {
+                if (pendingSave)
+                  void run(async () => {
+                    await emulator.importBattery(pendingSave.data);
+                    setPendingSave(null);
+                    closeModal();
+                    setView('play');
+                  }, '存档已导入，请在游戏中选择 CONTINUE');
+              }}
+            >
+              <Upload size={15} />
+              导入并启动
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {dragging && (
+        <div className="drop-overlay">
+          <div>
+            <FolderOpen size={42} />
+            <strong>把卡带放进来。</strong>
+            <span>松开即可载入 GB / GBC / GBA 游戏</span>
+          </div>
+        </div>
+      )}
+      {toast && (
+        <div
+          className={`toast ${toast.error ? 'toast-error' : ''}`}
+          role={toast.error ? 'alert' : 'status'}
+        >
+          {toast.error ? <CircleHelp size={18} /> : <Check size={18} />}
+          <span>{toast.text}</span>
+          <button aria-label="关闭提示" onClick={() => setToast(null)}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

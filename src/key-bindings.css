@@ -1,0 +1,152 @@
+.keyboard-settings {
+  padding-bottom: 22px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.keyboard-settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.keyboard-settings h3 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+.keyboard-settings .text-button {
+  font-size: 10px;
+  gap: 5px;
+}
+.keyboard-settings > p {
+  font-size: 10px;
+  color: #829175;
+  line-height: 1.8;
+  margin: 9px 0 15px;
+}
+.binding-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px 18px;
+}
+.binding-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: #eff2e7;
+  border: 1px solid #e3e8d9;
+  border-radius: 7px;
+  padding: 7px 8px 7px 10px;
+  min-width: 0;
+}
+.binding-row > span {
+  color: #6f8063;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.binding-keys {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.binding-key-wrap {
+  position: relative;
+}
+.binding-key {
+  height: 29px;
+  min-width: 37px;
+  padding: 0 6px;
+  border: 1px solid #d0d9c3;
+  border-bottom-width: 3px;
+  border-radius: 5px;
+  background: #fffef6;
+  color: #45603f;
+  font: 9px var(--mono);
+  white-space: nowrap;
+  box-shadow: 0 1px 2px #4861360d;
+}
+.binding-key:hover {
+  background: #f7f6e9;
+  border-color: #a6b68f;
+}
+.binding-key.empty-key {
+  color: #a3af96;
+  background: #e9eedf;
+  border-style: dashed;
+  border-bottom-width: 1px;
+}
+.binding-key.is-listening {
+  color: #fffef5;
+  border-color: #617c4f;
+  background: #718e60;
+  box-shadow: 0 0 0 3px #718e6026;
+}
+.remove-binding {
+  position: absolute;
+  top: -6px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid #d4dcca;
+  background: #fffef8;
+  color: #798b6b;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+}
+.remove-binding:hover {
+  background: #eee6d8;
+  color: #8b5845;
+}
+.keyboard-settings .binding-feedback {
+  min-height: 33px;
+  margin: 12px 0 6px;
+  font-size: 10px;
+  color: #698258;
+}
+.keyboard-settings .binding-feedback.is-error {
+  color: #b25e42;
+}
+.binding-shortcuts {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #8b987e;
+  font-size: 8px;
+  line-height: 1.8;
+}
+.binding-shortcuts > span:first-child {
+  white-space: nowrap;
+}
+@media (max-width: 540px) {
+  .binding-grid {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+  .binding-row {
+    padding: 7px 12px;
+  }
+  .binding-row > span {
+    font-size: 11px;
+  }
+  .binding-key {
+    min-width: 63px;
+    height: 32px;
+    font-size: 10px;
+  }
+  .binding-keys {
+    gap: 10px;
+  }
+  .keyboard-settings .binding-feedback {
+    font-size: 10px;
+  }
+  .binding-shortcuts {
+    flex-direction: column;
+    gap: 3px;
+    font-size: 9px;
+  }
+}

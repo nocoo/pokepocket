@@ -1,0 +1,55 @@
+{
+  "name": "poke-pocket",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "node scripts/setup-emulator.mjs && node scripts/check-no-roms.mjs public && npm run typecheck && vite build && node scripts/check-no-roms.mjs dist",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc -b",
+    "cf:typegen": "wrangler types",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:check": "npm run build && wrangler deploy --dry-run",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "postinstall": "node scripts/setup-emulator.mjs",
+    "rom:build": "node scripts/build-rom.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:distribution": "node scripts/check-no-roms.mjs public dist",
+    "verify:access": "node scripts/verify-access.mjs"
+  },
+  "dependencies": {
+    "@fontsource/dm-sans": "5.3.0",
+    "@fontsource/press-start-2p": "5.3.0",
+    "@fontsource/space-mono": "5.3.0",
+    "@thenick775/mgba-wasm": "2.5.1",
+    "idb": "8.0.3",
+    "jose": "6.2.11",
+    "lucide-react": "1.41.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.54.4",
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.4.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "prettier": "3.9.6",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "5.0.0",
+    "wrangler": "4.129.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nocoo/pokemon.git"
+  }
+}

@@ -1,0 +1,37 @@
+Poké Pocket — third-party components
+
+The project MIT license covers original application code and documentation only.
+It does not license Pokémon game content, character artwork or trademarks.
+
+mGBA WebAssembly 2.5.1 (unmodified binary)
+Mozilla Public License 2.0: ./mgba-MPL-2.0.txt
+Corresponding source and build instructions:
+https://github.com/thenick775/mgba/tree/e974b288bd7e5cfc7c7b96f8b4d32b673ddfb68c/src/platform/wasm
+Upstream: https://github.com/mgba-emu/mgba
+
+React and React DOM: ./react.txt and ./react-dom.txt
+idb: ./idb.txt
+jose: ./jose.txt
+Lucide icons: ./lucide-react.txt
+DM Sans: ./fontsource-dm-sans.txt
+Space Mono: ./fontsource-space-mono.txt
+Press Start 2P: ./fontsource-press-start-2p.txt
+
+Charizard, Venusaur, Blastoise, Pikachu, Ho-Oh, Lugia, Suicune, Groudon,
+Kyogre, Treecko, Torchic, Mudkip and Rayquaza artwork comes from:
+https://github.com/pret/pokeemerald/tree/5eff78649e7170a877b961ef0b3da13b81a16038/graphics/pokemon
+The first frame is cropped to 64 x 64 and palette index 0 is transparent.
+Pokémon and associated game content belong to Nintendo, Game Freak and Creatures.
+Poké Pocket is an independent fan project, without affiliation or endorsement.
+
+ROMs are not included in Git or production assets. Imported cartridges stay in
+browser storage. Optional private local builds use these source projects:
+https://github.com/pret/pokered
+https://github.com/Narishma-gb/pokegreen
+https://github.com/pret/pokeyellow
+https://github.com/pret/pokegold
+https://github.com/pret/pokecrystal
+https://github.com/pret/pokeruby
+https://github.com/pret/pokeemerald
+https://github.com/pret/pokefirered
+Build tools: https://github.com/pret/agbcc and https://github.com/gbdev/rgbds

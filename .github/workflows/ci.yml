@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    uses: nocoo/base-ci/.github/workflows/bun-quality.yml@b482fdee98ce1196c809ae158f116caabfc2475b # v2026.6
+    with:
+      bun-version: '1.4.0'
+      pre-command: 'bun run cf:typegen && bun run build'
+      test-command: 'bun run test'
+      typecheck-command: 'bun run typecheck'
+      lint-command: 'bun run format:check'
+      upload-coverage: 'false'
+      enable-l2: 'false'
+      enable-l3: 'true'
+      l3-command: 'bun run test:e2e'
+    secrets: inherit
