@@ -16,6 +16,7 @@
     "deploy:check": "npm run build && wrangler deploy --dry-run",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:http": "vitest run --config vitest.http.config.ts",
     "test:e2e": "playwright test",
     "postinstall": "node scripts/setup-emulator.mjs",
     "rom:build": "node scripts/build-rom.mjs",

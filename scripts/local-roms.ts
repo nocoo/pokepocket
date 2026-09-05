@@ -17,7 +17,7 @@ interface LocalCartridge {
   url: string;
 }
 
-async function inspect(file: string, expectedId?: string) {
+export async function inspectCartridgeFile(file: string, expectedId?: string) {
   // Do not follow a file symlink, including one swapped in after discovery.
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
@@ -53,7 +53,7 @@ export async function discoverLocalCartridges(root: string): Promise<LocalCartri
       if (!file.isFile() || !/\.(gb|gbc|gba)$/i.test(file.name)) continue;
       try {
         const fullPath = path.join(directory, file.name);
-        const { handle, edition } = await inspect(fullPath);
+        const { handle, edition } = await inspectCartridgeFile(fullPath);
         await handle.close();
         if (!cartridges.has(edition.id))
           cartridges.set(edition.id, {
@@ -120,7 +120,7 @@ export function localCartridges(): Plugin {
             response.statusCode = 404;
             return json(response, request, { error: 'Not found' });
           }
-          const { handle, size } = await inspect(cartridge.file, cartridge.id);
+          const { handle, size } = await inspectCartridgeFile(cartridge.file, cartridge.id);
           response.setHeader('Content-Type', 'application/octet-stream');
           response.setHeader('Content-Length', size);
           if (request.method === 'HEAD') {
