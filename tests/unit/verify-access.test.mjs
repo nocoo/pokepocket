@@ -107,4 +107,78 @@ describe('deployed version verification', () => {
     await vi.runAllTimersAsync();
     await verification;
   });
+
+  it('orchestrates complete access verification and release checks with default paths and package version', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const { version } = JSON.parse(
+      await readFile(new URL('../../package.json', import.meta.url), 'utf8'),
+    );
+    const { runAccessVerification } = await import('../../scripts/verify-access.mjs');
+    request.mockResolvedValue(new Response(null, { status: 302, headers: { Location: login } }));
+
+    // Test with default 5 protected paths and live package version check reading actual package.json
+    const res = await runAccessVerification({
+      isRelease: true,
+      fetchFn: async (url) => {
+        if (url.includes('/api/live')) {
+          return Response.json({ status: 'ok', version }, { status: 200 });
+        }
+        return new Response(null, { status: 302, headers: { Location: login } });
+      },
+      silent: true,
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.count).toBe(6); // 5 paths + 1 release version check
+  });
+
+  it('settles all checks and returns success:false when a check fails while waiting for remaining paths', async () => {
+    const { runAccessVerification } = await import('../../scripts/verify-access.mjs');
+
+    let deferredResolve;
+    const deferredPromise = new Promise((resolve) => {
+      deferredResolve = resolve;
+    });
+
+    let delayedPathSettled = false;
+    let aggregateSettled = false;
+
+    const resPromise = runAccessVerification({
+      paths: ['/valid-1', '/invalid-path', '/delayed-path'],
+      attempts: 1,
+      delayMs: 1,
+      fetchFn: async (url) => {
+        if (url.includes('/invalid-path')) {
+          return new Response('forbidden', { status: 403 });
+        }
+        if (url.includes('/delayed-path')) {
+          await deferredPromise;
+          delayedPathSettled = true;
+          return new Response(null, { status: 302, headers: { Location: login } });
+        }
+        return new Response(null, { status: 302, headers: { Location: login } });
+      },
+      silent: true,
+    });
+
+    resPromise.then(() => {
+      aggregateSettled = true;
+    });
+
+    // Advance fake timers by 10ms to let immediate rejections process without advancing deferredPromise
+    await vi.advanceTimersByTimeAsync(10);
+    expect(delayedPathSettled).toBe(false);
+    expect(aggregateSettled).toBe(false);
+
+    // Now release delayed path and advance fake timers
+    deferredResolve();
+    await vi.advanceTimersByTimeAsync(10);
+    const res = await resPromise;
+
+    expect(delayedPathSettled).toBe(true);
+    expect(aggregateSettled).toBe(true);
+    expect(res.success).toBe(false);
+    expect(res.failures).toHaveLength(1);
+    expect(res.failures[0]).toContain('/invalid-path');
+  });
 });
