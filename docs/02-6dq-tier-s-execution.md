@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1, B2, and B3 accepted; B4 assigned in four review handoffs. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1, B2, B3, and B4a accepted; B4b assigned. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -215,7 +215,10 @@ findings through additional atomic fixes, and commits the final implementation/e
 | B1    | Accepted | `59bbfa2`, `d89ff9d`                                                        | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below |
 | B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                       | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                 |
 | B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742` | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass             |
-| B4    | Assigned | —                                                                           | B4a input/browser boundaries; B4b maintenance scripts; B4c rendered UI; B4d enforced L1/G1                |
+| B4a   | Accepted | `fff1da2`, `8f9f008`                                                        | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed      |
+| B4b   | Assigned | —                                                                           | Callable maintenance scripts and temporary-files tests; developer HTTP case moves outside L1              |
+| B4c   | Pending  | —                                                                           | Rendered components, App commands, and input lifecycle                                                    |
+| B4d   | Pending  | —                                                                           | All four coverage metrics >=90%; enforced L1/G1 pre-commit gate                                           |
 | B5    | Pending  | —                                                                           | —                                                                                                         |
 | B6    | Pending  | —                                                                           | —                                                                                                         |
 | B7    | Pending  | —                                                                           | —                                                                                                         |
@@ -363,11 +366,42 @@ All B3 review findings are resolved. Browser runners are stopped before the next
 ### B4 handoff sequence
 
 The four B4 atomic boundaries in section 3 are separate implementation/review handoffs. B4a is
-assigned first; pi must stop for review before B4b, B4c, or B4d. Keep coverage scope and thresholds
+accepted; B4b is assigned, and pi must stop for review before B4c or B4d. Keep coverage scope and thresholds
 unchanged until the reviewed behavior tests meet all four metrics. B4a covers input, settings,
 screenshot/download boundaries, remaining controller recovery and subscription lifecycle branches.
 DOM dependencies must be pinned exactly, and TSX tests must be discovered and strictly typechecked.
 The current TypeScript test configuration already includes `tests/`; extend Vitest discovery as needed.
+
+### B4a acceptance evidence
+
+Reviewed implementation: `8f9f008`, following `fff1da2`. The exact-pinned `happy-dom@20.12.0`
+supports process-local browser boundary tests. No production source or coverage scope changed.
+
+Independent checks on 2026-09-06:
+
+- `bun run test:coverage` at `fff1da2`: 169 tests across 16 files pass in 0.60 seconds. Coverage is
+  52.35% statements (933/1782), 38.21% branches (501/1311), 42.68% functions (181/424), and 54.09%
+  lines (839/1551). `bun run build` also passes for the production Worker/client and distribution.
+- `bun run quality:g1` and `bun run test` at `8f9f008`: Biome checks 62 files with zero
+  errors/warnings; strict TypeScript, formatting, and all 169 tests pass without Node storage warnings.
+- Reviewed regressions cover keyboard source isolation and editable targets, gamepad mapping and
+  thresholds, settings corruption/clamping/non-finite values, GB/GBA exact PNG dimensions, deferred
+  image decoding and failures, disabled smoothing, PNG MIME, unavailable canvas contexts, and failed
+  blob encoding. Downloads verify actual bytes plus anchor removal and object-URL revocation.
+- Controller subscription/unsubscription, post-failure busy/error state, emulator control/capture/
+  export errors, and the existing library-view modal pause rule retain observable assertions.
+
+Review restored an overwritten B2 modal regression, completed decode/download assertions, and
+ensured URL mocks restore their original functions. The final correction removes eager reads of
+Node's host `localStorage` getter; Vitest's stub lifecycle restores the descriptor. Actual App
+keyboard/gamepad polling, disconnect handling, and DOM lifecycle remain B4c work. Production code
+did not change in this batch, so B3's browser regression evidence remains the relevant checkpoint.
+
+B4b now owns callable policies in `setup-emulator.mjs`, `check-no-roms.mjs`, `build-rom.mjs`, and
+`verify-access.mjs`, with import guards and real temporary-files assertions. Its unit tests must call
+the actual exports so coverage sees their execution. It also moves the developer-plugin TCP case
+outside L1 while retaining discovery and middleware policy tests. Threshold enforcement and hooks
+remain B4d work.
 
 ## 5. Final acceptance record
 
