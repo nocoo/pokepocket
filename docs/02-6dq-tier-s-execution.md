@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1 and B2 accepted; B3 assigned. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1 and B2 accepted; B3 implementation and review ongoing. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -207,16 +207,16 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State    | Implementation commits                                | Review and evidence                                                                                       |
-| ----- | -------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| B1    | Accepted | `59bbfa2`, `d89ff9d`                                  | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below |
-| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964` | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                 |
-| B3    | Assigned | —                                                     | Emulator dependency boundaries, serialized save recovery, and isolated storage transactions               |
-| B4    | Pending  | —                                                     | —                                                                                                         |
-| B5    | Pending  | —                                                     | —                                                                                                         |
-| B6    | Pending  | —                                                     | —                                                                                                         |
-| B7    | Pending  | —                                                     | —                                                                                                         |
-| B8    | Pending  | —                                                     | —                                                                                                         |
+| Batch | State       | Implementation commits                                | Review and evidence                                                                                       |
+| ----- | ----------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| B1    | Accepted    | `59bbfa2`, `d89ff9d`                                  | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below |
+| B2    | Accepted    | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964` | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                 |
+| B3    | In progress | `ebe6901`, `76a6148`                                  | Emulator review found further recovery/cleanup failures; isolated storage work remains pending            |
+| B4    | Pending     | —                                                     | —                                                                                                         |
+| B5    | Pending     | —                                                     | —                                                                                                         |
+| B6    | Pending     | —                                                     | —                                                                                                         |
+| B7    | Pending     | —                                                     | —                                                                                                         |
+| B8    | Pending     | —                                                     | —                                                                                                         |
 
 ### B1 review evidence
 
@@ -303,6 +303,28 @@ Independent checks on 2026-09-06 at the final implementation:
 
 Both agents stopped browser runners before handoff. B2 is accepted; B3 now owns the three confirmed
 emulator/storage failures documented in section 6 and the atomic boundaries in section 3.
+
+### B3 emulator review checkpoint
+
+The public dependency boundary and serialized command queue are present at `76a6148`. An independent
+process-local probe confirms that failed play-time writes retain accumulated time, including ticks
+that arrive during a later successful write. This resolves the original accounting retry failure.
+
+The same probe reproduces four remaining failures through public methods:
+
+- A rejected battery replacement leaves the old core running but never restarts the stopped timer,
+  so FPS, play-time accounting, and autosave stop indefinitely.
+- A crash callback queued by the old cartridge can fire after a new load and mark the new game as
+  failed. Deferred callbacks must belong to the lifecycle generation that created them.
+- A newly created core whose `FSInit` rejects is never released through `quitMgba`; retries can leak
+  owned runtimes. Initialization failure and explicit cleanup need tested ownership boundaries.
+- Importing a battery save discards seven accumulated seconds when the subsequent load resets the
+  session counter. Preserve that accounting without allowing an old save to overwrite the import.
+
+B3 remains open. Regression tests must cover live timers after import recovery, stale callbacks,
+failed initialization cleanup, and import accounting. Deferred tests of complete load/import/restore/
+reset/export operations with autosave are still required; immediate save/delete spy ordering alone
+does not establish the full serialization contract. Storage transaction work is not yet accepted.
 
 ## 5. Final acceptance record
 
