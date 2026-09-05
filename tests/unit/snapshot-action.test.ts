@@ -223,4 +223,30 @@ describe('snapshot-action controller', () => {
     expect(controller.getState().pending).toBeNull();
     expect(deleteSlot).toHaveBeenCalledTimes(2);
   });
+
+  it('separates successful mutation completion from onSuccess notification errors', async () => {
+    const controller = createSnapshotActionController();
+    const snapshot = createMockSnapshot({ slot: 2 });
+
+    controller.requestAction('replace', snapshot);
+
+    const throwingSuccess = vi.fn().mockImplementation(() => {
+      throw new Error('Toast notification component crashed');
+    });
+
+    const result = await controller.confirmAction({
+      getCurrentCartridgeId: () => snapshot.romId,
+      loadSlot: vi.fn(),
+      saveSlot: vi.fn().mockResolvedValue(undefined),
+      deleteSlot: vi.fn(),
+      onSuccess: throwingSuccess,
+    });
+
+    expect(result).toBe(true);
+    expect(throwingSuccess).toHaveBeenCalled();
+    // Mutation succeeded and was not marked as retryable error
+    expect(controller.getState().error).toBeNull();
+    expect(controller.getState().pending).toBeNull();
+    expect(controller.getState().busy).toBe(false);
+  });
 });

@@ -4,8 +4,6 @@ import type { SnapshotAction } from '../lib/snapshot-action';
 import type { Snapshot } from '../lib/storage';
 import { Modal } from './Modal';
 
-export type { SnapshotAction };
-
 const actions = {
   load: {
     verb: '读取',

@@ -99,13 +99,18 @@ export function createSnapshotActionController(): SnapshotActionController {
         }
 
         setState({ pending: null, busy: false, error: null });
-        handlers.onSuccess?.({ action, snapshot, returnTo });
-        return true;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : '即时存档操作失败，请重试。';
         setState({ busy: false, error: errorMessage });
         return false;
       }
+
+      try {
+        handlers.onSuccess?.({ action, snapshot, returnTo });
+      } catch {
+        // Notification errors after successful mutation should not revert state to pending error
+      }
+      return true;
     },
   };
 }
