@@ -391,7 +391,10 @@ export class PocketEmulator {
     await this.deps.storage.putSnapshot(snapshot);
     if (slot === 0) this.lastAutoCapture = this.deps.clock.now();
     this.update({
-      snapshots: [...this.state.snapshots.filter((item) => item.slot !== slot), snapshot],
+      snapshots: [
+        ...this.state.snapshots.filter((item) => item.slot !== slot && item.romId === cartridge.id),
+        snapshot,
+      ],
       lastSavedAt: snapshot.updatedAt,
     });
     return snapshot;

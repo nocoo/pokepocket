@@ -180,4 +180,149 @@ describe('PocketEmulator with injected dependencies', () => {
     expect(core.quitGame).toHaveBeenCalled();
     expect(emulator.getSnapshot().cartridge?.id).toBe('cart-2');
   });
+
+  it('retains accrued play time upon storage error and commits it on retry', async () => {
+    const core = createFakeCore();
+    let tickTimer: (() => void) | undefined;
+    let clockTime = 1000;
+
+    const clock: EmulatorClock = {
+      now: () => clockTime,
+      setInterval: (cb: () => void) => {
+        tickTimer = cb;
+        return 999 as unknown as ReturnType<typeof setInterval>;
+      },
+      clearInterval: vi.fn(),
+      requestAnimationFrame: (cb) => cb(),
+    };
+
+    const recordedSeconds: number[] = [];
+    let throwStorage = true;
+    const storage = createStorageDouble();
+    storage.recordPlayTime = vi.fn().mockImplementation(async (_id: string, s: number) => {
+      recordedSeconds.push(s);
+      if (s > 0 && throwStorage) {
+        throw new Error('storage error');
+      }
+    });
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock,
+    });
+
+    await emulator.load(createCartridge('cart-accrue'), {} as HTMLCanvasElement);
+
+    // Simulate 7 seconds passing
+    for (let i = 0; i < 7; i++) {
+      clockTime += 1000;
+      tickTimer?.();
+    }
+
+    // Persist fails due to storage error
+    await expect(emulator.persist()).rejects.toThrow('storage error');
+
+    // Simulate 3 more seconds passing while uncommitted time is retained
+    for (let i = 0; i < 3; i++) {
+      clockTime += 1000;
+      tickTimer?.();
+    }
+
+    // Storage is recovered
+    throwStorage = false;
+    await emulator.persist();
+
+    // 7 seconds from first attempt + 3 seconds from second attempt = 10 total seconds
+    expect(recordedSeconds).toEqual([0, 7, 10]);
+  });
+
+  it('prevents battery import from quitting core if replaceBattery fails', async () => {
+    const core = createFakeCore();
+    const storage = createStorageDouble();
+    storage.replaceBattery = vi.fn().mockRejectedValue(new Error('IndexedDB replace failed'));
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock: createClockDouble(),
+    });
+
+    const cart = createCartridge('cart-import-fail');
+    await emulator.load(cart, {} as HTMLCanvasElement);
+    expect(emulator.getSnapshot().status).toBe('running');
+
+    await expect(emulator.importBattery(new ArrayBuffer(16))).rejects.toThrow(
+      'IndexedDB replace failed',
+    );
+
+    // Core must NOT have been quit, and snapshot status must remain running with cartridge
+    expect(core.quitGame).not.toHaveBeenCalled();
+    expect(emulator.getSnapshot().status).toBe('running');
+    expect(emulator.getSnapshot().cartridge?.id).toBe('cart-import-fail');
+  });
+
+  it('serializes manual saveSlot and deleteSlot operations via queue', async () => {
+    const core = createFakeCore();
+    const storage = createStorageDouble();
+    const sequence: string[] = [];
+
+    storage.putSnapshot = vi.fn().mockImplementation(async () => {
+      sequence.push('putSnapshot');
+    });
+    storage.deleteSnapshot = vi.fn().mockImplementation(async () => {
+      sequence.push('deleteSnapshot');
+    });
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock: createClockDouble(),
+    });
+
+    const cart = createCartridge('cart-queue');
+    await emulator.load(cart, {} as HTMLCanvasElement);
+
+    const savePromise = emulator.saveSlot(1);
+    const deletePromise = emulator.deleteSlot({
+      key: 'cart-queue:1',
+      romId: 'cart-queue',
+      slot: 1,
+      data: new ArrayBuffer(4),
+      thumbnail: '',
+      updatedAt: 1000,
+      coreVersion: '2.5.1',
+    });
+
+    await Promise.all([savePromise, deletePromise]);
+    expect(sequence).toEqual(['putSnapshot', 'deleteSnapshot']);
+  });
+
+  it('rejects loadSlot if snapshot coreVersion does not match current core', async () => {
+    const core = createFakeCore();
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    const cart = createCartridge('cart-compat');
+    await emulator.load(cart, {} as HTMLCanvasElement);
+
+    const incompatibleSnapshot = {
+      key: 'cart-compat:1',
+      romId: 'cart-compat',
+      slot: 1,
+      data: new ArrayBuffer(4),
+      thumbnail: '',
+      updatedAt: 1000,
+      coreVersion: '1.0.0', // Different version
+    };
+
+    await expect(emulator.loadSlot(incompatibleSnapshot)).rejects.toThrow('不同版本的模拟器');
+  });
 });
