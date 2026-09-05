@@ -106,6 +106,9 @@ framework or change storage schema.
 7. `test: verify isolated storage transactions`
    - Test IndexedDB CRUD, isolation by ROM hash, open/transaction errors, and `replaceBattery` atomicity.
    - Verify rollback, automatic snapshot removal, and preservation of manual slots.
+   - Abort and settle failed multi-store transactions when a request throws synchronously; a failed
+     import must leave both the original battery and automatic snapshot intact, without unhandled
+     transaction rejections.
 
 Review: meaningful behavioral assertions, realistic core doubles, isolated fake IndexedDB instances,
 and preservation of browser IDBFS/IndexedDB behavior. Real WASM and browser storage remain covered by L3.
@@ -275,4 +278,9 @@ the automated port/concurrency guards. This incident is not counted as passing e
   configuration, but omitted test sources. A new snapshot test fixture with incorrect domain fields
   passed Vitest transformation, demonstrating the gap. Extend G1 to test sources in its own corrective
   commit and repair fixtures using the actual interfaces; retain the existing production checks.
+- 2026-09-06, B3 preparation: real [storage.ts](../src/lib/storage.ts) in a fresh Chrome context on an
+  owned ephemeral HTTP origin reproduced partial `replaceBattery` commit. Injecting a synchronous
+  snapshot-delete failure after the battery put left the new battery committed and old automatic
+  snapshot intact. B3 must abort this transaction and verify a clean retry. The probe closed its
+  browser context and listener and never used the daily development origin or user browser profile.
 - No work estimates are stored in this numbered implementation document.
