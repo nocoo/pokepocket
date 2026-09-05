@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1, B2, B3, and B4a accepted; B4b assigned. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1, B2, B3, B4a, and B4b accepted; B4c1 assigned. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -135,6 +135,8 @@ and preservation of browser IDBFS/IndexedDB behavior. Real WASM and browser stor
 
 - Enforce all four >=90% thresholds and install versioned hooks.
 - Run L1 and G1 concurrently with correct failure propagation and child-process cleanup.
+- Enforce the existing lowercase Conventional Commit subject rule, including a nonempty subject and
+  the 50-character limit, through a small tested `commit-msg` policy. Do not rewrite existing history.
 
 Review: independently regenerate the full coverage report; verify an injected unit/static failure
 blocks the gate; measure the combined hook runtime. **Milestone: Tier B.**
@@ -216,9 +218,12 @@ findings through additional atomic fixes, and commits the final implementation/e
 | B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                       | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                 |
 | B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742` | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass             |
 | B4a   | Accepted | `fff1da2`, `8f9f008`                                                        | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed      |
-| B4b   | Assigned | —                                                                           | Callable maintenance scripts and temporary-files tests; developer HTTP case moves outside L1              |
-| B4c   | Pending  | —                                                                           | Rendered components, App commands, and input lifecycle                                                    |
-| B4d   | Pending  | —                                                                           | All four coverage metrics >=90%; enforced L1/G1 pre-commit gate                                           |
+| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                       | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass         |
+| B4c1  | Assigned | —                                                                           | Console/MobileControls, Modal, and KeyBindings interactions                                               |
+| B4c2  | Pending  | —                                                                           | CartridgeGallery, SeriesLibrary, SaveSlots, and SnapshotConfirmation interactions                         |
+| B4c3  | Pending  | —                                                                           | Rendered App commands with production controllers                                                         |
+| B4c4  | Pending  | —                                                                           | App keyboard/gamepad and browser lifecycle                                                                |
+| B4d   | Pending  | —                                                                           | All four coverage metrics >=90%; L1/G1 pre-commit and commit-message gates                                |
 | B5    | Pending  | —                                                                           | —                                                                                                         |
 | B6    | Pending  | —                                                                           | —                                                                                                         |
 | B7    | Pending  | —                                                                           | —                                                                                                         |
@@ -365,12 +370,33 @@ All B3 review findings are resolved. Browser runners are stopped before the next
 
 ### B4 handoff sequence
 
-The four B4 atomic boundaries in section 3 are separate implementation/review handoffs. B4a is
-accepted; B4b is assigned, and pi must stop for review before B4c or B4d. Keep coverage scope and thresholds
-unchanged until the reviewed behavior tests meet all four metrics. B4a covers input, settings,
-screenshot/download boundaries, remaining controller recovery and subscription lifecycle branches.
-DOM dependencies must be pinned exactly, and TSX tests must be discovered and strictly typechecked.
-The current TypeScript test configuration already includes `tests/`; extend Vitest discovery as needed.
+The B4 atomic boundaries in section 3 are separate implementation/review handoffs. B4a and B4b are
+accepted. B4c is divided into the four bounded handoffs below; only B4c1 is currently assigned, and pi
+must stop for review after each. Keep coverage scope and thresholds unchanged until the reviewed
+behavior tests meet all four metrics. DOM dependencies must be pinned exactly, and TSX tests must be
+discovered and strictly typechecked. The existing TypeScript test configuration includes `tests/`;
+extend Vitest discovery rather than introducing a duplicate typechecking configuration.
+
+1. **B4c1 — device and input components.** Separate atomic commits for Console/MobileControls, Modal,
+   and KeyBindings. Mount the production components with the real InputController. Verify pointer
+   release/cancel/lost capture, keyboard activation/blur, inactive controls, shoulder availability,
+   device states, canvas identity, proportional resize geometry, and observer cleanup. Verify dialog
+   open/close and dismissal boundaries, accessible references, binding capture/conflicts, ignored
+   keys, cancellation/reset/secondary removal, and listener cleanup.
+2. **B4c2 — library and save components.** Separate atomic commits for cartridge/series selection
+   and for snapshot list/confirmation actions. Exercise real rendered controls, busy/disabled states,
+   available and missing cartridges, sorting/display states, confirmation/cancellation, and retry
+   affordances through observable callbacks and content.
+3. **B4c3 — App commands.** Separate atomic commits for cartridge/import/export commands and modal/
+   settings/snapshot wiring. Retain the actual production controllers; replace only browser, storage,
+   and emulator boundaries where necessary. Verify user-visible success/failure and pause ownership.
+4. **B4c4 — App lifecycle.** Separate atomic commits for keyboard/gamepad behavior and browser
+   lifecycle/fullscreen behavior. Exercise event registration, polling, disconnection, focus changes,
+   unmount cleanup, and native/fallback fullscreen transitions through the mounted application.
+
+Each handoff includes G1, unit coverage, and a production build before its review. Actual regressions
+receive their own fix commits. Neither DOM coverage nor the fast unit gate replaces B7's real browser
+and WASM execution requirements.
 
 ### B4a acceptance evidence
 
@@ -397,11 +423,37 @@ Node's host `localStorage` getter; Vitest's stub lifecycle restores the descript
 keyboard/gamepad polling, disconnect handling, and DOM lifecycle remain B4c work. Production code
 did not change in this batch, so B3's browser regression evidence remains the relevant checkpoint.
 
-B4b now owns callable policies in `setup-emulator.mjs`, `check-no-roms.mjs`, `build-rom.mjs`, and
-`verify-access.mjs`, with import guards and real temporary-files assertions. Its unit tests must call
-the actual exports so coverage sees their execution. It also moves the developer-plugin TCP case
-outside L1 while retaining discovery and middleware policy tests. Threshold enforcement and hooks
-remain B4d work.
+### B4b acceptance evidence
+
+Reviewed implementation: `bddd7e3`, following `405f7a1`, `3d40fcc`, `8e44499`, and `590f6da`.
+The maintained setup, distribution, ROM build, and Access/release scripts expose callable policies
+behind CLI entry guards. Tests use real temporary files and injected command/network boundaries,
+without downloading source, compiling commercial ROMs, or contacting the deployment during L1.
+
+Independent checks on 2026-09-06:
+
+- `bun run test:coverage`: 197 tests across 20 files pass in 0.69 seconds wall time. Coverage is
+  61.02% statements (1154/1891), 45.71% branches (662/1448), 48.40% functions (212/438), and 63.06%
+  lines (1045/1657). App, interactive components, and maintained scripts remain in scope.
+- `bun run quality:g1`: Biome checks 68 files with zero errors/warnings; strict TypeScript and
+  formatting pass. `bun run build` passes for the production Worker/client and distribution checks.
+- `bun run test:http`: the isolated developer-plugin TCP regression passes. Its configuration is
+  included in strict typechecking. Discovery and middleware policy units remain in L1; this test
+  does not yet provide B5's production Worker HTTP gate.
+- A separate Node process probe installs a child's SIGTERM handler before injecting a real log
+  stream failure. The runner rejects after approximately 203 ms, the child is no longer alive, no
+  delayed marker was written, and the log stream is closed. No owned runner remains on completion.
+
+Review fixed a log-stream error that previously escaped the subprocess runner, then strengthened
+settlement to stop the child, escalate to SIGKILL when necessary, await stream/process closure, and
+preserve the original failure. Tests assert selected-build exclusion, verify-only behavior, source/
+checksum/output bytes and manifest metadata, release version checks, and completion of all deferred
+Access checks. Middleware tests await observable response completion instead of fixed sleeps.
+
+The ROM build output now correctly resolves to the repository's `roms/` directory. The developer
+plugin exports its existing inspection implementation directly rather than adding a forwarding
+wrapper. B4b introduces no dependencies or coverage exclusions. B4c owns the remaining rendered
+application behavior; threshold enforcement and hooks remain B4d work.
 
 ## 5. Final acceptance record
 
@@ -466,3 +518,8 @@ remain B4d work.
   centered for all three platforms at 1440x1000; text and buttons shared the device scale. This
   confirms the expected geometry for B7 assertions and does not replace its required test gate or
   demonstrate a hosted SSO login.
+- 2026-09-06, B4b review: earlier commit subjects include length and capitalization violations.
+  Preserve that history and enforce the existing rule prospectively in B4d with a lightweight
+  `commit-msg` hook and policy tests. Verify real hook failures in an owned temporary repository;
+  never stage deliberately failing code in the shared checkout or bypass hooks for a documentation
+  commit. New gate scripts remain in the first-party coverage inventory.
