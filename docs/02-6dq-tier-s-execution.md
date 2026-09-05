@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1 accepted; B2 changes requested. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1 and B2 accepted; B3 assigned. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -194,16 +194,16 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State             | Implementation commits | Review and evidence                                                                                                    |
-| ----- | ----------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| B1    | Accepted          | `59bbfa2`, `d89ff9d`   | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below              |
-| B2    | Changes requested | `85cd089`, `1995b59`   | Initial implementation reviewed; async orchestration, stale initialization, and real command guards require correction |
-| B3    | Pending           | —                      | —                                                                                                                      |
-| B4    | Pending           | —                      | —                                                                                                                      |
-| B5    | Pending           | —                      | —                                                                                                                      |
-| B6    | Pending           | —                      | —                                                                                                                      |
-| B7    | Pending           | —                      | —                                                                                                                      |
-| B8    | Pending           | —                      | —                                                                                                                      |
+| Batch | State    | Implementation commits                                | Review and evidence                                                                                       |
+| ----- | -------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| B1    | Accepted | `59bbfa2`, `d89ff9d`                                  | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below |
+| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964` | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                 |
+| B3    | Assigned | —                                                     | Emulator dependency boundaries, serialized save recovery, and isolated storage transactions               |
+| B4    | Pending  | —                                                     | —                                                                                                         |
+| B5    | Pending  | —                                                     | —                                                                                                         |
+| B6    | Pending  | —                                                     | —                                                                                                         |
+| B7    | Pending  | —                                                     | —                                                                                                         |
+| B8    | Pending  | —                                                     | —                                                                                                         |
 
 ### B1 review evidence
 
@@ -253,11 +253,43 @@ An independent process-local probe on 2026-09-06 reproduced three issues without
 - A delayed initial read resets a newer `ruby` selection to `emerald`.
 - A production selection command changes edition while a deferred snapshot replacement is busy.
 
-B2 remains open. Corrective commits must put real asynchronous commands behind the tested boundary,
-reject conflicting calls before any selection/preference/storage mutation, protect against stale
-initialization and unmount, and refresh the library without reinitializing preferences. Tests must
-invoke those production commands with deferred dependencies, assert failure/retry and persistence
-ordering, and preserve cancelled-picker and modal resume behavior. Keep existing commits intact.
+The initial review required real asynchronous commands behind the tested boundary, guards before
+selection/preference/storage mutation, protection against stale initialization and unmount, and
+library refresh without reinitializing preferences. Corrective commits resolve these findings as
+recorded below; the initial commits remain intact.
+
+### B2 acceptance evidence
+
+Reviewed implementation: `e816964`. Actual import/start/switch/return commands now live in
+[cartridge-orchestrator.ts](../src/lib/cartridge-orchestrator.ts). Independent catalog/storage
+initialization uses separate generations; delayed reads cannot overwrite a newer selection or import,
+and invalid imports leave legitimate initialization active. Snapshot and cartridge commands reject
+conflicting operations through their production dependencies. ROM fetching is inside the busy/error
+boundary, while App file/drop handlers avoid acquiring the same operation lock twice.
+
+[snapshot-action.ts](../src/lib/snapshot-action.ts) separates a successful mutation from notification
+errors, so a notification failure cannot offer a second destructive mutation as a retry. Confirmation
+also rejects cartridge operations already in progress. Return-to-library waits for persistence before
+refreshing the library, and cancelled pickers retain the prior pause/resume intent.
+
+Independent checks on 2026-09-06 at the final implementation:
+
+- `bun run test:coverage`: 111 tests across 12 files pass in 0.58 seconds. Coverage is 31.94%
+  statements (554/1734), 27.71% branches (357/1288), 25.12% functions (102/406), and 32.91% lines
+  (495/1504). No coverage exclusions or enforced thresholds have been added.
+- `bun run quality:g1`: Biome checks 58 files with zero errors/warnings; strict TypeScript and
+  Prettier pass in 1.45 seconds.
+- `bun run build`: production Worker/client and both no-ROM distribution checks pass.
+- `bun run test:e2e --grep-invert 'runs the real Emerald|importing a battery save|runs real Pokémon|keeps each platform' --reporter=line --output=/tmp/pokepocket-b2-independent-20260906`:
+  12 passed, zero failed/skipped, in 46.7 seconds. This includes the previously broken bundled
+  catalog path plus snapshot confirmation/CRUD/retry and GB/GBC 1080p regression cases.
+- Independent deferred-operation probes verify parallel initialization, stale-result rejection,
+  cross-controller exclusion, successful catalog import, fetch failure recovery, and initial-library
+  preservation after an invalid import. Unit regressions call the production commands rather than
+  duplicating their guards in test code.
+
+Both agents stopped browser runners before handoff. B2 is accepted; B3 now owns the three confirmed
+emulator/storage failures documented in section 6 and the atomic boundaries in section 3.
 
 ## 5. Final acceptance record
 
