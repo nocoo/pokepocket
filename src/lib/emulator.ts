@@ -1,7 +1,7 @@
 import type { mGBAEmulator } from '@thenick775/mgba-wasm';
 import { romPath, type Cartridge } from './cartridge';
 import type { GameButton } from './input';
-import { copyBuffer, storage, type Snapshot } from './storage';
+import { copyBuffer, storage as defaultStorage, type BatterySave, type Snapshot } from './storage';
 
 export const CORE_VERSION = '2.5.1';
 export type EmulatorStatus = 'idle' | 'loading' | 'running' | 'paused' | 'error';
@@ -20,7 +20,47 @@ export interface EmulatorState {
   resumedAutomatically: boolean;
 }
 
+export interface EmulatorStorageAdapter {
+  getBattery: (id: string) => Promise<BatterySave | undefined>;
+  putBattery: (save: BatterySave) => Promise<void>;
+  replaceBattery: (save: BatterySave) => Promise<void>;
+  listSnapshots: (id: string) => Promise<Snapshot[]>;
+  putSnapshot: (snapshot: Snapshot) => Promise<void>;
+  deleteSnapshot: (key: string) => Promise<void>;
+  recordPlayTime: (id: string, seconds: number) => Promise<void>;
+}
+
+export interface EmulatorClock {
+  now: () => number;
+  setInterval: (handler: () => void, timeout: number) => ReturnType<typeof setInterval>;
+  clearInterval: (id: ReturnType<typeof setInterval>) => void;
+  requestAnimationFrame: (callback: () => void) => void;
+}
+
+export type CoreFactory = (options: { canvas: HTMLCanvasElement }) => Promise<mGBAEmulator>;
+
+export interface EmulatorDependencies {
+  storage: EmulatorStorageAdapter;
+  clock: EmulatorClock;
+  createCore?: CoreFactory;
+  checkCrossOriginIsolated?: () => boolean;
+}
+
+const defaultClock: EmulatorClock = {
+  now: () => performance.now(),
+  setInterval: (h, t) => setInterval(h, t),
+  clearInterval: (id) => clearInterval(id),
+  requestAnimationFrame: (cb) => {
+    if (typeof requestAnimationFrame !== 'undefined') {
+      requestAnimationFrame(cb);
+    } else {
+      setTimeout(cb, 16);
+    }
+  },
+};
+
 export class PocketEmulator {
+  private deps: EmulatorDependencies;
   private core: mGBAEmulator | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private initializing: Promise<mGBAEmulator> | null = null;
@@ -48,36 +88,67 @@ export class PocketEmulator {
     resumedAutomatically: false,
   };
 
+  constructor(dependencies?: Partial<EmulatorDependencies>) {
+    this.deps = {
+      storage: defaultStorage,
+      clock: defaultClock,
+      ...dependencies,
+    };
+  }
+
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
   };
+
   getSnapshot = () => this.state;
+
   private update(patch: Partial<EmulatorState>) {
     this.state = { ...this.state, ...patch };
     for (const listener of this.listeners) listener();
   }
 
-  private async initialize(canvas: HTMLCanvasElement) {
+  private enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const next = this.saveQueue.then(task);
+    this.saveQueue = next.then(
+      () => {},
+      () => {},
+    );
+    return next;
+  }
+
+  private async initialize(canvas: HTMLCanvasElement): Promise<mGBAEmulator> {
     if (this.core) return this.core;
     if (this.initializing) return this.initializing;
-    if (!window.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined') {
+
+    const checkIsolated =
+      this.deps.checkCrossOriginIsolated ??
+      (() =>
+        typeof window !== 'undefined' &&
+        Boolean(window.crossOriginIsolated) &&
+        typeof SharedArrayBuffer !== 'undefined');
+
+    if (!checkIsolated()) {
       throw new Error('浏览器未开启共享内存。请使用本地开发地址或已配置隔离响应头的 HTTPS 网站。');
     }
+
     this.canvas = canvas;
     this.initializing = (async () => {
-      // An absolute same-origin URL keeps Vite's dev import rewriting out of the
-      // precompiled runtime, including the worker it starts from import.meta.url.
-      const url = new URL(`/emulator/${CORE_VERSION}/mgba.js`, window.location.origin).href;
-      const {
-        default: createCore,
-      }: { default: (options: { canvas: HTMLCanvasElement }) => Promise<mGBAEmulator> } =
-        await import(/* @vite-ignore */ url);
-      const core = await createCore({ canvas });
+      let core: mGBAEmulator;
+      if (this.deps.createCore) {
+        core = await this.deps.createCore({ canvas });
+      } else {
+        const url = new URL(`/emulator/${CORE_VERSION}/mgba.js`, window.location.origin).href;
+        const {
+          default: createCore,
+        }: { default: (options: { canvas: HTMLCanvasElement }) => Promise<mGBAEmulator> } =
+          await import(/* @vite-ignore */ url);
+        core = await createCore({ canvas });
+      }
+
       await core.FSInit();
-      // Keep cartridge bytes out of IDBFS: the library already stores them in IndexedDB.
       core.FS.mkdir('/roms');
       core.toggleInput(false);
       core.setCoreSettings({
@@ -90,6 +161,7 @@ export class PocketEmulator {
       this.update({ coreVersion: `${core.version.projectName} ${core.version.projectVersion}` });
       return core;
     })();
+
     try {
       return await this.initializing;
     } finally {
@@ -97,15 +169,19 @@ export class PocketEmulator {
     }
   }
 
-  async load(cartridge: Cartridge, canvas: HTMLCanvasElement, resumeAuto = true) {
+  private async internalLoad(
+    cartridge: Cartridge,
+    canvas: HTMLCanvasElement,
+    resumeAuto = true,
+  ): Promise<void> {
     if (this.loading) throw new Error('正在载入卡带，请稍等。');
     this.loading = true;
     this.stopTimer();
+
     try {
-      // Stop new autosaves and checkpoint the old game before changing any paths.
       if (this.state.cartridge && this.core) {
         this.pause();
-        await this.persist(true);
+        await this.internalPersist(true);
       }
       this.update({ status: 'loading', error: null, fps: null, resumedAutomatically: false });
       const core = await this.initialize(canvas);
@@ -114,23 +190,29 @@ export class PocketEmulator {
         const previousPath = romPath(this.state.cartridge);
         if (core.FS.analyzePath(previousPath).exists) core.FS.unlink(previousPath);
       }
-      const battery = await storage.getBattery(cartridge.id);
-      const snapshots = await storage.listSnapshots(cartridge.id);
+
+      const battery = await this.deps.storage.getBattery(cartridge.id);
+      const snapshots = await this.deps.storage.listSnapshots(cartridge.id);
       const gamePath = romPath(cartridge);
       const savePath = `${core.filePaths().savePath}/${cartridge.id}.sav`;
       core.FS.writeFile(gamePath, new Uint8Array(cartridge.data));
       if (battery) core.FS.writeFile(savePath, new Uint8Array(battery.data));
-      if (!core.loadGame(gamePath, savePath))
+      if (!core.loadGame(gamePath, savePath)) {
         throw new Error('模拟器无法启动这枚卡带，请检查 GB / GBC / GBA 文件。');
-      // The core starts its CPU thread on the next rendering turn.
+      }
+
       await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        this.deps.clock.requestAnimationFrame(() =>
+          this.deps.clock.requestAnimationFrame(() => resolve()),
+        ),
       );
+
       this.frameCount = 0;
-      this.lastFrameTime = performance.now();
-      this.lastAutoCapture = performance.now();
+      this.lastFrameTime = this.deps.clock.now();
+      this.lastAutoCapture = this.deps.clock.now();
       this.sessionSeconds = 0;
       this.savedataDirty = false;
+
       core.addCoreCallbacks({
         videoFrameEndedCallback: () => {
           this.frameCount++;
@@ -138,14 +220,15 @@ export class PocketEmulator {
         saveDataUpdatedCallback: () => {
           this.savedataDirty = true;
         },
-        // Do not call thread-interrupting methods inside a synchronous core callback.
         coreCrashedCallback: () => {
           setTimeout(() => this.fail(new Error('游戏内核运行中断，请重新载入卡带。')), 0);
         },
       });
+
       core.setCoreSettings({ allowOpposingDirections: false });
       core.setVolume(this.volume);
       core.setFastForwardMultiplier(this.state.speed);
+
       const previous = snapshots.find((snapshot) => snapshot.slot === 0);
       let resumedAutomatically = false;
       if (resumeAuto && previous?.coreVersion === CORE_VERSION) {
@@ -153,8 +236,7 @@ export class PocketEmulator {
         core.FS.writeFile(path, new Uint8Array(previous.data));
         resumedAutomatically = core.loadState(0);
       }
-      // Restore before the UI can open a dialog and checkpoint the new session;
-      // otherwise a title-screen checkpoint would erase the previous adventure.
+
       this.update({
         status: 'running',
         cartridge,
@@ -164,7 +246,8 @@ export class PocketEmulator {
         seconds: cartridge.playTime,
         resumedAutomatically,
       });
-      await storage.recordPlayTime(cartridge.id, 0);
+
+      await this.deps.storage.recordPlayTime(cartridge.id, 0);
       this.startTimer();
       this.resumeAudio();
     } catch (error) {
@@ -175,21 +258,27 @@ export class PocketEmulator {
     }
   }
 
+  load(cartridge: Cartridge, canvas: HTMLCanvasElement, resumeAuto = true): Promise<void> {
+    return this.enqueue(() => this.internalLoad(cartridge, canvas, resumeAuto));
+  }
+
   private startTimer() {
     this.stopTimer();
-    this.timer = setInterval(() => {
+    this.timer = this.deps.clock.setInterval(() => {
       if (this.state.status !== 'running') return;
-      const now = performance.now();
+      const now = this.deps.clock.now();
       const elapsed = now - this.lastFrameTime;
       const frames = this.frameCount;
       this.frameCount = 0;
       this.lastFrameTime = now;
       this.sessionSeconds++;
+
       this.update({
         fps: Math.round((frames * 1000) / elapsed),
         frames: this.state.frames + frames,
         seconds: this.state.seconds + 1,
       });
+
       const snapshot = now - this.lastAutoCapture >= 30000;
       if (this.savedataDirty || snapshot) {
         if (snapshot) this.lastAutoCapture = now;
@@ -202,7 +291,7 @@ export class PocketEmulator {
   }
 
   private stopTimer() {
-    if (this.timer) clearInterval(this.timer);
+    if (this.timer) this.deps.clock.clearInterval(this.timer);
     this.timer = null;
   }
 
@@ -215,7 +304,7 @@ export class PocketEmulator {
   resume() {
     if (this.state.status !== 'paused') return;
     this.frameCount = 0;
-    this.lastFrameTime = performance.now();
+    this.lastFrameTime = this.deps.clock.now();
     this.core?.resumeGame();
     this.update({ status: 'running' });
     this.resumeAudio();
@@ -231,44 +320,56 @@ export class PocketEmulator {
     this.volume = volume;
     this.core?.setVolume(volume);
   }
+
   setSpeed(speed: number) {
     this.core?.setFastForwardMultiplier(speed);
     this.update({ speed });
   }
+
   resumeAudio() {
     const context = this.core?.SDL2?.audioContext;
-    if (context?.state === 'suspended')
-      void context.resume().catch(() => {
-        /* A subsequent user gesture can unlock audio. */
-      });
+    if (context?.state === 'suspended') {
+      void context.resume().catch(() => {});
+    }
   }
 
-  async reset() {
+  private async internalReset(): Promise<void> {
     if (!this.core || !this.state.cartridge) return;
-    await this.persist(true);
+    await this.internalPersist(true);
     this.core.quickReload();
     if (this.state.status === 'paused') this.resume();
   }
 
-  /** Serialize all IDBFS writes and captures so autosave cannot race a cartridge switch. */
+  reset(): Promise<void> {
+    return this.enqueue(() => this.internalReset());
+  }
+
+  private async internalPersist(withSnapshot = false): Promise<void> {
+    if (!this.core || !this.state.cartridge) return;
+    const cartridge = this.state.cartridge;
+    const save = this.core.getSave();
+    const now = Date.now();
+    if (save?.length) {
+      await this.deps.storage.putBattery({
+        romId: cartridge.id,
+        data: copyBuffer(save),
+        updatedAt: now,
+      });
+    }
+    if (withSnapshot && ['running', 'paused'].includes(this.state.status)) {
+      await this.capture(0);
+    }
+    await this.core.FSSync();
+    const elapsed = this.sessionSeconds;
+    if (elapsed) {
+      await this.deps.storage.recordPlayTime(cartridge.id, elapsed);
+      this.sessionSeconds -= elapsed;
+    }
+    if (save?.length || withSnapshot) this.update({ lastSavedAt: now });
+  }
+
   persist(withSnapshot = false): Promise<void> {
-    const task = async () => {
-      if (!this.core || !this.state.cartridge) return;
-      const cartridge = this.state.cartridge;
-      const save = this.core.getSave();
-      const now = Date.now();
-      if (save?.length)
-        await storage.putBattery({ romId: cartridge.id, data: copyBuffer(save), updatedAt: now });
-      if (withSnapshot && ['running', 'paused'].includes(this.state.status)) await this.capture(0);
-      await this.core.FSSync();
-      const elapsed = this.sessionSeconds;
-      this.sessionSeconds = 0;
-      if (elapsed) await storage.recordPlayTime(cartridge.id, elapsed);
-      if (save?.length || withSnapshot) this.update({ lastSavedAt: now });
-    };
-    const pending = this.saveQueue.then(task);
-    this.saveQueue = pending.catch(() => {});
-    return pending;
+    return this.enqueue(() => this.internalPersist(withSnapshot));
   }
 
   private async capture(slot: number) {
@@ -278,7 +379,6 @@ export class PocketEmulator {
     if (!core.saveState(slot)) throw new Error('即时存档失败，请稍后重试。');
     const path = `${core.filePaths().saveStatePath}/${cartridge.id}.ss${slot}`;
     const data = core.FS.readFile(path);
-    // mGBA's state includes SRAM, RTC, CPU, video, audio and RAM.
     const snapshot: Snapshot = {
       key: `${cartridge.id}:${slot}`,
       romId: cartridge.id,
@@ -288,8 +388,8 @@ export class PocketEmulator {
       updatedAt: Date.now(),
       coreVersion: CORE_VERSION,
     };
-    await storage.putSnapshot(snapshot);
-    if (slot === 0) this.lastAutoCapture = performance.now();
+    await this.deps.storage.putSnapshot(snapshot);
+    if (slot === 0) this.lastAutoCapture = this.deps.clock.now();
     this.update({
       snapshots: [...this.state.snapshots.filter((item) => item.slot !== slot), snapshot],
       lastSavedAt: snapshot.updatedAt,
@@ -297,75 +397,87 @@ export class PocketEmulator {
     return snapshot;
   }
 
-  async saveSlot(slot: number) {
-    const pending = this.saveQueue.then(async () => {
+  saveSlot(slot: number): Promise<void> {
+    return this.enqueue(async () => {
       await this.capture(slot);
       await this.core?.FSSync();
     });
-    this.saveQueue = pending.catch(() => {});
-    return pending;
   }
 
-  async loadSlot(snapshot: Snapshot) {
-    await this.saveQueue;
-    if (!this.core || snapshot.romId !== this.state.cartridge?.id)
+  private async internalLoadSlot(snapshot: Snapshot): Promise<void> {
+    if (!this.core || snapshot.romId !== this.state.cartridge?.id) {
       throw new Error('这份即时存档不属于当前卡带。');
-    if (snapshot.coreVersion !== CORE_VERSION)
+    }
+    if (snapshot.coreVersion !== CORE_VERSION) {
       throw new Error('这份即时存档来自不同版本的模拟器，请改用 .sav 游戏存档。');
+    }
     const path = `${this.core.filePaths().saveStatePath}/${snapshot.romId}.ss${snapshot.slot}`;
     this.core.FS.writeFile(path, new Uint8Array(snapshot.data));
-    if (!this.core.loadState(snapshot.slot))
+    if (!this.core.loadState(snapshot.slot)) {
       throw new Error('即时存档读取失败，原文件可能已损坏。');
-    await this.persist();
+    }
+    await this.internalPersist();
     if (this.state.status === 'paused') this.resume();
   }
 
-  async deleteSlot(snapshot: Snapshot) {
-    const pending = this.saveQueue.then(async () => {
+  loadSlot(snapshot: Snapshot): Promise<void> {
+    return this.enqueue(() => this.internalLoadSlot(snapshot));
+  }
+
+  deleteSlot(snapshot: Snapshot): Promise<void> {
+    return this.enqueue(async () => {
       const core = this.core;
       const cartridge = this.state.cartridge;
-      if (!core || snapshot.romId !== cartridge?.id)
+      if (!core || snapshot.romId !== cartridge?.id) {
         throw new Error('这份即时存档不属于当前卡带。');
+      }
       if (![1, 2, 3].includes(snapshot.slot)) throw new Error('只能清除手动即时存档。');
 
       const key = `${cartridge.id}:${snapshot.slot}`;
-      await storage.deleteSnapshot(key);
+      await this.deps.storage.deleteSnapshot(key);
       this.update({ snapshots: this.state.snapshots.filter((item) => item.key !== key) });
 
-      // Remove the core's persisted copy too, so clearing a slot survives a reload.
       const path = `${core.filePaths().saveStatePath}/${cartridge.id}.ss${snapshot.slot}`;
       if (core.FS.analyzePath(path).exists) core.FS.unlink(path);
       await core.FSSync();
     });
-    this.saveQueue = pending.catch(() => {});
-    return pending;
   }
 
-  async exportBattery(): Promise<ArrayBuffer> {
-    await this.persist();
-    const battery = this.state.cartridge ? await storage.getBattery(this.state.cartridge.id) : null;
-    if (!battery?.data.byteLength) throw new Error('尚无游戏存档。请先在游戏菜单中选择 SAVE。');
-    return battery.data;
+  exportBattery(): Promise<ArrayBuffer> {
+    return this.enqueue(async () => {
+      await this.internalPersist();
+      const battery = this.state.cartridge
+        ? await this.deps.storage.getBattery(this.state.cartridge.id)
+        : null;
+      if (!battery?.data.byteLength) throw new Error('尚无游戏存档。请先在游戏菜单中选择 SAVE。');
+      return battery.data;
+    });
   }
 
-  async importBattery(data: ArrayBuffer) {
-    await this.saveQueue;
+  private async internalImportBattery(data: ArrayBuffer): Promise<void> {
     const cartridge = this.state.cartridge;
     const core = this.core;
-    if (!core || !cartridge || !this.canvas) throw new Error('请先启动对应的卡带。');
-    // Close the old save file before replacing it: a later flush must not overwrite the import.
+    const canvas = this.canvas;
+    if (!core || !cartridge || !canvas) throw new Error('请先启动对应的卡带。');
+
     this.stopTimer();
+    await this.deps.storage.replaceBattery({
+      romId: cartridge.id,
+      data,
+      updatedAt: Date.now(),
+    });
+
     core.quitGame();
-    await storage.replaceBattery({ romId: cartridge.id, data, updatedAt: Date.now() });
     this.update({ cartridge: null, status: 'idle' });
-    // An imported battery save must boot normally, not restore an older snapshot.
-    await this.load(cartridge, this.canvas, false);
+    await this.internalLoad(cartridge, canvas, false);
+  }
+
+  importBattery(data: ArrayBuffer): Promise<void> {
+    return this.enqueue(() => this.internalImportBattery(data));
   }
 
   screenshot() {
     if (!this.core || !this.state.cartridge) throw new Error('请先启动游戏。');
-    // The SDL WebGL canvas does not preserve its drawing buffer between frames.
-    // Capture the actual emulated video buffer through mGBA instead of toDataURL.
     const filename = 'pocket-preview.png';
     if (!this.core.screenshot(filename)) throw new Error('截图失败，请稍后重试。');
     const path = `${this.core.filePaths().screenshotsPath}/${filename}`;
