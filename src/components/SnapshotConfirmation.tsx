@@ -1,9 +1,10 @@
 import { useId } from 'react';
 import { CornerDownLeft, Save, Trash2 } from 'lucide-react';
+import type { SnapshotAction } from '../lib/snapshot-action';
 import type { Snapshot } from '../lib/storage';
 import { Modal } from './Modal';
 
-export type SnapshotAction = 'load' | 'replace' | 'delete';
+export type { SnapshotAction };
 
 const actions = {
   load: {

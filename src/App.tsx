@@ -58,6 +58,10 @@ import { SnapshotConfirmation } from './components/SnapshotConfirmation';
 import { createModalPauseController, type ModalName } from './lib/modal-pause';
 import { createSnapshotActionController, type SnapshotAction } from './lib/snapshot-action';
 import {
+  createCartridgeOrchestrator,
+  type CartridgePreferences,
+} from './lib/cartridge-orchestrator';
+import {
   cartridgeTitle,
   readCartridge,
   validateBatterySave,
@@ -117,13 +121,19 @@ export default function App() {
         });
       }),
   );
-  const [library, setLibrary] = useState<Cartridge[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [available, setAvailable] = useState<AvailableEdition[]>([]);
-  const [catalogReady, setCatalogReady] = useState(false);
-  const [view, setView] = useState<'library' | 'play'>('library');
-  const [selectedEditionId, setSelectedEditionId] = useState(DEFAULT_EDITION.id);
-  const [storageReady, setStorageReady] = useState(false);
+  const [cartridgeOrchestrator] = useState(() => createCartridgeOrchestrator());
+  const cartridgeState = useSyncExternalStore(
+    cartridgeOrchestrator.subscribe,
+    cartridgeOrchestrator.getState,
+  );
+  const { library, selectedId, selectedEditionId, available, catalogReady, storageReady, view } =
+    cartridgeState;
+  const setView = useCallback(
+    (nextView: 'library' | 'play') => {
+      cartridgeOrchestrator.setView(nextView);
+    },
+    [cartridgeOrchestrator],
+  );
   const [settings, setSettings] = useState(loadSettings);
   const keyboardMap = useMemo(() => keyMap(settings.bindings), [settings.bindings]);
   const [modalPause] = useState(() => createModalPauseController());
@@ -136,6 +146,7 @@ export default function App() {
   );
   const [toast, setToast] = useState<Toast | null>(null);
   const [busy, setBusy] = useState(false);
+  const effectiveBusy = busy || snapshotActionState.busy || snapshotActions.getState().busy;
   const [dragging, setDragging] = useState(false);
   const [gamepad, setGamepad] = useState('');
   const [fullscreen, setFullscreen] = useState(false);
@@ -168,6 +179,7 @@ export default function App() {
   );
   const run = useCallback(
     async (action: () => Promise<unknown>, success?: string) => {
+      if (snapshotActions.getState().busy) return;
       setBusy(true);
       try {
         await action();
@@ -178,50 +190,34 @@ export default function App() {
         setBusy(false);
       }
     },
-    [notify],
+    [notify, snapshotActions],
   );
 
   useEffect(() => {
     let cancelled = false;
-    void storage
-      .listCartridges()
-      .then((items) => {
-        if (cancelled) return;
-        setLibrary(items);
-        setStorageReady(true);
-        try {
-          const previous = items.find(
-            (item) => item.id === localStorage.getItem('pocket-last-cartridge'),
-          );
-          setSelectedId(previous?.id ?? null);
-          setSelectedEditionId(
-            previous?.header.editionId ??
-              localStorage.getItem('pocket-last-edition') ??
-              DEFAULT_EDITION.id,
-          );
-        } catch {
-          /* The library still works without preferences. */
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) notify(`无法访问本地存储：${message(error)}`, true);
-      });
-    void fetch('/api/catalog')
-      .then(async (response) => {
-        if (!response.ok) return;
+    void cartridgeOrchestrator.initialize({
+      storage: {
+        listCartridges: () => storage.listCartridges(),
+        putCartridge: (cart) => storage.putCartridge(cart),
+      },
+      fetchCatalog: async () => {
+        const response = await fetch('/api/catalog');
+        if (!response.ok) throw new Error('Catalog fetch failed');
         const data: { editions: AvailableEdition[] } = await response.json();
-        if (!cancelled) setAvailable(data.editions);
-      })
-      .catch(() => {
-        /* Previously cached cartridges remain available. */
-      })
-      .finally(() => {
-        if (!cancelled) setCatalogReady(true);
-      });
+        return data.editions;
+      },
+      loadPreferences: () => ({
+        lastCartridgeId: localStorage.getItem('pocket-last-cartridge'),
+        lastEditionId: localStorage.getItem('pocket-last-edition'),
+      }),
+      onStorageError: (error) => {
+        if (!cancelled) notify(`无法访问本地存储：${message(error)}`, true);
+      },
+    });
     return () => {
       cancelled = true;
     };
-  }, [notify]);
+  }, [cartridgeOrchestrator, notify]);
 
   useEffect(() => {
     emulator.setVolume(settings.muted ? 0 : settings.volume);
@@ -269,14 +265,18 @@ export default function App() {
     if (shouldResume) emulator.resume();
   }, [emulator, modalPause, view]);
 
-  const rememberSelection = useCallback((id: string, editionId: string | null) => {
-    setSelectedId(id);
-    if (editionId) setSelectedEditionId(editionId);
+  const savePreferences = useCallback((prefs: CartridgePreferences) => {
     try {
-      localStorage.setItem('pocket-last-cartridge', id);
-      if (editionId) localStorage.setItem('pocket-last-edition', editionId);
+      if (prefs.lastCartridgeId !== undefined) {
+        if (prefs.lastCartridgeId)
+          localStorage.setItem('pocket-last-cartridge', prefs.lastCartridgeId);
+        else localStorage.removeItem('pocket-last-cartridge');
+      }
+      if (prefs.lastEditionId) {
+        localStorage.setItem('pocket-last-edition', prefs.lastEditionId);
+      }
     } catch {
-      /* Optional preference. */
+      /* Optional preference */
     }
   }, []);
 
@@ -285,16 +285,17 @@ export default function App() {
       const incoming = await readCartridge(file);
       const existing = (await storage.listCartridges()).find((item) => item.id === incoming.id);
       const cartridge = existing ?? incoming;
-      await storage.putCartridge(cartridge);
-      setLibrary(await storage.listCartridges());
-      rememberSelection(cartridge.id, cartridge.header.editionId);
-      setView('play');
+      await cartridgeOrchestrator.insertCartridge(
+        cartridge,
+        (cart) => storage.putCartridge(cart),
+        savePreferences,
+      );
       if (!canvasRef.current) throw new Error('游戏画面尚未就绪，请重试。');
       await emulator.load(cartridge, canvasRef.current);
       canvasRef.current.focus({ preventScroll: true });
       if (navigator.storage?.persist) void navigator.storage.persist().catch(() => false);
     },
-    [emulator, rememberSelection],
+    [cartridgeOrchestrator, emulator, savePreferences],
   );
 
   const loadLocalCartridge = useCallback(
@@ -328,9 +329,9 @@ export default function App() {
   }, [finishCartridgePicker]);
 
   const startAdventure = useCallback(() => {
-    if (busy || game.status === 'loading') return;
+    if (effectiveBusy || game.status === 'loading') return;
     if (!selected && !localAvailable) return openCartridgePicker();
-    setView('play');
+    cartridgeOrchestrator.setView('play');
     void run(async () => {
       if (selected?.id === game.cartridge?.id && game.status === 'paused') emulator.resume();
       else if (selected && canvasRef.current) await emulator.load(selected, canvasRef.current);
@@ -339,11 +340,12 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: 'instant' });
     });
   }, [
-    busy,
+    effectiveBusy,
     game.status,
     game.cartridge,
     selected,
     localAvailable,
+    cartridgeOrchestrator,
     run,
     emulator,
     loadLocalCartridge,
@@ -352,7 +354,7 @@ export default function App() {
   ]);
 
   const chooseCartridge = (cartridge: Cartridge) => {
-    rememberSelection(cartridge.id, cartridge.header.editionId);
+    cartridgeOrchestrator.selectCartridge(cartridge, savePreferences);
     const canvas = canvasRef.current;
     if (view === 'play' && active && game.cartridge?.id !== cartridge.id && canvas) {
       input.releaseAll();
@@ -361,17 +363,11 @@ export default function App() {
   };
 
   const chooseEdition = (next: PokemonEdition) => {
-    if (busy) return;
-    const owned = library.find((item) => item.header.editionId === next.id);
-    setSelectedEditionId(next.id);
-    setSelectedId(owned?.id ?? null);
-    try {
-      localStorage.setItem('pocket-last-edition', next.id);
-      if (owned) localStorage.setItem('pocket-last-cartridge', owned.id);
-      else localStorage.removeItem('pocket-last-cartridge');
-    } catch {
-      /* Selection also works without preferences. */
-    }
+    if (effectiveBusy) return;
+    const { selectedCartridge: owned } = cartridgeOrchestrator.selectEdition(
+      next.id,
+      savePreferences,
+    );
     if (view === 'play' && active && game.cartridge?.id !== owned?.id) {
       input.releaseAll();
       const canvas = canvasRef.current;
@@ -383,18 +379,29 @@ export default function App() {
   };
 
   const returnToGallery = useCallback(() => {
-    if (busy || game.status === 'loading' || view === 'library') return;
+    if (effectiveBusy || game.status === 'loading' || view === 'library') return;
     input.releaseAll();
     emulator.pause();
     setFocusMode(false);
     void run(async () => {
       if (document.fullscreenElement) await document.exitFullscreen();
       if (emulator.getSnapshot().cartridge) await emulator.persist(true);
-      setLibrary(await storage.listCartridges());
-      setView('library');
+      const cartridges = await storage.listCartridges();
+      cartridgeOrchestrator.initialize({
+        storage: {
+          listCartridges: async () => cartridges,
+          putCartridge: (cart) => storage.putCartridge(cart),
+        },
+        fetchCatalog: async () => available,
+        loadPreferences: () => ({
+          lastCartridgeId: localStorage.getItem('pocket-last-cartridge'),
+          lastEditionId: localStorage.getItem('pocket-last-edition'),
+        }),
+      });
+      cartridgeOrchestrator.setView('library');
       window.scrollTo({ top: 0, behavior: 'instant' });
     });
-  }, [busy, game.status, view, input, emulator, run]);
+  }, [effectiveBusy, game.status, view, input, emulator, run, cartridgeOrchestrator, available]);
 
   const toggleFullscreen = useCallback(() => {
     if (focusMode) {
@@ -545,7 +552,7 @@ export default function App() {
   }, [emulator, input, modal, view]);
 
   const requestSnapshotAction = (action: SnapshotAction, snapshot: Snapshot) => {
-    if (busy || snapshotActionState.busy || !active) return;
+    if (effectiveBusy || !active) return;
     const requested = snapshotActions.requestAction(action, snapshot, {
       returnTo: modal === 'saves' ? 'saves' : null,
       active,
@@ -583,7 +590,7 @@ export default function App() {
   };
 
   const saveSlot = (slot: number) => {
-    if (busy || !active) return;
+    if (effectiveBusy || !active) return;
     const snapshot = game.snapshots.find((item) => item.slot === slot);
     if (snapshot) requestSnapshotAction('replace', snapshot);
     else void run(() => emulator.saveSlot(slot), `冒险已记录在存档 0${slot}`);
@@ -636,7 +643,7 @@ export default function App() {
         dragDepth.current = 0;
         setDragging(false);
         const file = event.dataTransfer.files[0];
-        if (file && !busy) void run(() => insertCartridge(file));
+        if (file && !effectiveBusy) void run(() => insertCartridge(file));
       }}
     >
       <a href={view === 'library' ? '#cartridge-gallery' : '#game-stage'} className="skip-link">
@@ -652,7 +659,7 @@ export default function App() {
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = '';
-          if (file)
+          if (file && !effectiveBusy)
             void run(async () => {
               try {
                 await insertCartridge(file);
@@ -673,7 +680,7 @@ export default function App() {
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = '';
-          if (file && current)
+          if (file && current && !effectiveBusy)
             void run(async () => {
               if (!/\.sav$/i.test(file.name)) throw new Error('请选择 .sav 格式的游戏存档。');
               validateBatterySave(file.size, current.header);
@@ -705,7 +712,7 @@ export default function App() {
               type="button"
               aria-label="卡带收藏"
               className={!modal && view === 'library' ? 'nav-item active' : 'nav-item'}
-              disabled={busy}
+              disabled={effectiveBusy}
               onClick={returnToGallery}
             >
               <Gamepad2 size={17} />
@@ -714,7 +721,7 @@ export default function App() {
             <button
               type="button"
               aria-label="我的存档"
-              disabled={busy || game.status === 'loading'}
+              disabled={effectiveBusy || game.status === 'loading'}
               className={modal === 'saves' ? 'nav-item active' : 'nav-item'}
               onClick={() => openModal('saves')}
             >
@@ -724,7 +731,7 @@ export default function App() {
             <button
               type="button"
               aria-label="游玩指南"
-              disabled={busy || game.status === 'loading'}
+              disabled={effectiveBusy || game.status === 'loading'}
               className={modal === 'help' ? 'nav-item active' : 'nav-item'}
               onClick={() => openModal('help')}
             >
@@ -740,7 +747,7 @@ export default function App() {
             <button
               type="button"
               className="icon-button settings-button"
-              disabled={busy || game.status === 'loading'}
+              disabled={effectiveBusy || game.status === 'loading'}
               onClick={() => openModal('settings')}
               aria-label="打开设置"
             >
@@ -756,7 +763,7 @@ export default function App() {
           library={library}
           available={available}
           catalogReady={catalogReady}
-          busy={busy}
+          busy={effectiveBusy}
           onEdition={chooseEdition}
           onStart={startAdventure}
         />
@@ -769,7 +776,7 @@ export default function App() {
           cartridge={selected}
           library={library}
           available={available}
-          busy={busy}
+          busy={effectiveBusy}
           onEdition={chooseEdition}
           onCartridge={chooseCartridge}
         />
@@ -782,7 +789,7 @@ export default function App() {
                 className="back-to-gallery"
                 aria-label="返回卡带盘"
                 onClick={returnToGallery}
-                disabled={busy}
+                disabled={effectiveBusy}
               >
                 <ArrowLeft size={14} />
                 返回卡带盘<span>THE POKÉMON COLLECTION</span>
