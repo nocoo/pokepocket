@@ -76,6 +76,10 @@ strict checks, and production build. Capture the baseline honestly; B1 alone doe
 
 ### B2 — application state boundaries
 
+Corrective G1 follow-up, `fix: typecheck quality test sources`: include TypeScript/TSX test sources
+in strict compiler validation. Vitest transformation does not typecheck fixtures; test data must
+implement the real domain interfaces without assertions hiding missing fields.
+
 3. `refactor: extract snapshot action state`
    - Extract snapshot command/confirmation and modal pause ownership from `src/App.tsx`.
    - Add unit tests for request, confirm, cancel, busy state, failed mutation, and retry.
@@ -267,4 +271,8 @@ the automated port/concurrency guards. This incident is not counted as passing e
   seven seconds before retry; a rejected `replaceBattery` leaves status `running` after `quitGame`.
   B3 must add failing-before/passing-after regressions and fix both alongside queue ordering. The
   probe replaces only process-local dependencies and never opens browser or production storage.
+- 2026-09-06, B2 review: strict compiler scope previously covered application, Worker, and build
+  configuration, but omitted test sources. A new snapshot test fixture with incorrect domain fields
+  passed Vitest transformation, demonstrating the gap. Extend G1 to test sources in its own corrective
+  commit and repair fixtures using the actual interfaces; retain the existing production checks.
 - No work estimates are stored in this numbered implementation document.
