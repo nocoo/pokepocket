@@ -115,24 +115,37 @@ and preservation of browser IDBFS/IndexedDB behavior. Real WASM and browser stor
 
 ### B4 — complete L1 and activate pre-commit
 
-8. `test: cover remaining application logic`
-   - Cover settings, screenshot errors, inputs, maintained script policies, and remaining React logic.
+8. `test: cover browser and input boundaries`
+   - Cover settings, screenshot success/failures, keyboard/gamepad input, and controller edge cases.
+   - Exercise lifecycle cleanup and deferred failure/retry through production methods.
+9. `refactor: expose maintenance script policies`
+   - Make maintained CLI policies callable without executing a build/download at import time.
+   - Use temporary files and explicit dependency boundaries for distribution, emulator setup, source
+     pins, checksums, build selection, and release verification. Subprocess-only tests do not provide
+     Vitest coverage for the code inside those subprocesses.
    - Move true HTTP developer-plugin tests out of the fast unit suite, retaining discovery units.
-   - Document justified thin-view exclusions after extraction, not before it.
-9. `chore: enforce unit and static commit gates`
-   - Enforce all four >=90% thresholds and install versioned hooks.
-   - Run L1 and G1 concurrently with correct failure propagation and child-process cleanup.
+10. `test: cover rendered application interactions`
+    - Mount actual components and App wiring to verify keyboard, gamepad, settings, modals, snapshot
+      commands, import/export, fullscreen fallback, busy states, and error feedback.
+    - Split distinct behavior groups into additional atomic commits when needed. Preserve canvas
+      identity and meaningful assertions at the browser/core boundary.
+    - Keep App and interactive components in coverage scope. A thin-view exclusion requires prior
+      extraction and a recorded file-level justification; no coverage reduction is preapproved.
+11. `chore: enforce unit and static commit gates`
+
+- Enforce all four >=90% thresholds and install versioned hooks.
+- Run L1 and G1 concurrently with correct failure propagation and child-process cleanup.
 
 Review: independently regenerate the full coverage report; verify an injected unit/static failure
 blocks the gate; measure the combined hook runtime. **Milestone: Tier B.**
 
 ### B5 — production Worker over HTTP
 
-10. `test: add production worker http harness`
+12. `test: add production worker http harness`
     - Use the production build, real workerd/Miniflare, built assets, and ephemeral test JWT/JWKS keys.
     - Prove valid and invalid authenticated `/api/runtime` calls through real loopback HTTP first.
     - Keep production authentication intact; supply only the expected JWKS outbound response.
-11. `test: cover every worker api over http`
+13. `test: cover every worker api over http`
     - Cover `/api/live`, `/api/catalog`, `/api/cartridge`, and `/api/runtime` with GET/HEAD contracts.
     - Add shared token, method precedence, 403/404/405, static assets, WASM, and response-header cases.
     - Test endpoint inventory completeness, occupied-port failure, readiness failure, and cleanup.
@@ -144,10 +157,10 @@ plugin HTTP regressions separately.
 
 ### B6 — security and pre-push enforcement
 
-12. `chore: add local security quality gates`
+14. `chore: add local security quality gates`
     - Use version-pinned OSV/Gitleaks and scan the real `bun.lock` plus outgoing committed changes.
     - Handle new branches conservatively; missing tools and scanner errors fail, rather than skip.
-13. `chore: enforce integration push gates`
+15. `chore: enforce integration push gates`
     - Run L2 and G2 concurrently from the pre-push hook; propagate either failure.
     - Enable the same L2 entry point in CI and preserve both existing security scans.
 
@@ -156,17 +169,17 @@ negative gate probes, isolation guards, and combined runtime under 3 minutes. **
 
 ### B7 — required browser coverage
 
-14. `test: add an executable gba fixture`
+16. `test: add an executable gba fixture`
     - Add an original runnable GBA program with observable rendering and save behavior.
     - Verify actual execution; a valid header alone does not satisfy this fixture contract.
-15. `test: require core cartridge and save journeys`
+17. `test: require core cartridge and save journeys`
     - Make import/start/pause/resume/reload and cross-platform switching mandatory for GB/GBC/GBA.
     - Assert snapshot CRUD/confirmation/cancellation/retry and meaningful `.sav` import/export results.
     - Keep local 12-ROM compatibility tests in an explicitly optional suite.
-16. `test: verify browser authorization and isolation`
+18. `test: verify browser authorization and isolation`
     - Test anonymous denial and authorized application load against the production harness.
     - Reject non-owned test targets, development/production origins, and server reuse; clean contexts.
-17. `test: verify console layout and export behavior`
+19. `test: verify console layout and export behavior`
     - Cover fullscreen centering, proportional fonts/buttons, mobile/modals, and button contrast states.
     - Verify 1080-pixel-high PNG exports with the correct aspect ratio across all three platforms.
 
@@ -176,10 +189,10 @@ isolated. Record the precise authentication/login boundary. No required core tes
 
 ### B8 — CI, release gating, and final sign-off
 
-18. `chore: align ci with local quality commands`
+20. `chore: align ci with local quality commands`
     - Use the same project-owned L1/G1/L2/G2/L3 entry points in CI; publish coverage and failure artifacts.
     - Ensure required browser failures or skips block acceptance.
-19. `chore: require tested commits for every release`
+21. `chore: require tested commits for every release`
     - Resolve an immutable target SHA for main-CI, tag, and manual release paths.
     - Require all quality results for that SHA before deployment, running missing checks when needed.
     - Preserve Access checks, version/tag checks, serialized deployment, and post-deploy version checks.
