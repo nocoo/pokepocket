@@ -146,6 +146,11 @@ bun run check:distribution
 
 测试覆盖 ROM 文件头与版本识别、本机目录检测、Access JWT 与拒绝路径、输入映射、浏览器导入后离线于 ROM 服务的恢复，以及本地 12 版本启动、画面与独立存档。已实测绿宝石角色创建、进入未白镇、游戏内 SAVE 和 `.sav` 导出导入。当前支持单机游玩，暂不支持联机交换与对战；启动与存档验证不代表所有版本均已完整通关。
 
+## Documentation
+
+See the [documentation index](docs/README.md) and the proposed
+[6DQ adoption plan](docs/01-6dq-adoption-plan.md) for the quality assessment and implementation stages.
+
 ## 来源与许可
 
 本项目原创代码采用 **[MIT](LICENSE)**，版权声明与免责条款仅覆盖有权许可的原创部分。**ROM、宝可梦名称、商标、角色素材及截图中的原作内容不在 MIT 授权范围内**，相关权利归 Nintendo、Game Freak、Creatures 等权利人所有。项目为独立爱好者作品，无官方关联或背书；免责声明及访问控制不会授予游戏内容的使用权。
