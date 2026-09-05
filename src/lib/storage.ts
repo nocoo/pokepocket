@@ -62,10 +62,25 @@ export const storage = {
     const db = await database();
     try {
       const tx = db.transaction('cartridges', 'readwrite');
-      const item = await tx.store.get(id);
-      if (item)
-        await tx.store.put({ ...item, playTime: item.playTime + seconds, lastPlayed: Date.now() });
-      await tx.done;
+      const settlePromise = tx.done.catch(() => {});
+      try {
+        const item = await tx.store.get(id);
+        if (item)
+          await tx.store.put({
+            ...item,
+            playTime: item.playTime + seconds,
+            lastPlayed: Date.now(),
+          });
+        await tx.done;
+      } catch (error) {
+        try {
+          tx.abort();
+        } catch {
+          // Already aborted or inactive
+        }
+        await settlePromise;
+        throw error;
+      }
     } finally {
       db.close();
     }
@@ -92,6 +107,7 @@ export const storage = {
       // Commit the import and invalidate its old automatic resume point together.
       // A tab closed immediately afterwards must not restore the old SRAM data.
       const tx = db.transaction(['batteries', 'snapshots'], 'readwrite');
+      const settlePromise = tx.done.catch(() => {});
       try {
         await tx.objectStore('batteries').put(save);
         await tx.objectStore('snapshots').delete(`${save.romId}:0`);
@@ -102,7 +118,7 @@ export const storage = {
         } catch {
           // Transaction might already be inactive
         }
-        await tx.done.catch(() => {});
+        await settlePromise;
         throw error;
       }
     } finally {
