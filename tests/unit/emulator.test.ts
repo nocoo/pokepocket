@@ -906,6 +906,10 @@ describe('PocketEmulator with injected dependencies', () => {
     const autoSavePromise = emulator.persist(false);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
+    // Assert that while replaceBattery is deferred, autosave's putBattery has not run and core has not quit
+    expect(storage.putBattery).not.toHaveBeenCalled();
+    expect(core.quitGame).not.toHaveBeenCalled();
+
     resolveReplace();
     await Promise.all([importPromise, autoSavePromise]);
 
