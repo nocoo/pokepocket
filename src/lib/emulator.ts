@@ -70,6 +70,7 @@ export class PocketEmulator {
   private lastFrameTime = 0;
   private sessionSeconds = 0;
   private lastAutoCapture = 0;
+  private loadGeneration = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private saveQueue: Promise<void> = Promise.resolve();
   private savedataDirty = false;
@@ -148,18 +149,27 @@ export class PocketEmulator {
         core = await createCore({ canvas });
       }
 
-      await core.FSInit();
-      core.FS.mkdir('/roms');
-      core.toggleInput(false);
-      core.setCoreSettings({
-        autoSaveStateEnable: false,
-        restoreAutoSaveStateOnLoad: false,
-        rewindEnable: false,
-        allowOpposingDirections: false,
-      });
-      this.core = core;
-      this.update({ coreVersion: `${core.version.projectName} ${core.version.projectVersion}` });
-      return core;
+      try {
+        await core.FSInit();
+        core.FS.mkdir('/roms');
+        core.toggleInput(false);
+        core.setCoreSettings({
+          autoSaveStateEnable: false,
+          restoreAutoSaveStateOnLoad: false,
+          rewindEnable: false,
+          allowOpposingDirections: false,
+        });
+        this.core = core;
+        this.update({ coreVersion: `${core.version.projectName} ${core.version.projectVersion}` });
+        return core;
+      } catch (err) {
+        try {
+          (core as { quitMgba?: () => void }).quitMgba?.();
+        } catch {
+          // Ignore cleanup errors
+        }
+        throw err;
+      }
     })();
 
     try {
@@ -173,13 +183,15 @@ export class PocketEmulator {
     cartridge: Cartridge,
     canvas: HTMLCanvasElement,
     resumeAuto = true,
+    preserveSessionSeconds = false,
   ): Promise<void> {
     if (this.loading) throw new Error('正在载入卡带，请稍等。');
     this.loading = true;
     this.stopTimer();
+    const currentGeneration = ++this.loadGeneration;
 
     try {
-      if (this.state.cartridge && this.core) {
+      if (!preserveSessionSeconds && this.state.cartridge && this.core) {
         this.pause();
         await this.internalPersist(true);
       }
@@ -210,18 +222,28 @@ export class PocketEmulator {
       this.frameCount = 0;
       this.lastFrameTime = this.deps.clock.now();
       this.lastAutoCapture = this.deps.clock.now();
-      this.sessionSeconds = 0;
+      if (!preserveSessionSeconds) {
+        this.sessionSeconds = 0;
+      }
       this.savedataDirty = false;
 
       core.addCoreCallbacks({
         videoFrameEndedCallback: () => {
-          this.frameCount++;
+          if (this.loadGeneration === currentGeneration) {
+            this.frameCount++;
+          }
         },
         saveDataUpdatedCallback: () => {
-          this.savedataDirty = true;
+          if (this.loadGeneration === currentGeneration) {
+            this.savedataDirty = true;
+          }
         },
         coreCrashedCallback: () => {
-          setTimeout(() => this.fail(new Error('游戏内核运行中断，请重新载入卡带。')), 0);
+          setTimeout(() => {
+            if (this.loadGeneration === currentGeneration) {
+              this.fail(new Error('游戏内核运行中断，请重新载入卡带。'));
+            }
+          }, 0);
         },
       });
 
@@ -243,7 +265,7 @@ export class PocketEmulator {
         snapshots,
         lastSavedAt: battery?.updatedAt ?? null,
         frames: 0,
-        seconds: cartridge.playTime,
+        seconds: cartridge.playTime + this.sessionSeconds,
         resumedAutomatically,
       });
 
@@ -307,6 +329,7 @@ export class PocketEmulator {
     this.lastFrameTime = this.deps.clock.now();
     this.core?.resumeGame();
     this.update({ status: 'running' });
+    this.startTimer();
     this.resumeAudio();
   }
 
@@ -461,18 +484,39 @@ export class PocketEmulator {
     const cartridge = this.state.cartridge;
     const core = this.core;
     const canvas = this.canvas;
+    const wasRunning = this.state.status === 'running';
     if (!core || !cartridge || !canvas) throw new Error('请先启动对应的卡带。');
 
     this.stopTimer();
-    await this.deps.storage.replaceBattery({
-      romId: cartridge.id,
-      data,
-      updatedAt: Date.now(),
-    });
+    try {
+      await this.deps.storage.replaceBattery({
+        romId: cartridge.id,
+        data,
+        updatedAt: Date.now(),
+      });
+    } catch (error) {
+      if (wasRunning) {
+        this.startTimer();
+      }
+      throw error;
+    }
 
     core.quitGame();
-    this.update({ cartridge: null, status: 'idle' });
-    await this.internalLoad(cartridge, canvas, false);
+    try {
+      const livePlayTime = this.state.seconds;
+      await this.internalLoad(
+        {
+          ...cartridge,
+          playTime: Math.max(cartridge.playTime, livePlayTime - this.sessionSeconds),
+        },
+        canvas,
+        false,
+        true,
+      );
+    } catch (bootError) {
+      this.update({ cartridge, status: 'error', error: message(bootError) });
+      throw bootError;
+    }
   }
 
   importBattery(data: ArrayBuffer): Promise<void> {
