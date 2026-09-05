@@ -1,22 +1,20 @@
 import { execFileSync } from 'node:child_process';
 import { lstat, open, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
-const forbidden = /(?:^|\/)(?:roms?)(?:\/|$)|\.(?:gb|gbc|gba|sav)$/i;
-const violations = new Set();
+export const FORBIDDEN_PATTERN = /(?:^|\/)(?:roms?)(?:\/|$)|\.(?:gb|gbc|gba|sav)$/i;
 
-async function scan(directory) {
+export async function scanDirectoryForRoms(directory, root, violations = new Set()) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const file = path.join(directory, entry.name);
     const relative = path.relative(root, file);
-    if (forbidden.test(relative) || entry.isSymbolicLink()) {
+    if (FORBIDDEN_PATTERN.test(relative) || entry.isSymbolicLink()) {
       violations.add(relative);
       continue;
     }
     if (entry.isDirectory()) {
-      await scan(file);
+      await scanDirectoryForRoms(file, root, violations);
       continue;
     }
     if (!entry.isFile()) continue;
@@ -38,24 +36,62 @@ async function scan(directory) {
       await handle.close();
     }
   }
+  return violations;
 }
 
-for (const directory of process.argv.slice(2).length ? process.argv.slice(2) : ['public', 'dist']) {
-  const fullPath = path.resolve(root, directory);
-  const stat = await lstat(fullPath).catch(() => null);
-  if (!stat?.isDirectory() || stat.isSymbolicLink())
-    throw new Error(`Missing or unsafe directory: ${directory}`);
-  await scan(fullPath);
+export function checkTrackedFiles(root, violations = new Set()) {
+  const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split(
+    '\0',
+  );
+  for (const file of tracked) {
+    if (file && FORBIDDEN_PATTERN.test(file)) {
+      violations.add(`tracked: ${file}`);
+    }
+  }
+  return violations;
 }
 
-const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split(
-  '\0',
-);
-for (const file of tracked) if (forbidden.test(file)) violations.add(`tracked: ${file}`);
-if (violations.size) {
-  console.error('ROMs, saves and asset symlinks must stay outside Git and deployment assets:');
-  for (const file of violations) console.error(`  ${file}`);
-  process.exitCode = 1;
-} else {
-  console.log('Distribution check passed: no cartridge ROMs or saves in assets or tracked paths.');
+export async function checkNoRoms(options = {}) {
+  const root = options.root ?? fileURLToPath(new URL('../', import.meta.url));
+  const directories = options.directories ?? ['public', 'dist'];
+  const violations = new Set();
+
+  for (const directory of directories) {
+    const fullPath = path.resolve(root, directory);
+    const stat = await lstat(fullPath).catch(() => null);
+    if (!stat?.isDirectory() || stat.isSymbolicLink()) {
+      throw new Error(`Missing or unsafe directory: ${directory}`);
+    }
+    await scanDirectoryForRoms(fullPath, root, violations);
+  }
+
+  if (options.checkTracked !== false) {
+    checkTrackedFiles(root, violations);
+  }
+
+  const success = violations.size === 0;
+  if (!success) {
+    if (!options.silent) {
+      console.error('ROMs, saves and asset symlinks must stay outside Git and deployment assets:');
+      for (const file of violations) console.error(`  ${file}`);
+    }
+  } else {
+    if (!options.silent) {
+      console.log(
+        'Distribution check passed: no cartridge ROMs or saves in assets or tracked paths.',
+      );
+    }
+  }
+
+  return { success, violations: [...violations] };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const dirs = process.argv.slice(2);
+  const result = await checkNoRoms({
+    directories: dirs.length ? dirs : undefined,
+  });
+  if (!result.success) {
+    process.exitCode = 1;
+  }
 }
