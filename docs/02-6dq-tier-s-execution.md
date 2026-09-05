@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1 accepted; B2 assigned. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1 accepted; B2 changes requested. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -194,16 +194,16 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State    | Implementation commits | Review and evidence                                                                                       |
-| ----- | -------- | ---------------------- | --------------------------------------------------------------------------------------------------------- |
-| B1    | Accepted | `59bbfa2`, `d89ff9d`   | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below |
-| B2    | Assigned | —                      | Snapshot/modal state and cartridge orchestration assigned after B1 acceptance                             |
-| B3    | Pending  | —                      | —                                                                                                         |
-| B4    | Pending  | —                      | —                                                                                                         |
-| B5    | Pending  | —                      | —                                                                                                         |
-| B6    | Pending  | —                      | —                                                                                                         |
-| B7    | Pending  | —                      | —                                                                                                         |
-| B8    | Pending  | —                      | —                                                                                                         |
+| Batch | State             | Implementation commits | Review and evidence                                                                                                    |
+| ----- | ----------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| B1    | Accepted          | `59bbfa2`, `d89ff9d`   | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below              |
+| B2    | Changes requested | `85cd089`, `1995b59`   | Initial implementation reviewed; async orchestration, stale initialization, and real command guards require correction |
+| B3    | Pending           | —                      | —                                                                                                                      |
+| B4    | Pending           | —                      | —                                                                                                                      |
+| B5    | Pending           | —                      | —                                                                                                                      |
+| B6    | Pending           | —                      | —                                                                                                                      |
+| B7    | Pending           | —                      | —                                                                                                                      |
+| B8    | Pending           | —                      | —                                                                                                                      |
 
 ### B1 review evidence
 
@@ -238,6 +238,26 @@ An overlapping implementation/review browser run initially collided in `test-res
 a trace cleanup error. Both runners stopped; the independent run above used a separate output
 directory and passed. The working agreement now requires an explicit browser handoff, and B7 owns
 the automated port/concurrency guards. This incident is not counted as passing evidence.
+
+### B2 initial review
+
+Review of `85cd089` and `1995b59` found that snapshot/modal state extraction is present, but the
+cartridge module still delegates its actual asynchronous import/load/switch/return commands to App.
+The cross-controller test guards a spy with its own `if` and cannot detect a missing production
+guard. Passing unit and browser counts do not resolve these contract gaps.
+
+An independent process-local probe on 2026-09-06 reproduced three issues without browser storage:
+
+- Catalog fetching does not start while the initial IndexedDB read is pending; these requests were
+  independent before the refactor.
+- A delayed initial read resets a newer `ruby` selection to `emerald`.
+- A production selection command changes edition while a deferred snapshot replacement is busy.
+
+B2 remains open. Corrective commits must put real asynchronous commands behind the tested boundary,
+reject conflicting calls before any selection/preference/storage mutation, protect against stale
+initialization and unmount, and refresh the library without reinitializing preferences. Tests must
+invoke those production commands with deferred dependencies, assert failure/retry and persistence
+ordering, and preserve cancelled-picker and modal resume behavior. Keep existing commits intact.
 
 ## 5. Final acceptance record
 
