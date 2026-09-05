@@ -3,15 +3,12 @@ import { DEFAULT_SETTINGS, loadSettings } from '../../src/lib/settings';
 import { defaultBindings } from '../../src/lib/key-bindings';
 
 describe('settings persistence and boundaries', () => {
-  const originalLocalStorage = globalThis.localStorage;
-
   beforeEach(() => {
     vi.unstubAllGlobals();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    globalThis.localStorage = originalLocalStorage;
   });
 
   it('returns default settings when storage is empty', () => {
