@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1 and B2 accepted; B3 implementation and review ongoing. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1, B2, and B3 accepted; B4 assigned in four review handoffs. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -207,16 +207,16 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State       | Implementation commits                                | Review and evidence                                                                                       |
-| ----- | ----------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| B1    | Accepted    | `59bbfa2`, `d89ff9d`                                  | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below |
-| B2    | Accepted    | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964` | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                 |
-| B3    | In progress | `ebe6901`, `76a6148`                                  | Emulator review found further recovery/cleanup failures; isolated storage work remains pending            |
-| B4    | Pending     | —                                                     | —                                                                                                         |
-| B5    | Pending     | —                                                     | —                                                                                                         |
-| B6    | Pending     | —                                                     | —                                                                                                         |
-| B7    | Pending     | —                                                     | —                                                                                                         |
-| B8    | Pending     | —                                                     | —                                                                                                         |
+| Batch | State    | Implementation commits                                                      | Review and evidence                                                                                       |
+| ----- | -------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                        | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below |
+| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                       | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                 |
+| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742` | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass             |
+| B4    | Assigned | —                                                                           | B4a input/browser boundaries; B4b maintenance scripts; B4c rendered UI; B4d enforced L1/G1                |
+| B5    | Pending  | —                                                                           | —                                                                                                         |
+| B6    | Pending  | —                                                                           | —                                                                                                         |
+| B7    | Pending  | —                                                                           | —                                                                                                         |
+| B8    | Pending  | —                                                                           | —                                                                                                         |
 
 ### B1 review evidence
 
@@ -321,10 +321,50 @@ The same probe reproduces four remaining failures through public methods:
 - Importing a battery save discards seven accumulated seconds when the subsequent load resets the
   session counter. Preserve that accounting without allowing an old save to overwrite the import.
 
-B3 remains open. Regression tests must cover live timers after import recovery, stale callbacks,
-failed initialization cleanup, and import accounting. Deferred tests of complete load/import/restore/
-reset/export operations with autosave are still required; immediate save/delete spy ordering alone
-does not establish the full serialization contract. Storage transaction work is not yet accepted.
+B3 remained open at that checkpoint. The final review below supersedes those unresolved findings.
+
+### B3 final acceptance
+
+Reviewed implementation: `48d2742`, including `ebe6901`, `76a6148`, `a9f7339`, `c052d68`,
+`ba035c8`, and `242bd91`. The production emulator now injects core, clock, and storage boundaries;
+load/reset/restore/import/export and save mutations share one recoverable command queue.
+
+Independent checks on 2026-09-06:
+
+- `bun run test:coverage`: 139 tests across 14 files pass in 0.52 seconds. Coverage is 47.75%
+  statements (851/1782), 34.32% branches (450/1311), 38.44% functions (163/424), and 50.03% lines
+  (776/1551). The full inventory remains included; coverage is still diagnostic until B4.
+- `bun run quality:g1`: Biome checks 60 files with zero errors/warnings; strict TypeScript and
+  Prettier pass. `bun run build` passes for the production Worker/client and distribution checks.
+- `bun run test:e2e --reporter=line --output=/tmp/pokepocket-b3-independent-20260906`: 27 passed,
+  zero failed/skipped, in 2.2 minutes. This includes all existing local-ROM compatibility cases,
+  actual battery imports, snapshot confirmation/CRUD/retry, and GB/GBC screenshot exports.
+  These are regression results, not the commercial-ROM-independent L3 gate still required in B7.
+- Eight independent process-local probes pass: failed/concurrent play-time writes, running and
+  paused import recovery, delayed old-core crash callbacks, failed initialization cleanup,
+  retry after imported-save boot failure, and both accumulated and checkpointed play-time retention.
+- Isolated real storage operations against `fake-indexeddb@6.2.5` verify synchronous and asynchronous
+  transaction failures, rollback, clean retry, and no unhandled `tx.done` rejection. Each test owns
+  its IDB factory and restores globals; production continues using browser IndexedDB.
+
+Review refinements replaced an insufficient combined queue test with six deferred production
+regressions. The event loop advances while storage is blocked, and assertions prove that a later
+load/reset/restore cannot start early, an export retains its originating cartridge bytes, an import
+blocks premature autosave writes, and a rejected command does not poison the next command.
+
+The final source also retains pending play time until a write succeeds, restarts timers after failed
+imports, binds callbacks to the originating load generation, and releases a core whose initialization
+fails. Multi-store failures abort and settle their transaction before returning the original error.
+All B3 review findings are resolved. Browser runners are stopped before the next handoff.
+
+### B4 handoff sequence
+
+The four B4 atomic boundaries in section 3 are separate implementation/review handoffs. B4a is
+assigned first; pi must stop for review before B4b, B4c, or B4d. Keep coverage scope and thresholds
+unchanged until the reviewed behavior tests meet all four metrics. B4a covers input, settings,
+screenshot/download boundaries, remaining controller recovery and subscription lifecycle branches.
+DOM dependencies must be pinned exactly, and TSX tests must be discovered and strictly typechecked.
+The current TypeScript test configuration already includes `tests/`; extend Vitest discovery as needed.
 
 ## 5. Final acceptance record
 
