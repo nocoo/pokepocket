@@ -1,9 +1,9 @@
 import { pathToFileURL } from 'node:url';
+import { readFile } from 'node:fs/promises';
 
 const origin = 'https://pokepocket.hexly.ai';
 const paths = [
   '/',
-  '/api/live',
   '/api/catalog',
   '/art/rayquaza.png',
   '/emulator/2.5.1/mgba.wasm',
@@ -55,8 +55,42 @@ export async function verifyAccessPath(path) {
   );
 }
 
+export async function verifyReleaseVersion(version) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const response = await fetch(`${origin}/api/live`, {
+        headers: { Accept: 'application/json' },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(15000),
+      });
+      let data = null;
+      if (response.headers.get('content-type')?.includes('application/json'))
+        data = await response.json();
+      else await response.body?.cancel();
+      if (response.status === 200 && data?.status === 'ok' && data.version === version) {
+        console.log(`/api/live: 200 → v${version}`);
+        return;
+      }
+      console.log(
+        `/api/live: ${response.status} · attempt ${attempt}/${attempts} · waiting for v${version}`,
+      );
+    } catch (error) {
+      console.error(`/api/live: attempt ${attempt}/${attempts} · ${error.message}`);
+    }
+    if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  throw new Error(`Production did not report v${version} from ${origin}/api/live`);
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const results = await Promise.allSettled(paths.map(verifyAccessPath));
+  const checks = paths.map(verifyAccessPath);
+  if (process.argv.includes('--release')) {
+    const { version } = JSON.parse(
+      await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+    );
+    checks.push(verifyReleaseVersion(version));
+  }
+  const results = await Promise.allSettled(checks);
   for (const result of results) {
     if (result.status === 'rejected') {
       console.error(result.reason.message);

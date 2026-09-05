@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { verifyAccessPath } from '../../scripts/verify-access.mjs';
+import { verifyAccessPath, verifyReleaseVersion } from '../../scripts/verify-access.mjs';
 
 const login = 'https://nocoo.cloudflareaccess.com/cdn-cgi/access/login/pokepocket.hexly.ai';
 let request;
@@ -41,7 +41,7 @@ describe('deployment Access verification', () => {
     request.mockImplementation(
       async () => new Response(null, { status, headers: location ? { Location: location } : {} }),
     );
-    const verification = expect(verifyAccessPath('/api/live')).rejects.toThrow(
+    const verification = expect(verifyAccessPath('/api/catalog')).rejects.toThrow(
       'Cloudflare Access sign-in is not ready',
     );
     await vi.runAllTimersAsync();
@@ -49,7 +49,7 @@ describe('deployment Access verification', () => {
     expect(request).toHaveBeenCalledTimes(12);
   });
 
-  it('retries an edge propagation failure and reports the Worker rejection', async () => {
+  it('retries a temporary Worker rejection and reports diagnostics', async () => {
     request
       .mockResolvedValueOnce(
         Response.json(
@@ -80,5 +80,31 @@ describe('deployment Access verification', () => {
     await verification;
     expect(request).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(log.mock.calls)).not.toContain('synthetic-login-token');
+  });
+});
+
+describe('deployed version verification', () => {
+  it('waits until the requested version is live', async () => {
+    request
+      .mockResolvedValueOnce(Response.json({ status: 'ok', version: '1.0.0' }))
+      .mockResolvedValueOnce(Response.json({ status: 'ok', version: '1.1.0' }));
+    const verification = verifyReleaseVersion('1.1.0');
+    await vi.runAllTimersAsync();
+    await verification;
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [302, null],
+    [403, { error: 'Cloudflare Access authentication required' }],
+    [200, { status: 'ok', version: '1.0.0' }],
+    [200, { status: 'error', version: '1.1.0' }],
+  ])('rejects a stale or unavailable liveness response (%s, %j)', async (status, body) => {
+    request.mockImplementation(async () => Response.json(body, { status }));
+    const verification = expect(verifyReleaseVersion('1.1.0')).rejects.toThrow(
+      'Production did not report v1.1.0',
+    );
+    await vi.runAllTimersAsync();
+    await verification;
   });
 });

@@ -67,6 +67,7 @@ import { bindingText, keyLabel, keyMap } from './lib/key-bindings';
 import { loadSettings, type Settings } from './lib/settings';
 import { download, storage, type Snapshot } from './lib/storage';
 import { upscaleScreenshot } from './lib/screenshot';
+import { APP_VERSION } from './lib/version';
 
 type ModalName = 'settings' | 'saves' | 'help' | 'restart' | 'import-save' | 'snapshot' | null;
 type Toast = { text: string; error: boolean; id: number };
@@ -1110,7 +1111,7 @@ export default function App() {
           <div className="settings-about">
             <img src="/favicon.svg" alt="" width="30" height="30" />
             <div>
-              <strong>Poké Pocket 1.0</strong>
+              <strong>Poké Pocket v{APP_VERSION}</strong>
               <span>{game.coreVersion || `mGBA WASM ${CORE_VERSION}`} · 冒险始于一枚卡带</span>
               <a
                 className="text-button"

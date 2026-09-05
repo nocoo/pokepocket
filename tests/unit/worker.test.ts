@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { exportJWK, generateKeyPair, SignJWT, type JWTPayload } from 'jose';
 import worker from '../../worker/index';
+import { APP_VERSION } from '../../src/lib/version';
 
 const issuer = 'https://nocoo.cloudflareaccess.com';
 const audience = '7dcaf6fb44b1245dfec144db9df69cc1335a526cd9a29829f33e35f78aa306dd';
@@ -66,6 +67,9 @@ describe('Cloudflare Access protects the whole Worker', () => {
   it.each([
     '/',
     '/api/catalog',
+    '/api/runtime',
+    '/api/live/',
+    '/api/live/catalog',
     '/art/rayquaza.png',
     '/emulator/2.5.1/mgba.wasm',
     '/roms/pokeemerald.gba',
@@ -143,6 +147,28 @@ describe('Cloudflare Access protects the whole Worker', () => {
       expect(assetFetch).toHaveBeenCalledOnce();
     },
   );
+});
+
+describe('release metadata', () => {
+  it('exposes only status and the package version from the public liveness endpoint', async () => {
+    const { env, assetFetch } = environment();
+    const response = await worker.fetch(request('/api/live'), env);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'ok', version: APP_VERSION });
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(assetFetch).not.toHaveBeenCalled();
+    const head = await worker.fetch(request('/api/live', undefined, 'HEAD'), env);
+    expect(head.status).toBe(200);
+    expect(await head.text()).toBe('');
+    expect((await worker.fetch(request('/api/live', undefined, 'POST'), env)).status).toBe(405);
+  });
+
+  it('reports the same version in the authenticated runtime API', async () => {
+    const { env } = environment();
+    const response = await worker.fetch(request('/api/runtime', await token()), env);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ version: APP_VERSION, mode: 'private' });
+  });
 });
 
 describe('production never supplies cartridge ROMs', () => {

@@ -113,7 +113,9 @@ Issuer:   https://nocoo.cloudflareaccess.com
 Audience: 7dcaf6fb44b1245dfec144db9df69cc1335a526cd9a29829f33e35f78aa306dd
 ```
 
-Access 应用应覆盖整个域名，使用明确的用户 / 群组 Allow 策略，不设公共 Bypass。Worker 用 `jose` 验证 `Cf-Access-Jwt-Assertion` 的 RS256 签名、issuer、audience、有效期与必要声明，公钥取自团队 JWKS。所有页面、图片、WASM 和 API 都先经过 Worker；`workers.dev` 与预览域名关闭。生产构建会移除本地开发放行逻辑，Host、请求头和查询参数不能开启本地模式。
+Access 应用应覆盖整个域名，使用明确的用户 / 群组 Allow 策略，游戏内容不设公共 Bypass。Worker 用 `jose` 验证 `Cf-Access-Jwt-Assertion` 的 RS256 签名、issuer、audience、有效期与必要声明，公钥取自团队 JWKS。所有页面、图片、WASM 和游戏 API 都先经过 Worker 验证；`workers.dev` 与预览域名关闭。生产构建会移除本地开发放行逻辑，Host、请求头和查询参数不能开启本地模式。
+
+`GET /api/live` is the only public API: it returns `status` and the version from the root `package.json`. It never reads assets, cartridges, or saves. Subpaths such as `/api/live/catalog` still require authentication.
 
 ```bash
 bun run cf:typegen
@@ -121,6 +123,7 @@ bun run build
 bun run deploy:check
 bun run deploy
 bun run verify:access
+bun run verify:release
 ```
 
 CI/CD 沿用 [nocoo/base-ci](https://github.com/nocoo/base-ci) 与其他 Games 的约定：
@@ -128,7 +131,7 @@ CI/CD 沿用 [nocoo/base-ci](https://github.com/nocoo/base-ci) 与其他 Games �
 - **CI**：push / PR 到 `main`，运行构建、TypeScript、格式检查、单元测试、密钥与依赖扫描、浏览器测试。浏览器测试使用原创测试程序；真实卡带测试仅在本机存在相应 ROM 时运行。
 - **Release**：`main` 的 CI 成功后部署其已验证的提交；也支持 `v*.*.*` 标签和手动选择标签，标签版本须等于 `package.json`。生产部署串行执行。
 - GitHub repository / `production` environment secrets：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。Token 需要目标账户 Workers Scripts 编辑、账户读取，以及 `hexly.ai` 的 Workers Routes 编辑和 Zone 读取权限；不存入源码。
-- 部署后逐一检查页面、API、图片、WASM、ROM 路径均跳转到 `nocoo` 的 Access 登录，不能返回未经认证的应用内容。
+- Deployment checks require pages, protected APIs, images, WASM, and ROM paths to redirect to the `nocoo` Access login before and after deployment. The final check also requires `/api/live` to report the exact package version. Failures include HTTP status and Cloudflare request identifiers; a 403 response never counts as a successful login check.
 
 CF 仅负责访问验证和静态资源交付，CPU、画面、音频和存档都在浏览器中，无需服务端模拟、数据库或 ROM 存储。
 

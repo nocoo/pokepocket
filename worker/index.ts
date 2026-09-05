@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { EDITIONS } from '../src/lib/catalog';
+import { APP_VERSION } from '../src/lib/version';
 
 declare const __LOCAL_DEVELOPMENT__: boolean;
 
@@ -36,13 +37,17 @@ export default {
     // Vite replaces this at build time. Hosts, request headers and query strings cannot enable it.
     // An undefined build constant also fails closed if the source is run without Vite.
     const localDevelopment = typeof __LOCAL_DEVELOPMENT__ !== 'undefined' && __LOCAL_DEVELOPMENT__;
+    const url = new URL(request.url);
+    const live = url.pathname === '/api/live';
     let response: Response;
-    if (!localDevelopment && !(await authorized(request, env))) {
+    // The public liveness endpoint exposes only build metadata, never application data.
+    if (!live && !localDevelopment && !(await authorized(request, env))) {
       response = json({ error: 'Cloudflare Access authentication required' }, 403);
     } else {
-      const url = new URL(request.url);
       if (request.method !== 'GET' && request.method !== 'HEAD') {
         response = json({ error: 'Method not allowed' }, 405, { Allow: 'GET, HEAD' });
+      } else if (live) {
+        response = json({ status: 'ok', version: APP_VERSION });
       } else if (url.pathname === '/api/catalog') {
         response = json({
           mode: localDevelopment ? 'local' : 'private',
@@ -54,6 +59,7 @@ export default {
       } else if (url.pathname === '/api/runtime') {
         response = json({
           name: 'Poké Pocket',
+          version: APP_VERSION,
           platform: 'cloudflare-workers',
           emulation: 'browser-wasm',
           mode: localDevelopment ? 'local' : 'private',

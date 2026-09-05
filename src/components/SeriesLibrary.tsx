@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { EDITIONS, type AvailableEdition, type PokemonEdition } from '../lib/catalog';
 import { cartridgeTitle, type Cartridge } from '../lib/cartridge';
+import { APP_VERSION } from '../lib/version';
 import { CartridgeArt } from './CartridgeGallery';
 
 interface Props {
@@ -46,8 +47,8 @@ export function SeriesLibrary({
   return (
     <aside className="library-sidebar series-sidebar" aria-label="宝可梦系列游戏库">
       <div className="library-heading">
-        <span>宝可梦系列</span>
-        <span className="count-badge">{EDITIONS.length}</span>
+        <span>Poké Pocket</span>
+        <span className="version-pill">v{APP_VERSION}</span>
       </div>
       <div
         className="cartridge-card is-selected featured-edition"

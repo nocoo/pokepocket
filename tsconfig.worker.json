@@ -10,6 +10,7 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "strict": true
   },
   "include": ["worker", "worker-configuration.d.ts"]

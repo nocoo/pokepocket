@@ -245,14 +245,16 @@ h3 {
   letter-spacing: 1px;
   padding: 0 2px;
 }
-.count-badge {
+.version-pill {
   font: 10px var(--mono);
-  color: #829078;
+  color: #425335;
   background: #e9ede1;
-  min-width: 27px;
-  border-radius: 5px;
+  border: 1px solid #d5ddcb;
+  border-radius: 999px;
+  letter-spacing: 0;
+  white-space: nowrap;
   text-align: center;
-  padding: 3px 4px;
+  padding: 4px 8px;
 }
 .cartridge-card {
   width: 100%;
