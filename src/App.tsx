@@ -61,12 +61,7 @@ import {
   createCartridgeOrchestrator,
   type CartridgePreferences,
 } from './lib/cartridge-orchestrator';
-import {
-  cartridgeTitle,
-  readCartridge,
-  validateBatterySave,
-  type Cartridge,
-} from './lib/cartridge';
+import { cartridgeTitle, validateBatterySave, type Cartridge } from './lib/cartridge';
 import { CORE_VERSION, PocketEmulator, message } from './lib/emulator';
 import { BUTTONS, InputController, gamepadButtons, isEditing, type GameButton } from './lib/input';
 import { bindingText, keyLabel, keyMap } from './lib/key-bindings';
@@ -145,8 +140,10 @@ export default function App() {
     snapshotActions.getState,
   );
   const [toast, setToast] = useState<Toast | null>(null);
+  const isGeneralBusy = useRef(false);
   const [busy, setBusy] = useState(false);
-  const effectiveBusy = busy || snapshotActionState.busy || snapshotActions.getState().busy;
+  const effectiveBusy =
+    busy || cartridgeState.busy || snapshotActionState.busy || snapshotActions.getState().busy;
   const [dragging, setDragging] = useState(false);
   const [gamepad, setGamepad] = useState('');
   const [fullscreen, setFullscreen] = useState(false);
@@ -156,7 +153,6 @@ export default function App() {
   const stageRef = useRef<HTMLElement>(null);
   const romInput = useRef<HTMLInputElement>(null);
   const saveInput = useRef<HTMLInputElement>(null);
-  const pickerWasRunning = useRef(false);
   const dragDepth = useRef(0);
   const preferredEdition = getEdition(selectedEditionId) ?? DEFAULT_EDITION;
   const selected =
@@ -179,7 +175,13 @@ export default function App() {
   );
   const run = useCallback(
     async (action: () => Promise<unknown>, success?: string) => {
-      if (snapshotActions.getState().busy) return;
+      if (
+        isGeneralBusy.current ||
+        snapshotActions.getState().busy ||
+        cartridgeOrchestrator.getState().busy
+      )
+        return;
+      isGeneralBusy.current = true;
       setBusy(true);
       try {
         await action();
@@ -187,15 +189,30 @@ export default function App() {
       } catch (error) {
         notify(message(error), true);
       } finally {
+        isGeneralBusy.current = false;
         setBusy(false);
       }
     },
-    [notify, snapshotActions],
+    [notify, snapshotActions, cartridgeOrchestrator],
   );
 
+  const savePreferences = useCallback((prefs: CartridgePreferences) => {
+    try {
+      if (prefs.lastCartridgeId !== undefined) {
+        if (prefs.lastCartridgeId)
+          localStorage.setItem('pocket-last-cartridge', prefs.lastCartridgeId);
+        else localStorage.removeItem('pocket-last-cartridge');
+      }
+      if (prefs.lastEditionId) {
+        localStorage.setItem('pocket-last-edition', prefs.lastEditionId);
+      }
+    } catch {
+      /* Optional preference */
+    }
+  }, []);
+
   useEffect(() => {
-    let cancelled = false;
-    void cartridgeOrchestrator.initialize({
+    cartridgeOrchestrator.setDependencies({
       storage: {
         listCartridges: () => storage.listCartridges(),
         putCartridge: (cart) => storage.putCartridge(cart),
@@ -210,12 +227,33 @@ export default function App() {
         lastCartridgeId: localStorage.getItem('pocket-last-cartridge'),
         lastEditionId: localStorage.getItem('pocket-last-edition'),
       }),
+      savePreferences,
+      emulator: {
+        getSnapshot: () => emulator.getSnapshot(),
+        load: (cart, canvas) => emulator.load(cart, canvas),
+        resume: () => emulator.resume(),
+        pause: () => emulator.pause(),
+        persist: (cp) => emulator.persist(cp),
+      },
+      getCanvas: () => canvasRef.current,
+      releaseInput: () => input.releaseAll(),
+      isExternalBusy: () => isGeneralBusy.current || snapshotActions.getState().busy,
+      openPicker: () => romInput.current?.click(),
+      onBeforeReturnToGallery: () => setFocusMode(false),
+      notify,
+    });
+  }, [cartridgeOrchestrator, emulator, input, notify, savePreferences, snapshotActions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void cartridgeOrchestrator.initialize({
       onStorageError: (error) => {
         if (!cancelled) notify(`无法访问本地存储：${message(error)}`, true);
       },
     });
     return () => {
       cancelled = true;
+      cartridgeOrchestrator.cancel();
     };
   }, [cartridgeOrchestrator, notify]);
 
@@ -265,62 +303,16 @@ export default function App() {
     if (shouldResume) emulator.resume();
   }, [emulator, modalPause, view]);
 
-  const savePreferences = useCallback((prefs: CartridgePreferences) => {
-    try {
-      if (prefs.lastCartridgeId !== undefined) {
-        if (prefs.lastCartridgeId)
-          localStorage.setItem('pocket-last-cartridge', prefs.lastCartridgeId);
-        else localStorage.removeItem('pocket-last-cartridge');
-      }
-      if (prefs.lastEditionId) {
-        localStorage.setItem('pocket-last-edition', prefs.lastEditionId);
-      }
-    } catch {
-      /* Optional preference */
-    }
-  }, []);
-
   const insertCartridge = useCallback(
     async (file: File) => {
-      const incoming = await readCartridge(file);
-      const existing = (await storage.listCartridges()).find((item) => item.id === incoming.id);
-      const cartridge = existing ?? incoming;
-      await cartridgeOrchestrator.insertCartridge(
-        cartridge,
-        (cart) => storage.putCartridge(cart),
-        savePreferences,
-      );
-      if (!canvasRef.current) throw new Error('游戏画面尚未就绪，请重试。');
-      await emulator.load(cartridge, canvasRef.current);
-      canvasRef.current.focus({ preventScroll: true });
-      if (navigator.storage?.persist) void navigator.storage.persist().catch(() => false);
+      await cartridgeOrchestrator.insertCartridgeFile(file);
     },
-    [cartridgeOrchestrator, emulator, savePreferences],
+    [cartridgeOrchestrator],
   );
-
-  const loadLocalCartridge = useCallback(
-    async (edition: PokemonEdition) => {
-      const url = available.find((item) => item.id === edition.id && item.available)?.url;
-      if (!url) throw new Error('本地目录中未找到这枚卡带，请导入你的 ROM。');
-      const response = await fetch(url);
-      if (!response.ok || response.headers.get('Content-Type')?.includes('text/html'))
-        throw new Error('无法读取本地卡带，请检查文件后刷新页面。');
-      await insertCartridge(new File([await response.blob()], edition.fileName));
-    },
-    [available, insertCartridge],
-  );
-
-  const openCartridgePicker = useCallback(() => {
-    pickerWasRunning.current = emulator.getSnapshot().status === 'running';
-    input.releaseAll();
-    emulator.pause();
-    romInput.current?.click();
-  }, [emulator, input]);
 
   const finishCartridgePicker = useCallback(() => {
-    if (pickerWasRunning.current && emulator.getSnapshot().status === 'paused') emulator.resume();
-    pickerWasRunning.current = false;
-  }, [emulator]);
+    cartridgeOrchestrator.finishCartridgePicker();
+  }, [cartridgeOrchestrator]);
 
   useEffect(() => {
     const picker = romInput.current;
@@ -329,79 +321,20 @@ export default function App() {
   }, [finishCartridgePicker]);
 
   const startAdventure = useCallback(() => {
-    if (effectiveBusy || game.status === 'loading') return;
-    if (!selected && !localAvailable) return openCartridgePicker();
-    cartridgeOrchestrator.setView('play');
-    void run(async () => {
-      if (selected?.id === game.cartridge?.id && game.status === 'paused') emulator.resume();
-      else if (selected && canvasRef.current) await emulator.load(selected, canvasRef.current);
-      else await loadLocalCartridge(preferredEdition);
-      canvasRef.current?.focus({ preventScroll: true });
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    });
-  }, [
-    effectiveBusy,
-    game.status,
-    game.cartridge,
-    selected,
-    localAvailable,
-    cartridgeOrchestrator,
-    run,
-    emulator,
-    loadLocalCartridge,
-    openCartridgePicker,
-    preferredEdition,
-  ]);
+    void cartridgeOrchestrator.startAdventure();
+  }, [cartridgeOrchestrator]);
 
   const chooseCartridge = (cartridge: Cartridge) => {
-    cartridgeOrchestrator.selectCartridge(cartridge, savePreferences);
-    const canvas = canvasRef.current;
-    if (view === 'play' && active && game.cartridge?.id !== cartridge.id && canvas) {
-      input.releaseAll();
-      void run(() => emulator.load(cartridge, canvas));
-    }
+    void cartridgeOrchestrator.selectCartridge(cartridge);
   };
 
   const chooseEdition = (next: PokemonEdition) => {
-    if (effectiveBusy) return;
-    const { selectedCartridge: owned } = cartridgeOrchestrator.selectEdition(
-      next.id,
-      savePreferences,
-    );
-    if (view === 'play' && active && game.cartridge?.id !== owned?.id) {
-      input.releaseAll();
-      const canvas = canvasRef.current;
-      if (owned && canvas) void run(() => emulator.load(owned, canvas));
-      else if (available.some((item) => item.id === next.id && item.available))
-        void run(() => loadLocalCartridge(next));
-      else openCartridgePicker();
-    }
+    void cartridgeOrchestrator.selectEdition(next.id);
   };
 
   const returnToGallery = useCallback(() => {
-    if (effectiveBusy || game.status === 'loading' || view === 'library') return;
-    input.releaseAll();
-    emulator.pause();
-    setFocusMode(false);
-    void run(async () => {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      if (emulator.getSnapshot().cartridge) await emulator.persist(true);
-      const cartridges = await storage.listCartridges();
-      cartridgeOrchestrator.initialize({
-        storage: {
-          listCartridges: async () => cartridges,
-          putCartridge: (cart) => storage.putCartridge(cart),
-        },
-        fetchCatalog: async () => available,
-        loadPreferences: () => ({
-          lastCartridgeId: localStorage.getItem('pocket-last-cartridge'),
-          lastEditionId: localStorage.getItem('pocket-last-edition'),
-        }),
-      });
-      cartridgeOrchestrator.setView('library');
-      window.scrollTo({ top: 0, behavior: 'instant' });
-    });
-  }, [effectiveBusy, game.status, view, input, emulator, run, cartridgeOrchestrator, available]);
+    void cartridgeOrchestrator.returnToGallery();
+  }, [cartridgeOrchestrator]);
 
   const toggleFullscreen = useCallback(() => {
     if (focusMode) {
@@ -573,6 +506,7 @@ export default function App() {
   const confirmSnapshotAction = async () => {
     await snapshotActions.confirmAction({
       getCurrentCartridgeId: () => emulator.getSnapshot().cartridge?.id,
+      isExternalBusy: () => isGeneralBusy.current || cartridgeOrchestrator.getState().busy,
       loadSlot: (slotSnapshot) => emulator.loadSlot(slotSnapshot),
       saveSlot: (slot) => emulator.saveSlot(slot),
       deleteSlot: (slotSnapshot) => emulator.deleteSlot(slotSnapshot),
@@ -643,7 +577,7 @@ export default function App() {
         dragDepth.current = 0;
         setDragging(false);
         const file = event.dataTransfer.files[0];
-        if (file && !effectiveBusy) void run(() => insertCartridge(file));
+        if (file && !effectiveBusy) void insertCartridge(file);
       }}
     >
       <a href={view === 'library' ? '#cartridge-gallery' : '#game-stage'} className="skip-link">
@@ -659,15 +593,13 @@ export default function App() {
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = '';
-          if (file && !effectiveBusy)
-            void run(async () => {
-              try {
-                await insertCartridge(file);
-              } finally {
-                finishCartridgePicker();
-              }
+          if (file && !effectiveBusy) {
+            void insertCartridge(file).finally(() => {
+              finishCartridgePicker();
             });
-          else finishCartridgePicker();
+          } else {
+            finishCartridgePicker();
+          }
         }}
       />
       <input

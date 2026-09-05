@@ -44,10 +44,23 @@ function createMockSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 }
 
 describe('cross-controller orchestration & busy guard integration', () => {
-  it('deferred snapshot action in flight blocks cartridge operations via effective busy state', async () => {
+  it('deferred snapshot action in flight blocks actual production cartridge commands without mutations', async () => {
     const snapshotController = createSnapshotActionController();
-    const cartridgeOrchestrator = createCartridgeOrchestrator();
     const currentCartridge = createMockCartridge({ id: 'cart-emerald-1' });
+    const loadSpy = vi.fn();
+    const savePrefsSpy = vi.fn();
+
+    const cartridgeOrchestrator = createCartridgeOrchestrator({
+      isExternalBusy: () => snapshotController.getState().busy,
+      emulator: {
+        getSnapshot: () => ({ status: 'running', cartridge: currentCartridge }),
+        load: loadSpy,
+        resume: vi.fn(),
+        pause: vi.fn(),
+        persist: vi.fn(),
+      },
+      savePreferences: savePrefsSpy,
+    });
 
     snapshotController.requestAction('replace', createMockSnapshot());
 
@@ -64,34 +77,101 @@ describe('cross-controller orchestration & busy guard integration', () => {
       deleteSlot: vi.fn(),
     });
 
-    // Both controllers now reflect in-flight mutation
-    const isEffectiveBusy = () => snapshotController.getState().busy;
-    expect(isEffectiveBusy()).toBe(true);
+    expect(snapshotController.getState().busy).toBe(true);
 
-    // Any attempt to execute cartridge operations while effectiveBusy should be guarded
-    const fileDropOrImportAttempt = vi.fn();
-    if (!isEffectiveBusy()) {
-      await fileDropOrImportAttempt();
-    }
-    expect(fileDropOrImportAttempt).not.toHaveBeenCalled();
+    // Call production commands directly; they must reject synchronously or return false before any mutation
+    const selectResult = await cartridgeOrchestrator.selectEdition('sapphire');
+    expect(selectResult).toBe(false);
+    expect(cartridgeOrchestrator.getState().selectedEditionId).not.toBe('sapphire');
+    expect(savePrefsSpy).not.toHaveBeenCalled();
 
-    // Any attempt to switch editions or start new adventure should also check effectiveBusy
-    const switchEditionAttempt = vi.fn();
-    if (!isEffectiveBusy()) {
-      cartridgeOrchestrator.selectEdition('ruby');
-      switchEditionAttempt();
-    }
-    expect(switchEditionAttempt).not.toHaveBeenCalled();
+    const startResult = await cartridgeOrchestrator.startAdventure();
+    expect(startResult).toBe(false);
 
-    // Now resolve snapshot mutation
+    const switchResult = await cartridgeOrchestrator.selectCartridge(
+      createMockCartridge({ id: 'cart-ruby' }),
+    );
+    expect(switchResult).toBe(false);
+    expect(loadSpy).not.toHaveBeenCalled();
+
+    const returnResult = await cartridgeOrchestrator.returnToGallery();
+    expect(returnResult).toBe(false);
+
+    // Release deferred snapshot mutation
     resolveSnapshotMutation();
     await confirmPromise;
 
-    expect(isEffectiveBusy()).toBe(false);
-    expect(snapshotController.getState().pending).toBeNull();
+    expect(snapshotController.getState().busy).toBe(false);
 
-    // Post-resolution, cartridge operations can safely proceed
-    cartridgeOrchestrator.selectEdition('ruby');
-    expect(cartridgeOrchestrator.getState().selectedEditionId).toBe('ruby');
+    // Now production commands can proceed normally
+    const postResult = await cartridgeOrchestrator.selectEdition('sapphire');
+    expect(postResult).toBe(true);
+    expect(cartridgeOrchestrator.getState().selectedEditionId).toBe('sapphire');
+  });
+
+  it('in-flight cartridge command blocks snapshot confirmation via isExternalBusy', async () => {
+    const snapshotController = createSnapshotActionController();
+    const currentCartridge = createMockCartridge({ id: 'cart-emerald-1' });
+
+    let resolveCartridgeLoad: () => void = () => {};
+    const loadPromise = new Promise<void>((resolve) => {
+      resolveCartridgeLoad = resolve;
+    });
+
+    const cartridgeOrchestrator = createCartridgeOrchestrator({
+      storage: {
+        listCartridges: async () => [currentCartridge],
+        putCartridge: vi.fn(),
+      },
+      emulator: {
+        getSnapshot: () => ({ status: 'idle', cartridge: null }),
+        load: () => loadPromise,
+        resume: vi.fn(),
+        pause: vi.fn(),
+        persist: vi.fn(),
+      },
+      getCanvas: () => ({ focus: vi.fn() }) as unknown as HTMLCanvasElement,
+    });
+
+    await cartridgeOrchestrator.initialize({
+      loadPreferences: () => ({ lastCartridgeId: 'cart-emerald-1', lastEditionId: 'emerald' }),
+    });
+
+    // Start cartridge operation (in-flight deferred load)
+    const startPromise = cartridgeOrchestrator.startAdventure();
+    expect(cartridgeOrchestrator.getState().busy).toBe(true);
+
+    // Snapshot confirmation attempted while cartridge is busy
+    snapshotController.requestAction('replace', createMockSnapshot());
+    const saveSlotSpy = vi.fn();
+    const confirmResult = await snapshotController.confirmAction({
+      getCurrentCartridgeId: () => currentCartridge.id,
+      isExternalBusy: () => cartridgeOrchestrator.getState().busy,
+      loadSlot: vi.fn(),
+      saveSlot: saveSlotSpy,
+      deleteSlot: vi.fn(),
+    });
+
+    // Confirmation must reject and not run saveSlot
+    expect(confirmResult).toBe(false);
+    expect(saveSlotSpy).not.toHaveBeenCalled();
+    expect(snapshotController.getState().busy).toBe(false);
+    expect(snapshotController.getState().pending).not.toBeNull();
+
+    // Release cartridge load
+    resolveCartridgeLoad();
+    await startPromise;
+    expect(cartridgeOrchestrator.getState().busy).toBe(false);
+
+    // Now snapshot confirmation can succeed
+    const retryResult = await snapshotController.confirmAction({
+      getCurrentCartridgeId: () => currentCartridge.id,
+      isExternalBusy: () => cartridgeOrchestrator.getState().busy,
+      loadSlot: vi.fn(),
+      saveSlot: saveSlotSpy,
+      deleteSlot: vi.fn(),
+    });
+    expect(retryResult).toBe(true);
+    expect(saveSlotSpy).toHaveBeenCalled();
   });
 });
