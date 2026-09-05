@@ -93,9 +93,12 @@ framework or change storage schema.
 5. `refactor: inject emulator boundary dependencies`
    - Introduce only needed mGBA/browser/storage/clock seams in `src/lib/emulator.ts` and its adapter.
    - Test startup, reset, pause/resume, restore, cleanup, and core failures.
-6. `test: verify serialized emulator persistence`
+6. `fix: preserve serialized save recovery`
    - Assert concurrent autosave/manual operations and cartridge switches preserve write ordering.
    - Cover snapshot compatibility, create/load/replace/delete, failed writes, and queue recovery.
+   - Retain elapsed play time when its storage transaction fails; retry must record it exactly once.
+   - Keep failed battery imports coherent and retryable after core shutdown; never report a running
+     game whose core has already quit.
 7. `test: verify isolated storage transactions`
    - Test IndexedDB CRUD, isolation by ROM hash, open/transaction errors, and `replaceBattery` atomicity.
    - Verify rollback, automatic snapshot removal, and preservation of manual slots.
@@ -259,4 +262,9 @@ the automated port/concurrency guards. This incident is not counted as passing e
 - Cloud databases and buckets remain unnecessary while the application has no remote persistence.
   Future cloud saves must reopen D1 applicability before automated tests access those resources.
 - Application behavior and save compatibility are regression requirements throughout the work.
+- 2026-09-06, B3 preparation: an isolated in-memory probe against `d89ff9d` confirmed two existing
+  failures in [emulator.ts](../src/lib/emulator.ts). A rejected `recordPlayTime` loses the accumulated
+  seven seconds before retry; a rejected `replaceBattery` leaves status `running` after `quitGame`.
+  B3 must add failing-before/passing-after regressions and fix both alongside queue ordering. The
+  probe replaces only process-local dependencies and never opens browser or production storage.
 - No work estimates are stored in this numbered implementation document.
