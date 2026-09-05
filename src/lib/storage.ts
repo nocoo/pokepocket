@@ -92,9 +92,19 @@ export const storage = {
       // Commit the import and invalidate its old automatic resume point together.
       // A tab closed immediately afterwards must not restore the old SRAM data.
       const tx = db.transaction(['batteries', 'snapshots'], 'readwrite');
-      await tx.objectStore('batteries').put(save);
-      await tx.objectStore('snapshots').delete(`${save.romId}:0`);
-      await tx.done;
+      try {
+        await tx.objectStore('batteries').put(save);
+        await tx.objectStore('snapshots').delete(`${save.romId}:0`);
+        await tx.done;
+      } catch (error) {
+        try {
+          tx.abort();
+        } catch {
+          // Transaction might already be inactive
+        }
+        await tx.done.catch(() => {});
+        throw error;
+      }
     } finally {
       db.close();
     }
