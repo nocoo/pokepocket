@@ -507,23 +507,199 @@ describe('PocketEmulator with injected dependencies', () => {
     expect(emulator.getSnapshot().seconds).toBe(127);
   });
 
-  it('serializes whole transactions (load, reset, export, import) with background saves', async () => {
+  it('serializes background save before cartridge switch without early replacement', async () => {
+    let deferredFSSync: { promise: Promise<void>; resolve: () => void } | null = null;
+    let enteredSync: () => void = () => {};
+    const syncEntered = new Promise<void>((r) => {
+      enteredSync = r;
+    });
+
+    const core = {
+      ...createFakeCore(),
+      FSSync: vi.fn().mockImplementation(async () => {
+        if (deferredFSSync) {
+          enteredSync();
+          await deferredFSSync.promise;
+        }
+      }),
+      quitGame: vi.fn(),
+    } as unknown as mGBAEmulator;
+
+    const storage = createStorageDouble();
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock: createClockDouble(),
+    });
+
+    const cartA = createCartridge('cart-a');
+    const cartB = createCartridge('cart-b');
+    const canvas = {} as HTMLCanvasElement;
+
+    await emulator.load(cartA, canvas);
+    expect(emulator.getSnapshot().cartridge?.id).toBe('cart-a');
+
+    let resolveSync: () => void = () => {};
+    deferredFSSync = {
+      promise: new Promise<void>((r) => {
+        resolveSync = r;
+      }),
+      resolve: () => resolveSync(),
+    };
+
+    const persistA = emulator.persist(true);
+    await syncEntered;
+
+    // While persistA is held in FSSync, putBattery for Cart A was called, but Cart B operations must not start
+    const putBatteryCallsBefore = (storage.putBattery as ReturnType<typeof vi.fn>).mock.calls
+      .length;
+
+    const loadBPromise = emulator.load(cartB, canvas);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // While save/FSSync is held: no new putBattery calls, core has not quit Cart A, loaded Cart B, or changed snapshot
+    expect((storage.putBattery as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+      putBatteryCallsBefore,
+    );
+    expect(core.quitGame).not.toHaveBeenCalled();
+    expect(emulator.getSnapshot().cartridge?.id).toBe('cart-a');
+
+    deferredFSSync.resolve();
+    deferredFSSync = null;
+    await Promise.all([persistA, loadBPromise]);
+
+    expect(core.quitGame).toHaveBeenCalledTimes(1);
+    expect(emulator.getSnapshot().cartridge?.id).toBe('cart-b');
+  });
+
+  it('serializes background save before reset without early core reload', async () => {
+    let deferredFSSync: { promise: Promise<void>; resolve: () => void } | null = null;
+    let enteredSync: () => void = () => {};
+    const syncEntered = new Promise<void>((r) => {
+      enteredSync = r;
+    });
+
+    const core = {
+      ...createFakeCore(),
+      FSSync: vi.fn().mockImplementation(async () => {
+        if (deferredFSSync) {
+          enteredSync();
+          await deferredFSSync.promise;
+        }
+      }),
+      quickReload: vi.fn(),
+    } as unknown as mGBAEmulator;
+
+    const storage = createStorageDouble();
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock: createClockDouble(),
+    });
+
+    await emulator.load(createCartridge('cart-reset'), {} as HTMLCanvasElement);
+
+    let resolveSync: () => void = () => {};
+    deferredFSSync = {
+      promise: new Promise<void>((r) => {
+        resolveSync = r;
+      }),
+      resolve: () => resolveSync(),
+    };
+
+    const persistPromise = emulator.persist(true);
+    await syncEntered;
+
+    const putBatteryCallsBefore = (storage.putBattery as ReturnType<typeof vi.fn>).mock.calls
+      .length;
+    const resetPromise = emulator.reset();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // While background save is held: quickReload must not execute early, and no new reset persist call starts
+    expect((storage.putBattery as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+      putBatteryCallsBefore,
+    );
+    expect(core.quickReload).not.toHaveBeenCalled();
+
+    deferredFSSync.resolve();
+    deferredFSSync = null;
+    await Promise.all([persistPromise, resetPromise]);
+
+    expect(core.quickReload).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes background save before loadSlot without early state restore', async () => {
+    let deferredFSSync: { promise: Promise<void>; resolve: () => void } | null = null;
+    let enteredSync: () => void = () => {};
+    const syncEntered = new Promise<void>((r) => {
+      enteredSync = r;
+    });
+
+    const core = {
+      ...createFakeCore(),
+      FSSync: vi.fn().mockImplementation(async () => {
+        if (deferredFSSync) {
+          enteredSync();
+          await deferredFSSync.promise;
+        }
+      }),
+      loadState: vi.fn().mockReturnValue(true),
+    } as unknown as mGBAEmulator;
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    await emulator.load(createCartridge('cart-slot'), {} as HTMLCanvasElement);
+
+    let resolveSync: () => void = () => {};
+    deferredFSSync = {
+      promise: new Promise<void>((r) => {
+        resolveSync = r;
+      }),
+      resolve: () => resolveSync(),
+    };
+
+    const persistPromise = emulator.persist(true);
+    await syncEntered;
+
+    const slotPromise = emulator.loadSlot({
+      key: 'cart-slot:1',
+      romId: 'cart-slot',
+      slot: 1,
+      data: new ArrayBuffer(8),
+      thumbnail: '',
+      updatedAt: 100,
+      coreVersion: '2.5.1',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // loadState must not be called while prior persist is in flight
+    expect(core.loadState).not.toHaveBeenCalled();
+
+    deferredFSSync.resolve();
+    deferredFSSync = null;
+    await Promise.all([persistPromise, slotPromise]);
+
+    expect(core.loadState).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes exportBattery before cartridge switch retaining original ROM bytes', async () => {
     const files = new Map<string, Uint8Array>();
     const batteries = new Map<string, { romId: string; data: ArrayBuffer; updatedAt: number }>();
-    const snapshots = new Map<string, Snapshot>();
 
     let currentRomId = '';
     let currentSave = new Uint8Array([1, 1, 1, 1]);
 
-    let deferredFSSync: { promise: Promise<void>; resolve: () => void } | null = null;
-    const fsSyncMock = vi.fn().mockImplementation(async () => {
-      if (deferredFSSync) await deferredFSSync.promise;
-    });
-
     const core: mGBAEmulator = {
       version: { projectName: 'mGBA', projectVersion: '2.5.1' },
       FSInit: vi.fn().mockResolvedValue(undefined),
-      FSSync: fsSyncMock,
+      FSSync: vi.fn().mockResolvedValue(undefined),
       toggleInput: vi.fn(),
       setCoreSettings: vi.fn(),
       quitGame: vi.fn().mockImplementation(() => {
@@ -546,10 +722,7 @@ describe('PocketEmulator with injected dependencies', () => {
       setFastForwardMultiplier: vi.fn(),
       addCoreCallbacks: vi.fn(),
       loadState: vi.fn().mockReturnValue(true),
-      saveState: vi.fn().mockImplementation((slot: number) => {
-        files.set(`/states/${currentRomId}.ss${slot}`, currentSave.slice());
-        return true;
-      }),
+      saveState: vi.fn().mockReturnValue(true),
       getSave: vi.fn().mockImplementation(() => (currentRomId ? currentSave.slice() : null)),
       screenshot: vi.fn().mockReturnValue(true),
       filePaths: vi.fn().mockReturnValue({
@@ -567,26 +740,33 @@ describe('PocketEmulator with injected dependencies', () => {
       SDL2: { audioContext: { state: 'suspended', resume: vi.fn().mockResolvedValue(undefined) } },
     } as unknown as mGBAEmulator;
 
+    let armGetBatteryGate = false;
+    let enteredGetBattery: () => void = () => {};
+    const getBatteryEntered = new Promise<void>((r) => {
+      enteredGetBattery = r;
+    });
+    let resolveGetBattery: () => void = () => {};
+    const deferredGetBattery = new Promise<void>((r) => {
+      resolveGetBattery = r;
+    });
+
     const storage: EmulatorStorageAdapter = {
-      getBattery: vi.fn().mockImplementation(async (id: string) => batteries.get(id)),
+      getBattery: vi.fn().mockImplementation(async (id: string) => {
+        if (armGetBatteryGate && id === 'cart-b') {
+          enteredGetBattery();
+          await deferredGetBattery;
+        }
+        return batteries.get(id);
+      }),
       putBattery: vi.fn().mockImplementation(async (val) => {
         batteries.set(val.romId, val);
       }),
       replaceBattery: vi.fn().mockImplementation(async (val) => {
         batteries.set(val.romId, val);
-        snapshots.delete(`${val.romId}:0`);
       }),
-      listSnapshots: vi
-        .fn()
-        .mockImplementation(async (id: string) =>
-          [...snapshots.values()].filter((s) => s.romId === id),
-        ),
-      putSnapshot: vi.fn().mockImplementation(async (val) => {
-        snapshots.set(val.key, val);
-      }),
-      deleteSnapshot: vi.fn().mockImplementation(async (key: string) => {
-        snapshots.delete(key);
-      }),
+      listSnapshots: vi.fn().mockResolvedValue([]),
+      putSnapshot: vi.fn().mockResolvedValue(undefined),
+      deleteSnapshot: vi.fn().mockResolvedValue(undefined),
       recordPlayTime: vi.fn().mockResolvedValue(undefined),
     };
 
@@ -601,108 +781,173 @@ describe('PocketEmulator with injected dependencies', () => {
     const cartB = createCartridge('cart-b');
     const canvas = {} as HTMLCanvasElement;
 
-    // Load initial Cart A
-    await emulator.load(cartA, canvas);
-    expect(emulator.getSnapshot().cartridge?.id).toBe('cart-a');
-
-    // 1. Hold old-game save/FSSync while queuing switch to Cart B
-    let enteredSync: () => void = () => {};
-    const syncEntered = new Promise<void>((r) => {
-      enteredSync = r;
-    });
-    let resolveSync: () => void = () => {};
-    deferredFSSync = {
-      promise: new Promise<void>((r) => {
-        resolveSync = r;
-      }),
-      resolve: () => resolveSync(),
-    };
-    const origFSSync = fsSyncMock.getMockImplementation();
-    fsSyncMock.mockImplementation(async () => {
-      if (deferredFSSync) {
-        enteredSync();
-        await deferredFSSync.promise;
-      } else if (origFSSync) {
-        await origFSSync();
-      }
-    });
-
-    const persistA = emulator.persist(true);
-    await syncEntered;
-    const loadBPromise = emulator.load(cartB, canvas);
-
-    // Verify while FSSync is held, Cart B has not replaced the core or changed the snapshot
-    expect(emulator.getSnapshot().cartridge?.id).toBe('cart-a');
-
-    // Release FSSync
-    deferredFSSync.resolve();
-    deferredFSSync = null;
-    await Promise.all([persistA, loadBPromise]);
-
-    // Cart B is now active
+    // Load Cart B initially
+    await emulator.load(cartB, canvas);
     expect(emulator.getSnapshot().cartridge?.id).toBe('cart-b');
 
-    // 2. Set Cart B's live save data, hold getBattery, queue a switch to Cart A, and prove export returns Cart B's bytes
+    // Update Cart B save data in core
     const bBytes = new Uint8Array([42, 42, 42, 42]);
     currentSave = bBytes.slice();
 
-    let enteredGetBattery: () => void = () => {};
-    const getBatteryEntered = new Promise<void>((r) => {
-      enteredGetBattery = r;
-    });
-    let resolveGetBattery: () => void = () => {};
-    const deferredGetBattery = new Promise<void>((r) => {
-      resolveGetBattery = r;
-    });
-
-    storage.getBattery = vi.fn().mockImplementation(async (id: string) => {
-      if (id === 'cart-b') {
-        enteredGetBattery();
-        await deferredGetBattery;
-      }
-      return batteries.get(id);
-    });
+    // Arm gate only after initial load finishes
+    armGetBatteryGate = true;
 
     const exportPromise = emulator.exportBattery();
     await getBatteryEntered;
-    const switchBackToA = emulator.load(cartA, canvas);
 
-    // Verify while export is held inside getBattery, Cart A switch has not completed yet
+    const switchBackToA = emulator.load(cartA, canvas);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Cart B export is in flight; Cart A switch must not replace snapshot early
     expect(emulator.getSnapshot().cartridge?.id).toBe('cart-b');
 
-    // Release getBattery
     resolveGetBattery();
     const exportedData = await exportPromise;
     expect(new Uint8Array(exportedData)).toEqual(bBytes);
 
     await switchBackToA;
     expect(emulator.getSnapshot().cartridge?.id).toBe('cart-a');
+  });
 
-    // 3. Hold import replacement/reload while an autosave is queued and prove imported bytes survive
+  it('holds import replacement while autosave is queued and preserves imported bytes', async () => {
+    const files = new Map<string, Uint8Array>();
+    const batteries = new Map<string, { romId: string; data: ArrayBuffer; updatedAt: number }>();
+
+    let currentRomId = '';
+    let currentSave = new Uint8Array([1, 1, 1, 1]);
+
+    const core: mGBAEmulator = {
+      version: { projectName: 'mGBA', projectVersion: '2.5.1' },
+      FSInit: vi.fn().mockResolvedValue(undefined),
+      FSSync: vi.fn().mockResolvedValue(undefined),
+      toggleInput: vi.fn(),
+      setCoreSettings: vi.fn(),
+      quitGame: vi.fn().mockImplementation(() => {
+        files.set(`/saves/${currentRomId}.sav`, currentSave.slice());
+        currentRomId = '';
+      }),
+      loadGame: vi.fn().mockImplementation((path: string, savePath: string) => {
+        const parts = path.split('/');
+        const last = parts[parts.length - 1];
+        currentRomId = (last ?? '').replace(/\.gba$/, '');
+        currentSave = files.get(savePath)?.slice() ?? new Uint8Array([1, 1, 1, 1]);
+        return true;
+      }),
+      pauseGame: vi.fn(),
+      resumeGame: vi.fn(),
+      quickReload: vi.fn(),
+      buttonPress: vi.fn(),
+      buttonUnpress: vi.fn(),
+      setVolume: vi.fn(),
+      setFastForwardMultiplier: vi.fn(),
+      addCoreCallbacks: vi.fn(),
+      loadState: vi.fn().mockReturnValue(true),
+      saveState: vi.fn().mockReturnValue(true),
+      getSave: vi.fn().mockImplementation(() => (currentRomId ? currentSave.slice() : null)),
+      screenshot: vi.fn().mockReturnValue(true),
+      filePaths: vi.fn().mockReturnValue({
+        savePath: '/saves',
+        saveStatePath: '/states',
+        screenshotsPath: '/screenshots',
+      }),
+      FS: {
+        mkdir: vi.fn(),
+        writeFile: vi.fn().mockImplementation((p: string, data: Uint8Array) => files.set(p, data)),
+        readFile: vi.fn().mockImplementation((p: string) => files.get(p) ?? new Uint8Array([0])),
+        unlink: vi.fn().mockImplementation((p: string) => files.delete(p)),
+        analyzePath: vi.fn().mockImplementation((p: string) => ({ exists: files.has(p) })),
+      },
+      SDL2: { audioContext: { state: 'suspended', resume: vi.fn().mockResolvedValue(undefined) } },
+    } as unknown as mGBAEmulator;
+
+    let armReplaceGate = false;
+    let enteredReplace: () => void = () => {};
+    const replaceEntered = new Promise<void>((r) => {
+      enteredReplace = r;
+    });
+    let resolveReplace: () => void = () => {};
+    const deferredReplace = new Promise<void>((r) => {
+      resolveReplace = r;
+    });
+
+    const storage: EmulatorStorageAdapter = {
+      getBattery: vi.fn().mockImplementation(async (id: string) => batteries.get(id)),
+      putBattery: vi.fn().mockImplementation(async (val) => {
+        batteries.set(val.romId, val);
+      }),
+      replaceBattery: vi.fn().mockImplementation(async (val) => {
+        if (armReplaceGate) {
+          enteredReplace();
+          await deferredReplace;
+        }
+        batteries.set(val.romId, val);
+      }),
+      listSnapshots: vi.fn().mockResolvedValue([]),
+      putSnapshot: vi.fn().mockResolvedValue(undefined),
+      deleteSnapshot: vi.fn().mockResolvedValue(undefined),
+      recordPlayTime: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock: createClockDouble(),
+    });
+
+    await emulator.load(createCartridge('cart-import'), {} as HTMLCanvasElement);
+
+    armReplaceGate = true;
     const importedBytes = new Uint8Array([99, 99, 99, 99]);
     const importPromise = emulator.importBattery(importedBytes.buffer);
-    const autoSavePromise = emulator.persist(false);
+    await replaceEntered;
 
+    // While replacement is held inside replaceBattery, queue an autosave
+    const autoSavePromise = emulator.persist(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    resolveReplace();
     await Promise.all([importPromise, autoSavePromise]);
-    const finalBattery = await storage.getBattery('cart-a');
+
+    const finalBattery = await storage.getBattery('cart-import');
     expect(finalBattery).toBeDefined();
     if (finalBattery) {
       expect(new Uint8Array(finalBattery.data)).toEqual(importedBytes);
     }
+  });
 
-    // 4. Queued command failure recovery: rejected command followed by successful queued command
+  it('recovers queue after rejection and executes subsequent queued command successfully', async () => {
+    const storage = createStorageDouble();
+    const snapshots = new Map<string, Snapshot>();
+
     storage.putSnapshot = vi
       .fn()
       .mockRejectedValueOnce(new Error('disk full'))
       .mockImplementation(async (val) => {
         snapshots.set(val.key, val);
       });
+    storage.listSnapshots = vi
+      .fn()
+      .mockImplementation(async (id: string) =>
+        [...snapshots.values()].filter((s) => s.romId === id),
+      );
+
+    const emulator = new PocketEmulator({
+      createCore: async () => createFakeCore(),
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock: createClockDouble(),
+    });
+
+    await emulator.load(createCartridge('cart-recover'), {} as HTMLCanvasElement);
+
     const failedSave = emulator.saveSlot(1).catch((err) => err.message);
     const retrySave = emulator.saveSlot(1);
 
     const [errorMsg] = await Promise.all([failedSave, retrySave]);
     expect(errorMsg).toBe('disk full');
-    const slotSnap = await storage.listSnapshots('cart-a');
+
+    const slotSnap = await storage.listSnapshots('cart-recover');
     expect(slotSnap.some((s) => s.slot === 1)).toBe(true);
   });
 });
