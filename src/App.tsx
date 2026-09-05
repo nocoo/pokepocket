@@ -54,7 +54,9 @@ import {
 } from './lib/catalog';
 import { Modal } from './components/Modal';
 import { SaveSlots } from './components/SaveSlots';
-import { SnapshotConfirmation, type SnapshotAction } from './components/SnapshotConfirmation';
+import { SnapshotConfirmation } from './components/SnapshotConfirmation';
+import { createModalPauseController, type ModalName } from './lib/modal-pause';
+import { createSnapshotActionController, type SnapshotAction } from './lib/snapshot-action';
 import {
   cartridgeTitle,
   readCartridge,
@@ -69,13 +71,7 @@ import { download, storage, type Snapshot } from './lib/storage';
 import { upscaleScreenshot } from './lib/screenshot';
 import { APP_VERSION } from './lib/version';
 
-type ModalName = 'settings' | 'saves' | 'help' | 'restart' | 'import-save' | 'snapshot' | null;
 type Toast = { text: string; error: boolean; id: number };
-type PendingSnapshot = {
-  action: SnapshotAction;
-  snapshot: Snapshot;
-  returnTo: 'saves' | null;
-};
 
 function playTime(seconds: number) {
   const h = Math.floor(seconds / 3600)
@@ -130,7 +126,14 @@ export default function App() {
   const [storageReady, setStorageReady] = useState(false);
   const [settings, setSettings] = useState(loadSettings);
   const keyboardMap = useMemo(() => keyMap(settings.bindings), [settings.bindings]);
-  const [modal, setModal] = useState<ModalName>(null);
+  const [modalPause] = useState(() => createModalPauseController());
+  const modalPauseState = useSyncExternalStore(modalPause.subscribe, modalPause.getState);
+  const modal = modalPauseState.modal;
+  const [snapshotActions] = useState(() => createSnapshotActionController());
+  const snapshotActionState = useSyncExternalStore(
+    snapshotActions.subscribe,
+    snapshotActions.getState,
+  );
   const [toast, setToast] = useState<Toast | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -138,13 +141,10 @@ export default function App() {
   const [fullscreen, setFullscreen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [pendingSave, setPendingSave] = useState<{ data: ArrayBuffer; name: string } | null>(null);
-  const [pendingSnapshot, setPendingSnapshot] = useState<PendingSnapshot | null>(null);
-  const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLElement>(null);
   const romInput = useRef<HTMLInputElement>(null);
   const saveInput = useRef<HTMLInputElement>(null);
-  const wasRunning = useRef(false);
   const pickerWasRunning = useRef(false);
   const dragDepth = useRef(0);
   const preferredEdition = getEdition(selectedEditionId) ?? DEFAULT_EDITION;
@@ -249,22 +249,25 @@ export default function App() {
   }, [game.status, input]);
 
   const openModal = useCallback(
-    (name: ModalName) => {
-      wasRunning.current = emulator.getSnapshot().status === 'running';
+    (name: Exclude<ModalName, null>) => {
       input.releaseAll();
-      emulator.pause();
-      if (emulator.getSnapshot().cartridge)
+      const currentSnapshot = emulator.getSnapshot();
+      const { shouldPause, shouldPersist } = modalPause.openModal(name, {
+        isRunning: currentSnapshot.status === 'running',
+        hasCartridge: Boolean(currentSnapshot.cartridge),
+      });
+      if (shouldPause) emulator.pause();
+      if (shouldPersist && currentSnapshot.cartridge) {
         void emulator.persist(true).catch((error) => notify(message(error), true));
-      setModal(name);
+      }
     },
-    [emulator, input, notify],
+    [emulator, input, modalPause, notify],
   );
 
   const closeModal = useCallback(() => {
-    setModal(null);
-    if (wasRunning.current && view === 'play') emulator.resume();
-    wasRunning.current = false;
-  }, [emulator, view]);
+    const { shouldResume } = modalPause.closeModal({ currentView: view });
+    if (shouldResume) emulator.resume();
+  }, [emulator, modalPause, view]);
 
   const rememberSelection = useCallback((id: string, editionId: string | null) => {
     setSelectedId(id);
@@ -542,49 +545,41 @@ export default function App() {
   }, [emulator, input, modal, view]);
 
   const requestSnapshotAction = (action: SnapshotAction, snapshot: Snapshot) => {
-    if (busy || !active) return;
-    setPendingSnapshot({ action, snapshot, returnTo: modal === 'saves' ? 'saves' : null });
-    setSnapshotError(null);
-    // The saves manager already paused and checkpointed the game. Keep its
-    // original resume intent when moving between it and a confirmation dialog.
-    if (modal === 'saves') setModal('snapshot');
+    if (busy || snapshotActionState.busy || !active) return;
+    const requested = snapshotActions.requestAction(action, snapshot, {
+      returnTo: modal === 'saves' ? 'saves' : null,
+      active,
+    });
+    if (!requested) return;
+    if (modal === 'saves') modalPause.setModalDirectly('snapshot');
     else openModal('snapshot');
   };
 
   const closeSnapshotConfirmation = () => {
-    if (busy) return;
-    setPendingSnapshot(null);
-    setSnapshotError(null);
-    if (pendingSnapshot?.returnTo === 'saves') setModal('saves');
+    if (snapshotActionState.busy) return;
+    const returnTo = snapshotActionState.pending?.returnTo;
+    snapshotActions.cancelAction();
+    if (returnTo === 'saves') modalPause.setModalDirectly('saves');
     else closeModal();
   };
 
   const confirmSnapshotAction = async () => {
-    if (busy || !pendingSnapshot) return;
-    const { action, snapshot, returnTo } = pendingSnapshot;
-    setBusy(true);
-    setSnapshotError(null);
-    try {
-      if (snapshot.romId !== emulator.getSnapshot().cartridge?.id)
-        throw new Error('当前卡带已切换，请重新选择即时存档。');
-      if (action === 'load') await emulator.loadSlot(snapshot);
-      else if (action === 'replace') await emulator.saveSlot(snapshot.slot);
-      else await emulator.deleteSlot(snapshot);
-
-      setPendingSnapshot(null);
-      if (action !== 'load' && returnTo === 'saves') setModal('saves');
-      else closeModal();
-      if (action === 'load') setView('play');
-      notify(
-        action === 'load'
-          ? '欢迎回来，接着冒险吧。'
-          : `即时存档 0${snapshot.slot} 已${action === 'replace' ? '替换为当前进度' : '清除'}`,
-      );
-    } catch (error) {
-      setSnapshotError(message(error));
-    } finally {
-      setBusy(false);
-    }
+    await snapshotActions.confirmAction({
+      getCurrentCartridgeId: () => emulator.getSnapshot().cartridge?.id,
+      loadSlot: (slotSnapshot) => emulator.loadSlot(slotSnapshot),
+      saveSlot: (slot) => emulator.saveSlot(slot),
+      deleteSlot: (slotSnapshot) => emulator.deleteSlot(slotSnapshot),
+      onSuccess: ({ action, snapshot, returnTo }) => {
+        if (action !== 'load' && returnTo === 'saves') modalPause.setModalDirectly('saves');
+        else closeModal();
+        if (action === 'load') setView('play');
+        notify(
+          action === 'load'
+            ? '欢迎回来，接着冒险吧。'
+            : `即时存档 0${snapshot.slot} 已${action === 'replace' ? '替换为当前进度' : '清除'}`,
+        );
+      },
+    });
   };
 
   const saveSlot = (slot: number) => {
@@ -683,7 +678,7 @@ export default function App() {
               if (!/\.sav$/i.test(file.name)) throw new Error('请选择 .sav 格式的游戏存档。');
               validateBatterySave(file.size, current.header);
               setPendingSave({ data: await file.arrayBuffer(), name: file.name });
-              setModal('import-save');
+              openModal('import-save');
             });
         }}
       />
@@ -1225,13 +1220,13 @@ export default function App() {
         </Modal>
       )}
 
-      {modal === 'snapshot' && pendingSnapshot && (
+      {modal === 'snapshot' && snapshotActionState.pending && (
         <SnapshotConfirmation
-          action={pendingSnapshot.action}
-          snapshot={pendingSnapshot.snapshot}
+          action={snapshotActionState.pending.action}
+          snapshot={snapshotActionState.pending.snapshot}
           gameTitle={title}
-          busy={busy}
-          error={snapshotError}
+          busy={snapshotActionState.busy}
+          error={snapshotActionState.error}
           onClose={closeSnapshotConfirmation}
           onConfirm={() => void confirmSnapshotAction()}
         />
