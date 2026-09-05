@@ -83,7 +83,11 @@ export function CartridgeGallery({
           </h1>
           <p>打开卡带盒，把那个舍不得结束的夏天，再过一遍。</p>
         </div>
-        <div className="collection-postmark" aria-label="关都、城都、丰缘，1996 至 2004 年">
+        <div
+          className="collection-postmark"
+          role="img"
+          aria-label="关都、城都、丰缘，1996 至 2004 年"
+        >
           <span>
             KANTO <i>·</i> JOHTO <i>·</i> HOENN
           </span>
@@ -112,9 +116,10 @@ export function CartridgeGallery({
             </span>
           </div>
           <div className="case-filters">
-            <div className="generation-tabs" role="group" aria-label="按世代筛选">
+            <fieldset className="generation-tabs" aria-label="按世代筛选">
               {['全部', '初代', '二代', '三代'].map((label, index) => (
                 <button
+                  type="button"
                   key={label}
                   aria-label={label}
                   aria-pressed={generation === index}
@@ -125,7 +130,7 @@ export function CartridgeGallery({
                   <small>{[12, 4, 3, 5][index]}</small>
                 </button>
               ))}
-            </div>
+            </fieldset>
             <label className="series-search">
               <Search size={14} />
               <input
@@ -142,6 +147,7 @@ export function CartridgeGallery({
               const index = EDITIONS.findIndex((entry) => entry.id === item.id) + 1;
               return (
                 <button
+                  type="button"
                   key={item.id}
                   className={`tray-slot ${selected ? 'is-selected' : ''}`}
                   style={{ '--edition-color': item.color } as CSSProperties}
@@ -174,6 +180,7 @@ export function CartridgeGallery({
                 <strong>没有找到这枚卡带</strong>
                 <span>试试中文名、英文名或地区名称。</span>
                 <button
+                  type="button"
                   className="text-button"
                   onClick={() => {
                     setQuery('');
@@ -264,6 +271,7 @@ export function CartridgeGallery({
               </div>
             </div>
             <button
+              type="button"
               className="gallery-start"
               aria-label={ready(edition.id) ? '开始冒险' : '导入卡带'}
               disabled={busy || (!catalogReady && !ready(edition.id))}

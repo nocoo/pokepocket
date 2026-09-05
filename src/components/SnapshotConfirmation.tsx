@@ -84,10 +84,18 @@ export function SnapshotConfirmation({
         </p>
       )}
       <div className="modal-actions">
-        <button className="secondary-button" disabled={busy} onClick={onClose} autoFocus>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={busy}
+          onClick={onClose}
+          // biome-ignore lint/a11y/noAutofocus: confirmation dialog autofocuses cancel to prevent accidental destructive actions
+          autoFocus
+        >
           取消
         </button>
         <button
+          type="button"
           className={`primary-button ${action === 'delete' ? 'danger-button' : ''}`}
           disabled={busy}
           onClick={onConfirm}

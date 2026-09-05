@@ -23,6 +23,7 @@ export function SaveSlots({
         return (
           <div className={`save-slot ${snapshot ? 'has-save' : ''}`} key={slot}>
             <button
+              type="button"
               className="save-slot-preview"
               disabled={!active || busy}
               onClick={() => (snapshot ? onLoad(snapshot) : onSave(slot))}
@@ -58,6 +59,7 @@ export function SaveSlots({
             {snapshot && (
               <div className="save-slot-actions">
                 <button
+                  type="button"
                   className="save-slot-action"
                   disabled={!active || busy}
                   onClick={() => onSave(slot)}
@@ -67,6 +69,7 @@ export function SaveSlots({
                   替换
                 </button>
                 <button
+                  type="button"
                   className="save-slot-action save-slot-delete"
                   disabled={!active || busy}
                   onClick={() => onDelete(snapshot)}

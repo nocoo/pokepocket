@@ -65,7 +65,7 @@ test.beforeEach(async ({ page }) => {
   });
   await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
   await expect
-    .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0'))
+    .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0', 10))
     .toBeGreaterThan(20);
 });
 
@@ -74,7 +74,8 @@ test('confirms every restore and preserves the previous pause state when cancell
 }) => {
   await saveToEmptySlot(page, 1);
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  const saved = (await readSaves(page)).snapshots.find((snapshot) => snapshot.slot === 1)!;
+  const saved = (await readSaves(page)).snapshots.find((snapshot) => snapshot.slot === 1);
+  if (!saved) throw new Error('Saved snapshot slot 1 not found');
 
   await page.getByRole('button', { name: '读取即时存档 1', exact: true }).click();
   const confirmation = page.getByRole('dialog', { name: '读取即时存档 01？', exact: true });
@@ -89,8 +90,9 @@ test('confirms every restore and preserves the previous pause state when cancell
   );
   await expect(page.getByText('已暂停', { exact: true })).toBeVisible();
   const pausedAt = await page.getByTestId('play-time').textContent();
+  if (!pausedAt) throw new Error('Paused play time not found');
   await page.waitForTimeout(1100);
-  await expect(page.getByTestId('play-time')).toHaveText(pausedAt!);
+  await expect(page.getByTestId('play-time')).toHaveText(pausedAt);
   await confirmation.getByRole('button', { name: '取消', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
@@ -134,7 +136,8 @@ test('replaces and clears only the confirmed slot, persists both, and reuses the
   for (const slot of [1, 2, 3]) await saveToEmptySlot(page, slot);
   // Let the CPU advance so replacing a save must capture a new emulated state.
   const savedAt = await page.getByTestId('play-time').textContent();
-  await expect(page.getByTestId('play-time')).not.toHaveText(savedAt!);
+  if (!savedAt) throw new Error('Saved play time not found');
+  await expect(page.getByTestId('play-time')).not.toHaveText(savedAt);
   await page.getByRole('button', { name: '我的存档', exact: true }).click();
   const manager = page.getByRole('dialog', { name: '把这一刻，好好收起来。', exact: true });
   await expect(manager.getByRole('button', { name: '恢复进度', exact: true })).toBeEnabled();
@@ -152,8 +155,9 @@ test('replaces and clears only the confirmed slot, persists both, and reuses the
   await expect(manager).toBeVisible();
   await expect(page.getByText('已暂停', { exact: true })).toBeVisible();
   const replaced = await readSaves(page);
-  const before = original.snapshots.find((snapshot) => snapshot.slot === 2)!;
-  const after = replaced.snapshots.find((snapshot) => snapshot.slot === 2)!;
+  const before = original.snapshots.find((snapshot) => snapshot.slot === 2);
+  const after = replaced.snapshots.find((snapshot) => snapshot.slot === 2);
+  if (!before || !after) throw new Error('Snapshots for slot 2 not found');
   expect(after.updatedAt).toBeGreaterThan(before.updatedAt);
   expect(after.hash).not.toBe(before.hash);
   expect(replaced.snapshots.filter((snapshot) => snapshot.slot !== 2)).toEqual(
@@ -194,9 +198,10 @@ test('replaces and clears only the confirmed slot, persists both, and reuses the
   await saveToEmptySlot(page, 1);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const reused = await readSaves(page);
-  expect(reused.snapshots.find((snapshot) => snapshot.slot === 1)!.updatedAt).toBeGreaterThan(
-    original.snapshots.find((snapshot) => snapshot.slot === 1)!.updatedAt,
-  );
+  const reusedSlot = reused.snapshots.find((snapshot) => snapshot.slot === 1);
+  const originalSlot = original.snapshots.find((snapshot) => snapshot.slot === 1);
+  if (!reusedSlot || !originalSlot) throw new Error('Snapshots for slot 1 not found');
+  expect(reusedSlot.updatedAt).toBeGreaterThan(originalSlot.updatedAt);
   expect(reused.snapshots.filter((snapshot) => snapshot.slot > 1)).toEqual(
     cleared.snapshots.filter((snapshot) => snapshot.slot > 1),
   );

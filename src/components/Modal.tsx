@@ -35,6 +35,12 @@ export function Modal({
         event.preventDefault();
         if (dismissible) onClose();
       }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          if (dismissible) onClose();
+        }
+      }}
       onClick={(event) => {
         if (dismissible && event.target === dialog.current) onClose();
       }}
@@ -46,6 +52,7 @@ export function Modal({
             <h2 id={titleId}>{title}</h2>
           </div>
           <button
+            type="button"
             className="icon-button"
             aria-label="关闭窗口"
             disabled={!dismissible}

@@ -806,6 +806,10 @@ h3 {
   transform: translateX(-50%);
 }
 .dpad {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
   display: grid;
   grid-template: repeat(3, 1fr) / repeat(3, 1fr);
   width: 80%;
@@ -1418,6 +1422,10 @@ h3 {
   color: #49632f;
 }
 .mobile-controls {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
   display: none;
 }
 .below-grid {
@@ -3592,6 +3600,8 @@ kbd {
   min-width: 0;
 }
 .generation-tabs {
+  margin: 0;
+  min-inline-size: 0;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   border: 1px solid var(--border);

@@ -37,11 +37,12 @@ describe('Pokémon GB / GBC / GBA cartridge recognition', () => {
   ])('recognizes regional GBA game code %s', (code, id) => {
     const header = parseHeader(gbaFixture(code).buffer);
     expect(header.editionId).toBe(id);
-    expect(header.rtc).toBe(['ruby', 'sapphire', 'emerald'].includes(id!));
+    expect(header.rtc).toBe(Boolean(id && ['ruby', 'sapphire', 'emerald'].includes(id)));
   });
   it('rejects malformed Game Boy headers and truncated bank data', () => {
     const bytes = gbFixture();
-    bytes[0x14d]! ^= 1;
+    const current = bytes[0x14d] ?? 0;
+    bytes[0x14d] = current ^ 1;
     expect(() => parseHeader(bytes.buffer)).toThrow('校验失败');
     updateGbChecksum(bytes);
     bytes[0x148] = 1;

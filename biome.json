@@ -1,0 +1,36 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "src/**/*.{ts,tsx}",
+      "worker/**/*.ts",
+      "scripts/**/*.{ts,mjs}",
+      "tests/**/*.{ts,tsx,mjs}",
+      "*.{ts,mjs,json}",
+      "!!worker-configuration.d.ts"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "domains": {
+      "react": "recommended",
+      "solid": "none",
+      "vue": "none",
+      "svelte": "none",
+      "qwik": "none",
+      "astro": "none",
+      "next": "none"
+    },
+    "rules": {
+      "preset": "recommended"
+    }
+  }
+}

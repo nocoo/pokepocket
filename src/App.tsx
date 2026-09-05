@@ -350,9 +350,10 @@ export default function App() {
 
   const chooseCartridge = (cartridge: Cartridge) => {
     rememberSelection(cartridge.id, cartridge.header.editionId);
-    if (view === 'play' && active && game.cartridge?.id !== cartridge.id && canvasRef.current) {
+    const canvas = canvasRef.current;
+    if (view === 'play' && active && game.cartridge?.id !== cartridge.id && canvas) {
       input.releaseAll();
-      void run(() => emulator.load(cartridge, canvasRef.current!));
+      void run(() => emulator.load(cartridge, canvas));
     }
   };
 
@@ -370,7 +371,8 @@ export default function App() {
     }
     if (view === 'play' && active && game.cartridge?.id !== owned?.id) {
       input.releaseAll();
-      if (owned && canvasRef.current) void run(() => emulator.load(owned, canvasRef.current!));
+      const canvas = canvasRef.current;
+      if (owned && canvas) void run(() => emulator.load(owned, canvas));
       else if (available.some((item) => item.id === next.id && item.available))
         void run(() => loadLocalCartridge(next));
       else openCartridgePicker();
@@ -610,6 +612,7 @@ export default function App() {
   };
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop file target on full page container
     <div
       className={`pocket-app view-${view}`}
       style={
@@ -704,6 +707,7 @@ export default function App() {
           </a>
           <nav className="header-nav" aria-label="主导航">
             <button
+              type="button"
               aria-label="卡带收藏"
               className={!modal && view === 'library' ? 'nav-item active' : 'nav-item'}
               disabled={busy}
@@ -713,6 +717,7 @@ export default function App() {
               <span>卡带收藏</span>
             </button>
             <button
+              type="button"
               aria-label="我的存档"
               disabled={busy || game.status === 'loading'}
               className={modal === 'saves' ? 'nav-item active' : 'nav-item'}
@@ -722,6 +727,7 @@ export default function App() {
               <span>我的存档</span>
             </button>
             <button
+              type="button"
               aria-label="游玩指南"
               disabled={busy || game.status === 'loading'}
               className={modal === 'help' ? 'nav-item active' : 'nav-item'}
@@ -737,6 +743,7 @@ export default function App() {
               {storageReady ? '本地存储已就绪' : '正在连接存储'}
             </span>
             <button
+              type="button"
               className="icon-button settings-button"
               disabled={busy || game.status === 'loading'}
               onClick={() => openModal('settings')}
@@ -776,6 +783,7 @@ export default function App() {
           <div className="page-heading">
             <div>
               <button
+                type="button"
                 className="back-to-gallery"
                 aria-label="返回卡带盘"
                 onClick={returnToGallery}
@@ -849,6 +857,7 @@ export default function App() {
             <div className="stage-toolbar">
               <div className="toolbar-group">
                 <button
+                  type="button"
                   className="play-toggle"
                   disabled={!active || busy}
                   aria-label={game.status === 'paused' ? '继续游戏' : '暂停游戏'}
@@ -868,6 +877,7 @@ export default function App() {
                   <span>{game.status === 'paused' ? '继续' : '暂停'}</span>
                 </button>
                 <button
+                  type="button"
                   className="toolbar-button"
                   disabled={!active || busy}
                   onClick={() => openModal('restart')}
@@ -878,6 +888,7 @@ export default function App() {
                 </button>
                 <span className="toolbar-divider" />
                 <button
+                  type="button"
                   className="toolbar-button"
                   aria-label={settings.muted ? '开启声音' : '静音'}
                   title="声音 · M"
@@ -912,6 +923,7 @@ export default function App() {
               </div>
               <div className="toolbar-group right-tools">
                 <button
+                  type="button"
                   className={`speed-button ${game.speed !== 1 ? 'is-fast' : ''}`}
                   onClick={() => emulator.setSpeed(game.speed === 1 ? 2 : game.speed === 2 ? 3 : 1)}
                   aria-label={`游戏速度 ${game.speed} 倍，点击切换`}
@@ -922,6 +934,7 @@ export default function App() {
                 </button>
                 <span className="toolbar-divider" />
                 <button
+                  type="button"
                   className="toolbar-button screenshot-button"
                   onClick={screenshot}
                   disabled={!active || busy}
@@ -931,6 +944,7 @@ export default function App() {
                   <Download size={17} />
                 </button>
                 <button
+                  type="button"
                   className="toolbar-button"
                   onClick={toggleFullscreen}
                   aria-label={fullscreen || focusMode ? '退出全屏' : '全屏游戏'}
@@ -955,7 +969,7 @@ export default function App() {
                   <Keyboard size={17} />
                   操作指南
                 </h2>
-                <button className="text-button" onClick={() => openModal('help')}>
+                <button type="button" className="text-button" onClick={() => openModal('help')}>
                   全部按键
                   <ArrowRight size={13} />
                 </button>
@@ -964,26 +978,31 @@ export default function App() {
                 <div>
                   <span>移动</span>
                   <span className="key-group">
-                    {(['Up', 'Down', 'Left', 'Right'] as const).map((button) => (
-                      <kbd key={button}>{keyLabel(settings.bindings[button][0]!)}</kbd>
-                    ))}
+                    {(['Up', 'Down', 'Left', 'Right'] as const).map((button) => {
+                      const code = settings.bindings[button][0];
+                      return <kbd key={button}>{code ? keyLabel(code) : ''}</kbd>;
+                    })}
                   </span>
                 </div>
                 <div>
                   <span>确认 / 取消</span>
                   <span className="key-group">
-                    <kbd>{keyLabel(settings.bindings.A[0]!)}</kbd>
+                    <kbd>{settings.bindings.A[0] ? keyLabel(settings.bindings.A[0]) : ''}</kbd>
                     <i>/</i>
-                    <kbd>{keyLabel(settings.bindings.B[0]!)}</kbd>
+                    <kbd>{settings.bindings.B[0] ? keyLabel(settings.bindings.B[0]) : ''}</kbd>
                   </span>
                 </div>
                 <div>
                   <span>开始</span>
-                  <kbd className="wide-key">{keyLabel(settings.bindings.Start[0]!)}</kbd>
+                  <kbd className="wide-key">
+                    {settings.bindings.Start[0] ? keyLabel(settings.bindings.Start[0]) : ''}
+                  </kbd>
                 </div>
                 <div>
                   <span>选择</span>
-                  <kbd className="wide-key">{keyLabel(settings.bindings.Select[0]!)}</kbd>
+                  <kbd className="wide-key">
+                    {settings.bindings.Select[0] ? keyLabel(settings.bindings.Select[0]) : ''}
+                  </kbd>
                 </div>
               </div>
               <div className="controls-footnote">
@@ -1017,7 +1036,7 @@ export default function App() {
                   <CheckCheck size={13} />
                   {relativeTime(game.lastSavedAt)}
                 </span>
-                <button className="text-button" onClick={() => openModal('saves')}>
+                <button type="button" className="text-button" onClick={() => openModal('saves')}>
                   管理
                   <ChevronRight size={13} />
                 </button>
@@ -1050,6 +1069,7 @@ export default function App() {
               <p>让熟悉的旋律，再次响起。</p>
             </div>
             <button
+              type="button"
               className="icon-button"
               onClick={() => patchSettings({ muted: !settings.muted })}
               aria-label={settings.muted ? '取消静音' : '静音游戏'}
@@ -1079,6 +1099,7 @@ export default function App() {
           </div>
           <div className="filter-options">
             <button
+              type="button"
               className={settings.filter === 'crisp' ? 'selected' : ''}
               onClick={() => patchSettings({ filter: 'crisp' })}
             >
@@ -1086,6 +1107,7 @@ export default function App() {
               清晰像素{settings.filter === 'crisp' && <Check size={14} />}
             </button>
             <button
+              type="button"
               className={settings.filter === 'lcd' ? 'selected' : ''}
               onClick={() => patchSettings({ filter: 'lcd' })}
             >
@@ -1099,6 +1121,7 @@ export default function App() {
               <p>切换标签页时，帮你按下暂停。</p>
             </div>
             <button
+              type="button"
               className={`toggle-switch ${settings.autoPause ? 'on' : ''}`}
               role="switch"
               aria-checked={settings.autoPause}
@@ -1160,6 +1183,7 @@ export default function App() {
               </p>
             </div>
             <button
+              type="button"
               className="secondary-button"
               disabled={!active || !autoSnapshot || busy}
               onClick={() => autoSnapshot && loadSlot(autoSnapshot)}
@@ -1175,6 +1199,7 @@ export default function App() {
             </div>
             <div>
               <button
+                type="button"
                 className="secondary-button"
                 disabled={!active || busy}
                 onClick={() => saveInput.current?.click()}
@@ -1182,7 +1207,12 @@ export default function App() {
                 <ArrowUpFromLine size={15} />
                 导入
               </button>
-              <button className="primary-button" disabled={!active || busy} onClick={exportSave}>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!active || busy}
+                onClick={exportSave}
+              >
                 <ArrowDownToLine size={15} />
                 导出存档
               </button>
@@ -1311,10 +1341,11 @@ export default function App() {
             掌机会回到游戏标题画面。当前进度会先记录为自动存档，也可以继续读取游戏内的 SAVE。
           </p>
           <div className="modal-actions">
-            <button className="secondary-button" onClick={closeModal}>
+            <button type="button" className="secondary-button" onClick={closeModal}>
               再玩一会儿
             </button>
             <button
+              type="button"
               className="primary-button"
               disabled={busy}
               onClick={() => {
@@ -1340,10 +1371,11 @@ export default function App() {
             将替换当前卡带的游戏存档并重新启动。已有的即时存档仍会保留。
           </p>
           <div className="modal-actions">
-            <button className="secondary-button" onClick={closeModal}>
+            <button type="button" className="secondary-button" onClick={closeModal}>
               取消
             </button>
             <button
+              type="button"
               className="primary-button"
               disabled={busy || !pendingSave}
               onClick={() => {
@@ -1379,7 +1411,7 @@ export default function App() {
         >
           {toast.error ? <CircleHelp size={18} /> : <Check size={18} />}
           <span>{toast.text}</span>
-          <button aria-label="关闭提示" onClick={() => setToast(null)}>
+          <button type="button" aria-label="关闭提示" onClick={() => setToast(null)}>
             <X size={16} />
           </button>
         </div>

@@ -10,16 +10,8 @@ export default defineConfig({
       enabled: false,
       reporter: ['text', 'json-summary', 'html'],
       reportsDirectory: './coverage',
-      include: [
-        'src/**/*.{ts,tsx}',
-        'worker/**/*.ts',
-        'scripts/**/*.{ts,mjs}',
-      ],
-      exclude: [
-        'src/vite-env.d.ts',
-        'worker-configuration.d.ts',
-        '**/*.d.ts',
-      ],
+      include: ['src/**/*.{ts,tsx}', 'worker/**/*.ts', 'scripts/**/*.{ts,mjs}'],
+      exclude: ['src/vite-env.d.ts', 'worker-configuration.d.ts', '**/*.d.ts'],
     },
   },
 });

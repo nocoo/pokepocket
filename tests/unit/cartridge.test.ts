@@ -12,7 +12,7 @@ function fixture() {
   data.set(new TextEncoder().encode('BPEE01'), 0xac);
   data[0xb2] = 0x96;
   let checksum = 0;
-  for (let i = 0xa0; i <= 0xbc; i++) checksum -= data[i]!;
+  for (let i = 0xa0; i <= 0xbc; i++) checksum -= data[i] ?? 0;
   data[0xbd] = (checksum - 0x19) & 0xff;
   data.set(new TextEncoder().encode('FLASH1M_V103\0SIIRTC_V001'), 0x100);
   return data;

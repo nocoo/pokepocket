@@ -28,7 +28,9 @@ async function serve(directory: string) {
   });
   servers.push(server);
   await server.listen();
-  const address = server.httpServer!.address();
+  const httpServer = server.httpServer;
+  if (!httpServer) throw new Error('Expected an HTTP server instance');
+  const address = httpServer.address();
   if (!address || typeof address === 'string') throw new Error('Expected a TCP listener');
   return `http://127.0.0.1:${address.port}`;
 }

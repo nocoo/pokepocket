@@ -16,21 +16,25 @@ export interface HardwareHeader {
   declaredSize: number | null;
   rtc: boolean;
 }
-function ascii(bytes: Uint8Array, start: number, end: number) {
-  return new TextDecoder().decode(bytes.subarray(start, end)).replace(/\0/g, '').trim();
+function ascii(view: DataView, start: number, end: number) {
+  const slice = new Uint8Array(view.buffer, view.byteOffset + start, end - start);
+  return new TextDecoder().decode(slice).replace(/\0/g, '').trim();
 }
 /** Accepts bounded reads so Workers do not need to buffer the whole ROM. */
 export function readHardwareHeader(bytes: Uint8Array): HardwareHeader {
   if (bytes.length < 0xc0) throw new Error('卡带文件不完整，无法读取文件头。');
-  const gameBoy = bytes.length >= 0x150 && GB_LOGO.every((byte, i) => bytes[0x104 + i] === byte);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const gameBoy =
+    bytes.length >= 0x150 && GB_LOGO.every((byte, i) => view.getUint8(0x104 + i) === byte);
   if (gameBoy) {
     let checksum = 0;
-    for (let i = 0x134; i <= 0x14c; i++) checksum = (checksum - bytes[i]! - 1) & 0xff;
-    if (checksum !== bytes[0x14d]) throw new Error('GB / GBC 文件头校验失败，卡带可能已损坏。');
-    const color = (bytes[0x143]! & 0x80) !== 0;
-    const code = color ? ascii(bytes, 0x13f, 0x143) : '';
+    for (let i = 0x134; i <= 0x14c; i++) checksum = (checksum - view.getUint8(i) - 1) & 0xff;
+    if (checksum !== view.getUint8(0x14d))
+      throw new Error('GB / GBC 文件头校验失败，卡带可能已损坏。');
+    const color = (view.getUint8(0x143) & 0x80) !== 0;
+    const code = color ? ascii(view, 0x13f, 0x143) : '';
     const hasCode = /^[A-Z0-9]{4}$/.test(code);
-    const type = bytes[0x147]!;
+    const type = view.getUint8(0x147);
     const mapper = [0, 8, 9].includes(type)
       ? 'ROM'
       : [1, 2, 3].includes(type)
@@ -43,32 +47,34 @@ export function readHardwareHeader(bytes: Uint8Array): HardwareHeader {
               ? 'MBC5'
               : `TYPE ${type.toString(16).padStart(2, '0').toUpperCase()}`;
     const ramSizes = [0, 2048, 8192, 32768, 131072, 65536];
-    const sizeCode = bytes[0x148]!;
-    const irregular: Record<number, number> = { 0x52: 72, 0x53: 80, 0x54: 96 };
+    const sizeCode = view.getUint8(0x148);
+    const irregular: Record<number, number> = { 82: 72, 83: 80, 84: 96 };
     const banks = sizeCode <= 8 ? 2 ** (sizeCode + 1) : irregular[sizeCode];
     if (!banks) throw new Error('无法识别 GB / GBC 卡带容量。');
+    const makerCodeByte = view.getUint8(0x14b);
     return {
       system: color ? 'GBC' : 'GB',
-      title: ascii(bytes, 0x134, color ? (hasCode ? 0x13f : 0x143) : 0x144),
+      title: ascii(view, 0x134, color ? (hasCode ? 0x13f : 0x143) : 0x144),
       gameCode: hasCode ? code : '',
-      makerCode: bytes[0x14b] === 0x33 ? ascii(bytes, 0x144, 0x146) : bytes[0x14b]!.toString(16),
-      version: bytes[0x14c]!,
+      makerCode: makerCodeByte === 0x33 ? ascii(view, 0x144, 0x146) : makerCodeByte.toString(16),
+      version: view.getUint8(0x14c),
       mapper,
-      ramSize: mapper === 'MBC2' ? 512 : (ramSizes[bytes[0x149]!] ?? 0),
+      ramSize: mapper === 'MBC2' ? 512 : (ramSizes[view.getUint8(0x149)] ?? 0),
       declaredSize: banks * 16384,
       rtc: type === 0x0f || type === 0x10,
     };
   }
-  if (bytes[0xb2] !== 0x96) throw new Error('这不是有效的 GB / GBC / GBA 卡带。');
+  if (view.getUint8(0xb2) !== 0x96) throw new Error('这不是有效的 GB / GBC / GBA 卡带。');
   let checksum = -0x19;
-  for (let i = 0xa0; i <= 0xbc; i++) checksum -= bytes[i]!;
-  if ((checksum & 0xff) !== bytes[0xbd]) throw new Error('GBA 文件头校验失败，卡带可能已损坏。');
+  for (let i = 0xa0; i <= 0xbc; i++) checksum -= view.getUint8(i);
+  if ((checksum & 0xff) !== view.getUint8(0xbd))
+    throw new Error('GBA 文件头校验失败，卡带可能已损坏。');
   return {
     system: 'GBA',
-    title: ascii(bytes, 0xa0, 0xac),
-    gameCode: ascii(bytes, 0xac, 0xb0),
-    makerCode: ascii(bytes, 0xb0, 0xb2),
-    version: bytes[0xbc]!,
+    title: ascii(view, 0xa0, 0xac),
+    gameCode: ascii(view, 0xac, 0xb0),
+    makerCode: ascii(view, 0xb0, 0xb2),
+    version: view.getUint8(0xbc),
     mapper: 'GBA',
     ramSize: 0,
     declaredSize: null,

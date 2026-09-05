@@ -18,18 +18,21 @@ for (const system of ['GB', 'GBC'] as const) {
     });
     await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
     await expect
-      .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0'))
+      .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0', 10))
       .toBeGreaterThan(20);
     await page.getByRole('button', { name: '暂停游戏', exact: true }).click();
     await page.getByRole('button', { name: '保存到位置 1', exact: true }).click();
     const preview = page.getByAltText('即时存档 1 的游戏画面');
     await expect(preview).toBeVisible();
-    const thumbnail = (await preview.getAttribute('src'))!;
+    const thumbnail = await preview.getAttribute('src');
+    if (!thumbnail) throw new Error('Preview thumbnail src not found');
 
     const downloaded = page.waitForEvent('download');
     await page.getByRole('button', { name: '保存游戏截图', exact: true }).click();
     const png = await downloaded;
-    const data = await readFile((await png.path())!);
+    const pngPath = await png.path();
+    if (!pngPath) throw new Error('Downloaded PNG path not found');
+    const data = await readFile(pngPath);
     expect(png.suggestedFilename()).toMatch(/^pocket-.*\.png$/);
     expect(data.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
     expect(data.readUInt32BE(16)).toBe(1200);
@@ -45,7 +48,8 @@ for (const system of ['GB', 'GBC'] as const) {
             const canvas = document.createElement('canvas');
             canvas.width = image.naturalWidth;
             canvas.height = image.naturalHeight;
-            const context = canvas.getContext('2d')!;
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('2D context not available');
             context.drawImage(image, 0, 0);
             const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
             return {
@@ -58,10 +62,11 @@ for (const system of ['GB', 'GBC'] as const) {
       },
       [thumbnail, `data:image/png;base64,${data.toString('base64')}`],
     );
-    expect([original!.width, original!.height]).toEqual([160, 144]);
-    expect(original!.colors.length).toBeGreaterThan(1);
+    if (!original || !exported) throw new Error('Evaluated images not found');
+    expect([original.width, original.height]).toEqual([160, 144]);
+    expect(original.colors.length).toBeGreaterThan(1);
     // Interpolation would introduce colors absent from the native pixel art.
-    expect(exported!.colors).toEqual(original!.colors);
+    expect(exported.colors).toEqual(original.colors);
     await expect(preview).toHaveAttribute('src', thumbnail);
   });
 }

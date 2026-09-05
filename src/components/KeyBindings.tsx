@@ -62,6 +62,7 @@ export function KeyBindings({
           按键映射
         </h3>
         <button
+          type="button"
           className="text-button"
           onClick={() => {
             onChange(defaultBindings());
@@ -86,6 +87,7 @@ export function KeyBindings({
                 return (
                   <span className="binding-key-wrap" key={index}>
                     <button
+                      type="button"
                       className={`binding-key ${listening ? 'is-listening' : ''} ${code ? '' : 'empty-key'}`}
                       aria-label={`修改 ${button} ${index ? '备用' : '主要'}键位`}
                       aria-pressed={listening}
@@ -101,10 +103,13 @@ export function KeyBindings({
                     </button>
                     {index === 1 && code && (
                       <button
+                        type="button"
                         className="remove-binding"
                         aria-label={`移除 ${button} 备用键位`}
                         onClick={() => {
-                          onChange({ ...bindings, [button]: [bindings[button][0]!] });
+                          const primary = bindings[button][0];
+                          if (!primary) return;
+                          onChange({ ...bindings, [button]: [primary] });
                           setCapture(null);
                           setError(false);
                           setFeedback(`${button} 的备用键位已移除。`);

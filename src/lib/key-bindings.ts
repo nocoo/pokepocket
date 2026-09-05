@@ -131,7 +131,7 @@ export function bindKey(
     bindings[other].some((key, slot) => key === code && (other !== button || slot !== index)),
   );
   if (conflict) {
-    const label = BINDING_LABELS.find((item) => item.button === conflict)!.label;
+    const label = BINDING_LABELS.find((item) => item.button === conflict)?.label ?? conflict;
     throw new Error(`${keyLabel(code)} 已分配给 ${label}，请先修改该键位或选择其他按键。`);
   }
   const codes = [...bindings[button]];

@@ -14,16 +14,16 @@ export function gbFixture(title = 'POKEMON RED', color = false, type = 0x13, cod
 }
 export function updateGbChecksum(bytes: Uint8Array) {
   let checksum = 0;
-  for (let i = 0x134; i <= 0x14c; i++) checksum = (checksum - bytes[i]! - 1) & 0xff;
+  for (let i = 0x134; i <= 0x14c; i++) checksum = (checksum - (bytes[i] ?? 0) - 1) & 0xff;
   bytes[0x14d] = checksum;
 }
 export function gbaFixture(code = 'BPEE') {
   const bytes = new Uint8Array(1024);
   bytes.set(new TextEncoder().encode('POKEMON EMER'), 0xa0);
-  bytes.set(new TextEncoder().encode(code + '01'), 0xac);
+  bytes.set(new TextEncoder().encode(`${code}01`), 0xac);
   bytes[0xb2] = 0x96;
   let checksum = -0x19;
-  for (let i = 0xa0; i <= 0xbc; i++) checksum -= bytes[i]!;
+  for (let i = 0xa0; i <= 0xbc; i++) checksum -= bytes[i] ?? 0;
   bytes[0xbd] = checksum & 0xff;
   bytes.set(new TextEncoder().encode('FLASH1M_V103'), 0x180);
   return bytes;

@@ -149,7 +149,7 @@ try {
     }
     await writeFile(
       path.join(cache, 'build-info.json'),
-      JSON.stringify({ rgbds: sources.rgbds, agbcc: sources.agbcc, roms: results }, null, 2) + '\n',
+      `${JSON.stringify({ rgbds: sources.rgbds, agbcc: sources.agbcc, roms: results }, null, 2)}\n`,
     );
     console.log(`${results.length} Pokémon editions ready in public/roms/.`);
   }

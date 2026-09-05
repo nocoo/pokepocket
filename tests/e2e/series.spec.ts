@@ -23,7 +23,7 @@ for (const edition of EDITIONS) {
     await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
     await expect(page.locator('#game-canvas')).toHaveAttribute('data-system', edition.system);
     await expect
-      .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0'))
+      .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0', 10))
       .toBeGreaterThan(20);
     await page.waitForTimeout(2400);
     const preview = page.getByAltText('即时存档 1 的游戏画面');
@@ -48,7 +48,8 @@ for (const edition of EDITIONS) {
             const canvas = document.createElement('canvas');
             canvas.width = img.naturalWidth;
             canvas.height = img.naturalHeight;
-            const context = canvas.getContext('2d')!;
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('2D context not available');
             context.drawImage(img, 0, 0);
             const bytes = context.getImageData(0, 0, canvas.width, canvas.height).data;
             return {
@@ -71,7 +72,9 @@ for (const edition of EDITIONS) {
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: '保存游戏截图', exact: true }).click();
     const screenshot = await download;
-    const data = await readFile((await screenshot.path())!);
+    const screenshotPath = await screenshot.path();
+    if (!screenshotPath) throw new Error('Screenshot path not found');
+    const data = await readFile(screenshotPath);
     expect(data.readUInt32BE(16)).toBe(Math.round((pixels.width / pixels.height) * 1080));
     expect(data.readUInt32BE(20)).toBe(1080);
     await screenshot.saveAs(`artifacts/series-${edition.id}.png`);
@@ -98,30 +101,33 @@ test('keeps each platform’s saves separate during hot switching and restores l
   await page.goto('/');
   const thumbnails = new Map<string, string>();
   for (const id of required) {
-    const edition = EDITIONS.find((item) => item.id === id)!;
+    const edition = EDITIONS.find((item) => item.id === id);
+    if (!edition) throw new Error(`Edition ${id} not found`);
     await page.getByRole('button', { name: `选择宝可梦 ${edition.name}`, exact: true }).click();
     if (id === 'emerald') await page.getByRole('button', { name: '开始冒险', exact: true }).click();
     await expect(page.locator('.stage-heading h2')).toHaveText(`宝可梦 ${edition.name}`);
     await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
     await expect
-      .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0'))
+      .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0', 10))
       .toBeGreaterThan(20);
     await expect(page.getByAltText('即时存档 1 的游戏画面')).toHaveCount(0);
     await page.waitForTimeout(1000);
     await page.getByRole('button', { name: '保存到位置 1', exact: true }).click();
     const preview = page.getByAltText('即时存档 1 的游戏画面');
     await expect(preview).toBeVisible();
-    thumbnails.set(id, (await preview.getAttribute('src'))!);
+    const thumb = await preview.getAttribute('src');
+    if (!thumb) throw new Error(`Thumbnail src for ${id} not found`);
+    thumbnails.set(id, thumb);
   }
   expect(new Set(thumbnails.values()).size).toBe(3);
   for (const id of ['red', 'emerald']) {
-    const edition = EDITIONS.find((item) => item.id === id)!;
+    const edition = EDITIONS.find((item) => item.id === id);
+    if (!edition) throw new Error(`Edition ${id} not found`);
     await page.getByRole('button', { name: `选择宝可梦 ${edition.name}`, exact: true }).click();
     await expect(page.locator('.stage-heading h2')).toHaveText(`宝可梦 ${edition.name}`);
-    await expect(page.getByAltText('即时存档 1 的游戏画面')).toHaveAttribute(
-      'src',
-      thumbnails.get(id)!,
-    );
+    const thumb = thumbnails.get(id);
+    if (!thumb) throw new Error(`Thumbnail for ${id} not found`);
+    await expect(page.getByAltText('即时存档 1 的游戏画面')).toHaveAttribute('src', thumb);
   }
   await page.getByRole('button', { name: '暂停游戏', exact: true }).click();
   // Simulate the cartridge metadata saved by the previous Emerald-only release.
@@ -159,10 +165,9 @@ test('keeps each platform’s saves separate during hot switching and restores l
   await page.reload();
   await page.getByRole('button', { name: '开始冒险', exact: true }).click();
   await expect(page.locator('.stage-heading h2')).toHaveText('宝可梦 绿宝石');
-  await expect(page.getByAltText('即时存档 1 的游戏画面')).toHaveAttribute(
-    'src',
-    thumbnails.get('emerald')!,
-  );
+  const emeraldThumb = thumbnails.get('emerald');
+  if (!emeraldThumb) throw new Error('Emerald thumbnail not found');
+  await expect(page.getByAltText('即时存档 1 的游戏画面')).toHaveAttribute('src', emeraldThumb);
   await expect(page.getByRole('status')).toContainText('已继续上次的冒险');
   expect(errors).toEqual([]);
 });

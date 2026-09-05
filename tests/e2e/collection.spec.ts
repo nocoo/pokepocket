@@ -34,15 +34,17 @@ test('selects bundled cartridges without a file dialog and preserves the canvas 
     await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
     await expect(page.locator('.console-wrap')).toHaveClass(new RegExp(`system-${system}`));
     await expect
-      .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0'))
+      .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0', 10))
       .toBeGreaterThan(20);
-    expect(await canvas!.evaluate((node) => node === document.querySelector('#game-canvas'))).toBe(
-      true,
-    );
+    expect(
+      canvas
+        ? await canvas.evaluate((node) => node === document.querySelector('#game-canvas'))
+        : false,
+    ).toBe(true);
     const frame = await page.locator('.console-shell').boundingBox();
-    expect(system === 'gba' ? frame!.width > frame!.height : frame!.height > frame!.width).toBe(
-      true,
-    );
+    expect(
+      frame && (system === 'gba' ? frame.width > frame.height : frame.height > frame.width),
+    ).toBe(true);
     colors.push(
       await page
         .locator('.console-shell')
@@ -52,15 +54,17 @@ test('selects bundled cartridges without a file dialog and preserves the canvas 
     await expect(page.locator('#cartridge-gallery')).toBeVisible();
     await expect(page.locator('.stage-status')).toContainText('已暂停');
     const before = await page.getByTestId('play-time').textContent();
+    if (!before) throw new Error('Play time before pause not found');
     await page.keyboard.press('Space');
     await page.waitForTimeout(1100);
-    await expect(page.getByTestId('play-time')).toHaveText(before!);
+    await expect(page.getByTestId('play-time')).toHaveText(before);
   }
   expect(new Set(colors).size).toBe(3);
   const elapsed = await page.getByTestId('play-time').textContent();
+  if (!elapsed) throw new Error('Elapsed play time not found');
   await page.getByRole('button', { name: '开始冒险', exact: true }).click();
   await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
-  await expect(page.getByTestId('play-time')).toHaveText(elapsed!);
+  await expect(page.getByTestId('play-time')).toHaveText(elapsed);
   expect(fileDialogs).toEqual([]);
   expect(errors).toEqual([]);
 });
@@ -110,7 +114,12 @@ test('maps O/P, captures custom bindings, handles conflicts and restores prefere
   await page.getByRole('button', { name: '修改 B 备用键位', exact: true }).click();
   await page.keyboard.press('j');
   await expect
-    .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('pocket-settings')!).bindings))
+    .poll(() =>
+      page.evaluate(() => {
+        const raw = localStorage.getItem('pocket-settings');
+        return raw ? JSON.parse(raw).bindings : null;
+      }),
+    )
     .toMatchObject({ A: ['KeyK'], B: ['KeyP', 'KeyJ'] });
   await page.getByRole('button', { name: '关闭窗口' }).click();
   await page.locator('#game-canvas').focus();
@@ -142,7 +151,10 @@ test('maps O/P, captures custom bindings, handles conflicts and restores prefere
   await page.reload();
   await expect
     .poll(() =>
-      page.evaluate(() => JSON.parse(localStorage.getItem('pocket-settings')!).bindings.A),
+      page.evaluate(() => {
+        const raw = localStorage.getItem('pocket-settings');
+        return raw ? JSON.parse(raw).bindings.A : null;
+      }),
     )
     .toEqual(['KeyO']);
 });

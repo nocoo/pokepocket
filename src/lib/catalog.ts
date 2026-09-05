@@ -23,7 +23,9 @@ export interface AvailableEdition {
   url: string | null;
 }
 export const EDITIONS = data as readonly PokemonEdition[];
-export const DEFAULT_EDITION = EDITIONS.find((edition) => edition.id === 'emerald')!;
+const defaultEdition = EDITIONS.find((edition) => edition.id === 'emerald');
+if (!defaultEdition) throw new Error('默认版本 emerald 未配置');
+export const DEFAULT_EDITION = defaultEdition;
 export const getEdition = (id: string | null | undefined) =>
   EDITIONS.find((edition) => edition.id === id);
 

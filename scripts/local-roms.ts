@@ -105,7 +105,8 @@ export function localCartridges(): Plugin {
               const local = cartridges.find((item) => item.id === edition.id);
               return { id: edition.id, available: Boolean(local), url: local?.url ?? null };
             });
-            const fallback = editions.find((item) => item.id === DEFAULT_EDITION.id)!;
+            const fallback = editions.find((item) => item.id === DEFAULT_EDITION.id);
+            if (!fallback) throw new Error('默认版本未找到');
             return json(
               response,
               request,

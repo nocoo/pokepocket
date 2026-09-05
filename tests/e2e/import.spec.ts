@@ -31,19 +31,20 @@ test('imports a cartridge into the browser and resumes with no ROM service after
   await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
   await expect(page.locator('#game-canvas')).toHaveAttribute('data-system', 'GB');
   await expect
-    .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0'))
+    .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0', 10))
     .toBeGreaterThan(20);
   await page.getByRole('button', { name: '保存到位置 1', exact: true }).click();
   const preview = page.getByAltText('即时存档 1 的游戏画面');
   await expect(preview).toBeVisible();
   const thumbnail = await preview.getAttribute('src');
+  if (!thumbnail) throw new Error('Preview thumbnail src not found');
   await page.getByRole('button', { name: '返回卡带盘', exact: true }).click();
   await expect(page.locator('.case-capacity')).toContainText('1 枚卡带就绪');
   await page.reload();
   await page.getByRole('button', { name: '开始冒险', exact: true }).click();
   await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('已继续上次的冒险');
-  await expect(preview).toHaveAttribute('src', thumbnail!);
+  await expect(preview).toHaveAttribute('src', thumbnail);
   expect(romRequests).toEqual([]);
   expect(errors).toEqual([]);
 });

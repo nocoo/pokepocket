@@ -82,9 +82,10 @@ export function SeriesLibrary({
         </div>
       </div>
       <div className="series-browser">
-        <div className="generation-tabs" role="group" aria-label="按世代筛选">
+        <fieldset className="generation-tabs" aria-label="按世代筛选">
           {['全部', '初代', '二代', '三代'].map((label, index) => (
             <button
+              type="button"
               key={label}
               className={generation === index ? 'selected' : ''}
               aria-pressed={generation === index}
@@ -93,7 +94,7 @@ export function SeriesLibrary({
               {label}
             </button>
           ))}
-        </div>
+        </fieldset>
         <label className="series-search">
           <Search size={13} />
           <input
@@ -106,6 +107,7 @@ export function SeriesLibrary({
         <div className="edition-list">
           {filtered.map((item) => (
             <button
+              type="button"
               key={item.id}
               className={`edition-row ${edition?.id === item.id ? 'is-selected' : ''}`}
               disabled={busy}
@@ -160,6 +162,7 @@ export function SeriesLibrary({
           <div>
             {library.map((item) => (
               <button
+                type="button"
                 key={item.id}
                 disabled={busy}
                 onClick={() => onCartridge(item)}

@@ -45,6 +45,7 @@ function ConsoleButton({
 }) {
   return (
     <button
+      type="button"
       className={`console-button ${className} ${pressed.has(button) ? 'is-pressed' : ''}`}
       aria-label={label ?? `游戏按键 ${button}`}
       disabled={!active}
@@ -97,7 +98,7 @@ export function Console({
     const viewport = device?.parentElement;
     if (!expanded || !device || !viewport) return;
 
-    const fit = () => {
+    const fitConsole = () => {
       const padding = getComputedStyle(viewport);
       const width =
         viewport.clientWidth - parseFloat(padding.paddingLeft) - parseFloat(padding.paddingRight);
@@ -109,10 +110,10 @@ export function Console({
       const scale = Math.min(width / device.offsetWidth, height / device.offsetHeight);
       device.style.setProperty('--console-scale', String(scale));
     };
-    const observer = new ResizeObserver(fit);
+    const observer = new ResizeObserver(fitConsole);
     observer.observe(viewport);
     observer.observe(device);
-    fit();
+    fitConsole();
     return () => {
       observer.disconnect();
       device.style.removeProperty('--console-scale');
@@ -149,7 +150,7 @@ export function Console({
       <div className="console-shell">
         <div className="console-left">
           <div className="shell-brand">POCKET®</div>
-          <div className="dpad" aria-label="方向键">
+          <fieldset className="dpad" aria-label="方向键">
             <ConsoleButton {...controls} button="Up" className="dpad-up" label="方向上">
               <ChevronUp />
             </ConsoleButton>
@@ -165,7 +166,7 @@ export function Console({
             <ConsoleButton {...controls} button="Down" className="dpad-down" label="方向下">
               <ChevronDown />
             </ConsoleButton>
-          </div>
+          </fieldset>
           <div className="small-buttons">
             <div>
               <ConsoleButton {...controls} button="Select" className="small-console-button">
@@ -222,7 +223,12 @@ export function Console({
                 />
                 <div className="pixel-cloud cloud-one" />
                 <div className="pixel-cloud cloud-two" />
-                <button className="boot-start" onClick={onStart} disabled={status === 'loading'}>
+                <button
+                  type="button"
+                  className="boot-start"
+                  onClick={onStart}
+                  disabled={status === 'loading'}
+                >
                   {status === 'loading' ? (
                     <>
                       <LoaderCircle className="spin" size={15} /> 正在唤醒掌机
@@ -238,7 +244,12 @@ export function Console({
               </div>
             )}
             {status === 'paused' && (
-              <button className="paused-screen" onClick={onResume} aria-label="点击画面继续游戏">
+              <button
+                type="button"
+                className="paused-screen"
+                onClick={onResume}
+                aria-label="点击画面继续游戏"
+              >
                 <span className="pause-symbol">
                   <Play size={25} fill="currentColor" />
                 </span>
@@ -266,8 +277,8 @@ export function Console({
             </ConsoleButton>
           </div>
           <div className="speaker" aria-hidden="true">
-            {Array.from({ length: 5 }, (_, i) => (
-              <i key={i} />
+            {['slot-1', 'slot-2', 'slot-3', 'slot-4', 'slot-5'].map((id) => (
+              <i key={id} />
             ))}
           </div>
         </div>
@@ -293,7 +304,7 @@ export function MobileControls({
 }: Pick<ConsoleProps, 'status' | 'input' | 'pressed' | 'system'>) {
   const controls = { input, pressed, active: status === 'running' };
   return (
-    <div className="mobile-controls" data-system={system} aria-label="触屏游戏按键">
+    <fieldset className="mobile-controls" data-system={system} aria-label="触屏游戏按键">
       <div className="mobile-dpad dpad">
         <ConsoleButton {...controls} button="Up" className="dpad-up" label="触屏方向上">
           <ChevronUp />
@@ -343,6 +354,6 @@ export function MobileControls({
           A
         </ConsoleButton>
       </div>
-    </div>
+    </fieldset>
   );
 }

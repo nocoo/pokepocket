@@ -40,7 +40,7 @@ test('runs the real Emerald ROM and restores an actual state after reloading', a
   await page.getByRole('button', { name: '开始冒险', exact: true }).click();
   await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
   await expect
-    .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0'))
+    .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0', 10))
     .toBeGreaterThan(20);
   await page.waitForTimeout(3500);
   await page.getByRole('button', { name: '保存到位置 1', exact: true }).click();
@@ -52,19 +52,22 @@ test('runs the real Emerald ROM and restores an actual state after reloading', a
     const canvas = document.createElement('canvas');
     canvas.width = 240;
     canvas.height = 160;
-    const context = canvas.getContext('2d')!;
+    const context = canvas.getContext('2d');
+    if (!context) return 0;
     context.drawImage(img, 0, 0, 240, 160);
     const bytes = context.getImageData(0, 0, 240, 160).data;
     return new Set(new Uint32Array(bytes.buffer)).size;
   });
   expect(colors).toBeGreaterThan(4);
   const thumbnail = await savedImage.getAttribute('src');
+  if (!thumbnail) throw new Error('Saved image thumbnail src not found');
 
   await page.getByRole('button', { name: '暂停游戏', exact: true }).click();
   await expect(page.getByText('已暂停', { exact: true })).toBeVisible();
   const time = await page.getByTestId('play-time').textContent();
+  if (!time) throw new Error('Play time not found');
   await page.waitForTimeout(1100);
-  await expect(page.getByTestId('play-time')).toHaveText(time!);
+  await expect(page.getByTestId('play-time')).toHaveText(time);
   await expect(page.getByRole('button', { name: '读取即时存档 1', exact: true })).toBeEnabled();
 
   // Reload must use the cartridge in IndexedDB even when the original URL is unavailable.
@@ -73,12 +76,12 @@ test('runs the real Emerald ROM and restores an actual state after reloading', a
   await page.getByRole('button', { name: '开始冒险', exact: true }).click();
   await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('已继续上次的冒险');
-  await expect(page.getByAltText('即时存档 1 的游戏画面')).toHaveAttribute('src', thumbnail!);
+  await expect(page.getByAltText('即时存档 1 的游戏画面')).toHaveAttribute('src', thumbnail);
   await page.getByRole('button', { name: '读取即时存档 1', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '确认读取', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('欢迎回来');
   await expect
-    .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0'))
+    .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0', 10))
     .toBeGreaterThan(20);
   await page.locator('#game-canvas').focus();
   await page.keyboard.down('ArrowUp');
@@ -110,7 +113,9 @@ test('runs the real Emerald ROM and restores an actual state after reloading', a
   const downloaded = page.waitForEvent('download');
   await page.getByRole('button', { name: '保存游戏截图', exact: true }).click();
   const png = await downloaded;
-  const data = await readFile((await png.path())!);
+  const pngPath = await png.path();
+  if (!pngPath) throw new Error('PNG download path not found');
+  const data = await readFile(pngPath);
   expect(data.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
   expect(data.readUInt32BE(16)).toBe(1620);
   expect(data.readUInt32BE(20)).toBe(1080);
@@ -143,7 +148,8 @@ test('mobile layout provides accessible controls without horizontal scrolling', 
     await expect(page.getByRole('button', { name: '触屏方向上', exact: true })).toBeVisible();
     const button = page.locator('.mobile-controls .action-a');
     await button.scrollIntoViewIfNeeded();
-    const box = (await button.boundingBox())!;
+    const box = await button.boundingBox();
+    if (!box) throw new Error('Button bounding box not found');
     const cdp = await context.newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
@@ -171,6 +177,7 @@ test('importing a battery save discards the stale automatic resume point and kee
   const preview = page.getByAltText('即时存档 1 的游戏画面');
   await expect(preview).toBeVisible();
   const thumbnail = await preview.getAttribute('src');
+  if (!thumbnail) throw new Error('Preview thumbnail src not found');
   await page.getByRole('button', { name: '我的存档', exact: true }).click();
   await expect(page.getByRole('button', { name: '恢复进度', exact: true })).toBeEnabled();
 
@@ -183,7 +190,7 @@ test('importing a battery save discards the stale automatic resume point and kee
   });
   await page.getByRole('button', { name: '导入并启动', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('存档已导入');
-  await expect(preview).toHaveAttribute('src', thumbnail!);
+  await expect(preview).toHaveAttribute('src', thumbnail);
 
   // Inspect committed data before pagehide can create a new checkpoint: an old
   // automatic state contains SRAM and would silently overwrite the imported save.
@@ -217,5 +224,5 @@ test('importing a battery save discards the stale automatic resume point and kee
   await page.reload();
   await page.getByRole('button', { name: '开始冒险', exact: true }).click();
   await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
-  await expect(preview).toHaveAttribute('src', thumbnail!);
+  await expect(preview).toHaveAttribute('src', thumbnail);
 });
