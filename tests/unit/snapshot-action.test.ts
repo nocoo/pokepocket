@@ -249,4 +249,40 @@ describe('snapshot-action controller', () => {
     expect(controller.getState().pending).toBeNull();
     expect(controller.getState().busy).toBe(false);
   });
+
+  it('supports subscribe and unsubscribe listener lifecycle', () => {
+    const controller = createSnapshotActionController();
+    let updates = 0;
+    const unsubscribe = controller.subscribe(() => {
+      updates++;
+    });
+
+    const snapshot = createMockSnapshot();
+    controller.requestAction('load', snapshot);
+    expect(updates).toBe(1);
+
+    controller.cancelAction();
+    expect(updates).toBe(2);
+
+    unsubscribe();
+    controller.requestAction('delete', snapshot);
+    expect(updates).toBe(2); // No new call after unsubscribe
+  });
+
+  it('handles non-Error objects thrown during confirmAction with default error message', async () => {
+    const controller = createSnapshotActionController();
+    const snapshot = createMockSnapshot();
+
+    controller.requestAction('load', snapshot);
+    const result = await controller.confirmAction({
+      getCurrentCartridgeId: () => snapshot.romId,
+      loadSlot: vi.fn().mockRejectedValue('network-string-rejection'),
+      saveSlot: vi.fn(),
+      deleteSlot: vi.fn(),
+    });
+
+    expect(result).toBe(false);
+    expect(controller.getState().error).toBe('即时存档操作失败，请重试。');
+    expect(controller.getState().pending).not.toBeNull();
+  });
 });

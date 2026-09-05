@@ -954,4 +954,164 @@ describe('PocketEmulator with injected dependencies', () => {
     const slotSnap = await storage.listSnapshots('cart-recover');
     expect(slotSnap.some((s) => s.slot === 1)).toBe(true);
   });
+
+  it('handles button presses, volume, speed, audio resume and screenshot capture', async () => {
+    const core = createFakeCore();
+    const resumeAudioSpy = vi.fn().mockResolvedValue(undefined);
+    core.SDL2 = {
+      audio: {
+        currentOutputBuffer: {} as AudioBuffer,
+        scriptProcessorNode: {} as ScriptProcessorNode,
+      },
+      audioContext: {
+        state: 'suspended',
+        resume: resumeAudioSpy,
+      } as unknown as AudioContext,
+    };
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    // Button before load should not throw or emit
+    emulator.button('A', true);
+    expect(core.buttonPress).not.toHaveBeenCalled();
+
+    await emulator.load(createCartridge('cart-controls'), {} as HTMLCanvasElement);
+
+    emulator.button('A', true);
+    expect(core.buttonPress).toHaveBeenCalledWith('A');
+
+    emulator.button('A', false);
+    expect(core.buttonUnpress).toHaveBeenCalledWith('A');
+
+    emulator.setVolume(0.8);
+    expect(core.setVolume).toHaveBeenCalledWith(0.8);
+
+    emulator.setSpeed(2);
+    expect(core.setFastForwardMultiplier).toHaveBeenCalledWith(2);
+    expect(emulator.getSnapshot().speed).toBe(2);
+
+    emulator.resumeAudio();
+    expect(resumeAudioSpy).toHaveBeenCalled();
+
+    // Screenshot succeeds when game is running
+    const shot = emulator.screenshot();
+    expect(shot).toContain('data:image/png;base64,');
+  });
+
+  it('rejects screenshot when core or cartridge is missing, or screenshot fails', async () => {
+    const emulator = new PocketEmulator();
+    expect(() => emulator.screenshot()).toThrow('请先启动游戏');
+
+    const core = createFakeCore();
+    core.screenshot = vi.fn().mockReturnValue(false);
+
+    const emuWithFailingShot = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    await emuWithFailingShot.load(createCartridge('cart-shot-fail'), {} as HTMLCanvasElement);
+    expect(() => emuWithFailingShot.screenshot()).toThrow('截图失败');
+  });
+
+  it('rejects capture and saveSlot when saveState fails', async () => {
+    const core = createFakeCore();
+    core.saveState = vi.fn().mockReturnValue(false);
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    await emulator.load(createCartridge('cart-save-fail'), {} as HTMLCanvasElement);
+    await expect(emulator.saveSlot(1)).rejects.toThrow('即时存档失败');
+  });
+
+  it('rejects loadSlot when core.loadState fails', async () => {
+    const core = createFakeCore();
+    core.loadState = vi.fn().mockReturnValue(false);
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    await emulator.load(createCartridge('cart-loadstate-fail'), {} as HTMLCanvasElement);
+    await expect(
+      emulator.loadSlot({
+        key: 'cart-loadstate-fail:1',
+        romId: 'cart-loadstate-fail',
+        slot: 1,
+        data: new ArrayBuffer(4),
+        thumbnail: '',
+        updatedAt: 100,
+        coreVersion: '2.5.1',
+      }),
+    ).rejects.toThrow('即时存档读取失败');
+  });
+
+  it('rejects deleteSlot for invalid slots or unowned cartridges', async () => {
+    const core = createFakeCore();
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    await emulator.load(createCartridge('cart-del'), {} as HTMLCanvasElement);
+
+    // Slot 0 (automatic slot) cannot be deleted via deleteSlot
+    await expect(
+      emulator.deleteSlot({
+        key: 'cart-del:0',
+        romId: 'cart-del',
+        slot: 0,
+        data: new ArrayBuffer(4),
+        thumbnail: '',
+        updatedAt: 100,
+        coreVersion: '2.5.1',
+      }),
+    ).rejects.toThrow('只能清除手动即时存档');
+
+    // Mismatched cartridge ID
+    await expect(
+      emulator.deleteSlot({
+        key: 'cart-other:1',
+        romId: 'cart-other',
+        slot: 1,
+        data: new ArrayBuffer(4),
+        thumbnail: '',
+        updatedAt: 100,
+        coreVersion: '2.5.1',
+      }),
+    ).rejects.toThrow('不属于当前卡带');
+  });
+
+  it('rejects exportBattery when no battery data exists', async () => {
+    const core = createFakeCore();
+    const storage = createStorageDouble();
+    storage.getBattery = vi.fn().mockResolvedValue(undefined);
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock: createClockDouble(),
+    });
+
+    await emulator.load(createCartridge('cart-nobattery'), {} as HTMLCanvasElement);
+    await expect(emulator.exportBattery()).rejects.toThrow('尚无游戏存档');
+  });
 });

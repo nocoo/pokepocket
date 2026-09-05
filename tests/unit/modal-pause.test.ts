@@ -99,4 +99,34 @@ describe('modal-pause controller', () => {
       runningIntent: false,
     });
   });
+
+  it('supports subscribe and unsubscribe lifecycle listeners', () => {
+    const controller = createModalPauseController();
+    let notifyCount = 0;
+    const unsubscribe = controller.subscribe(() => {
+      notifyCount++;
+    });
+
+    controller.openModal('help', { isRunning: true });
+    expect(notifyCount).toBe(1);
+
+    controller.closeModal();
+    expect(notifyCount).toBe(2);
+
+    unsubscribe();
+    controller.openModal('settings');
+    expect(notifyCount).toBe(2); // No new notification after unsubscribe
+  });
+
+  it('handles setModalDirectly(null) resetting running intent', () => {
+    const controller = createModalPauseController();
+    controller.openModal('saves', { isRunning: true });
+    expect(controller.getState().runningIntent).toBe(true);
+
+    controller.setModalDirectly(null);
+    expect(controller.getState()).toEqual({
+      modal: null,
+      runningIntent: false,
+    });
+  });
 });

@@ -595,4 +595,86 @@ describe('cartridge orchestrator', () => {
     // Must reflect newer initialization, not cancelled older one
     expect(orchestrator.getState().library).toEqual([newCart]);
   });
+
+  it('supports subscribe and unsubscribe listener lifecycle', async () => {
+    const orchestrator = createCartridgeOrchestrator();
+    let updates = 0;
+    const unsubscribe = orchestrator.subscribe(() => {
+      updates++;
+    });
+
+    orchestrator.setView('play');
+    expect(updates).toBe(1);
+
+    unsubscribe();
+    orchestrator.setView('library');
+    expect(updates).toBe(1); // No new update after unsubscribe
+  });
+
+  it('notifies error and resets busy state if selectEdition load fails', async () => {
+    const cartridge = createMockCartridge({
+      id: 'cart-ruby',
+      header: { ...createMockCartridge().header, editionId: 'ruby' },
+    });
+    const notifySpy = vi.fn();
+    const mockCanvas = { focus: vi.fn() } as unknown as HTMLCanvasElement;
+
+    const emulator = {
+      getSnapshot: () => ({
+        status: 'running',
+        cartridge: createMockCartridge({ id: 'cart-current' }),
+      }),
+      load: vi.fn().mockRejectedValue(new Error('Core failed to load')),
+      resume: vi.fn(),
+      pause: vi.fn(),
+      persist: vi.fn(),
+    };
+
+    const orchestrator = createCartridgeOrchestrator({
+      storage: {
+        listCartridges: async () => [cartridge],
+        putCartridge: vi.fn(),
+      },
+      emulator,
+      getCanvas: () => mockCanvas,
+      notify: notifySpy,
+    });
+
+    await orchestrator.initialize();
+    orchestrator.setView('play');
+
+    const result = await orchestrator.selectEdition('ruby');
+    expect(result).toBe(false);
+    expect(notifySpy).toHaveBeenCalledWith('Core failed to load', true);
+    expect(orchestrator.getState().busy).toBe(false);
+  });
+
+  it('notifies error and resets busy state if selectCartridge load fails', async () => {
+    const cartridge = createMockCartridge({ id: 'cart-diff' });
+    const notifySpy = vi.fn();
+    const mockCanvas = { focus: vi.fn() } as unknown as HTMLCanvasElement;
+
+    const emulator = {
+      getSnapshot: () => ({
+        status: 'running',
+        cartridge: createMockCartridge({ id: 'cart-current' }),
+      }),
+      load: vi.fn().mockRejectedValue(new Error('Load cartridge crashed')),
+      resume: vi.fn(),
+      pause: vi.fn(),
+      persist: vi.fn(),
+    };
+
+    const orchestrator = createCartridgeOrchestrator({
+      emulator,
+      getCanvas: () => mockCanvas,
+      notify: notifySpy,
+    });
+
+    orchestrator.setView('play');
+    const result = await orchestrator.selectCartridge(cartridge);
+    expect(result).toBe(false);
+    expect(notifySpy).toHaveBeenCalledWith('Load cartridge crashed', true);
+    expect(orchestrator.getState().busy).toBe(false);
+  });
 });
