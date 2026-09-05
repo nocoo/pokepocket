@@ -76,9 +76,9 @@ strict checks, and production build. Capture the baseline honestly; B1 alone doe
 
 ### B2 — application state boundaries
 
-Corrective G1 follow-up, `fix: typecheck quality test sources`: include TypeScript/TSX test sources
-in strict compiler validation. Vitest transformation does not typecheck fixtures; test data must
-implement the real domain interfaces without assertions hiding missing fields.
+Existing G1 already typechecks TypeScript/TSX tests through
+[tsconfig.tests.json](../tsconfig.tests.json), referenced by the root build configuration. Test data
+must implement the actual domain interfaces; no duplicate typechecking configuration is needed.
 
 3. `refactor: extract snapshot action state`
    - Extract snapshot command/confirmation and modal pause ownership from `src/App.tsx`.
@@ -274,10 +274,10 @@ the automated port/concurrency guards. This incident is not counted as passing e
   seven seconds before retry; a rejected `replaceBattery` leaves status `running` after `quitGame`.
   B3 must add failing-before/passing-after regressions and fix both alongside queue ordering. The
   probe replaces only process-local dependencies and never opens browser or production storage.
-- 2026-09-06, B2 review: strict compiler scope previously covered application, Worker, and build
-  configuration, but omitted test sources. A new snapshot test fixture with incorrect domain fields
-  passed Vitest transformation, demonstrating the gap. Extend G1 to test sources in its own corrective
-  commit and repair fixtures using the actual interfaces; retain the existing production checks.
+- 2026-09-06, B2 review: the existing `tsconfig.tests.json` extends application strict settings and
+  already includes test sources. Root `tsconfig.json` references it, including at the original
+  baseline. The earlier proposed additional test-typecheck commit was based on an incomplete config
+  audit and is withdrawn. Correct fixture domain fields and run the existing G1 command.
 - 2026-09-06, B3 preparation: real [storage.ts](../src/lib/storage.ts) in a fresh Chrome context on an
   owned ephemeral HTTP origin reproduced partial `replaceBattery` commit. Injecting a synchronous
   snapshot-delete failure after the battery put left the new battery committed and old automatic
