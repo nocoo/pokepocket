@@ -66,7 +66,7 @@ pi reports the reason before expanding scope; Codex updates the contract.
    - Include logic in `src/`, `worker/`, and maintained `scripts/`; record all four baseline metrics.
    - Keep the diagnostic command distinct from the eventual enforced L1 gate.
 2. `chore: enforce strict static checks`
-   - Add `eslint.config.mjs`, exact development dependencies, and project-owned G1 commands.
+   - Add `biome.json`, exact development dependencies, and project-owned G1 commands.
    - Cover `.mjs` scripts, TypeScript, and React hook correctness; retain strict typecheck and Prettier.
    - Fix violations without broad suppressions or unrelated behavior changes.
 
@@ -213,6 +213,14 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 6. Decisions and follow-ups
 
+- 2026-09-06, B1: use Biome strict lint alongside TypeScript 7 strict typechecking. The attempted
+  `typescript-eslint@8.69.0` integration fails at module load with an explicit unsupported-TS-7 error;
+  its supported peer range is `>=4.8.4 <6.1.0`. Biome is an allowed nmem G1 implementation and avoids
+  changing the project's compiler or suppressing incompatibility warnings. The uncommitted ESLint
+  dependency attempt is removed before the G1 implementation commit.
+- 2026-09-06, B1: retain Vitest and its coverage provider at 5.0.0. The preferred Microsoft mirror did
+  not have the matching coverage package; the approved Tencent mirror did. Install-time mirror
+  selection is temporary, and committed lockfile entries retain registry-independent resolution.
 - Cloud databases and buckets remain unnecessary while the application has no remote persistence.
   Future cloud saves must reopen D1 applicability before automated tests access those resources.
 - Application behavior and save compatibility are regression requirements throughout the work.

@@ -104,7 +104,7 @@ tests and produce reviewable commits with the new behavior and its tests togethe
 
 ### Stage 1: establish strict analysis and a truthful coverage baseline
 
-Change `package.json`, `vitest.config.ts`, and `.github/workflows/ci.yml`; add `eslint.config.mjs` and a
+Change `package.json`, `vitest.config.ts`, and `.github/workflows/ci.yml`; add `biome.json` and a
 coverage-scope record in this document.
 
 - Add a Vitest-compatible `@vitest/coverage-v8` and collect coverage for unimported as well as imported
@@ -115,9 +115,11 @@ coverage-scope record in this document.
 - nmem specifies >=90% without selecting coverage metrics. The proposed project convention is
   **>=90% for statements, lines, functions, and branches**, aggregated over the declared scope. This
   four-metric convention is an explicit project choice, not a quotation from nmem.
-- Configure `typescript-eslint` strict rules, JavaScript rules for `.mjs` scripts, and React hook
-  checks. Keep TypeScript strict and Prettier as separate checks. Verify tooling compatibility with
-  the current TypeScript version; finish with `--max-warnings=0` and no broad rule suppressions.
+- Configure Biome's recommended strict lint rules for JavaScript/TypeScript, including `.mjs`
+  scripts and React hook correctness, with warnings treated as failures. Keep TypeScript strict and
+  Prettier as separate checks. The original ESLint choice was revised during B1 because
+  `typescript-eslint@8.69.0` explicitly rejects TypeScript 7.0; see the execution record. Do not use
+  broad rule suppressions.
 - Record actual uncovered modules before estimating the remaining L1 work more precisely. Baseline
   reporting is diagnostic; it does not count as a passing L1 gate.
 
