@@ -67,6 +67,9 @@ jobs:
           bun run build
           bun run test
 
+      - name: Verify Access before deploying
+        run: bun run verify:access
+
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v4
         with:
@@ -75,5 +78,5 @@ jobs:
           packageManager: bun
           command: deploy
 
-      - name: Verify Access on pages and assets
+      - name: Verify Access after deploying
         run: bun run verify:access
