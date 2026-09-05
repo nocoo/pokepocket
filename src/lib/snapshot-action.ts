@@ -25,6 +25,7 @@ export interface SnapshotActionController {
   cancelAction: () => boolean;
   confirmAction: (handlers: {
     getCurrentCartridgeId: () => string | undefined;
+    isExternalBusy?: () => boolean;
     loadSlot: (snapshot: Snapshot) => Promise<void>;
     saveSlot: (slot: number) => Promise<void>;
     deleteSlot: (snapshot: Snapshot) => Promise<void>;
@@ -81,6 +82,7 @@ export function createSnapshotActionController(): SnapshotActionController {
     },
     confirmAction: async (handlers) => {
       if (state.busy || !state.pending) return false;
+      if (handlers.isExternalBusy?.()) return false;
       const { action, snapshot, returnTo } = state.pending;
       setState({ busy: true, error: null });
 
