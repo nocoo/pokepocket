@@ -2,7 +2,7 @@
 
 ## Scope of the project license
 
-The MIT license in `LICENSE` applies only to the original application code and original documentation contributed to Poké Pocket. It does not license Pokémon ROMs, characters, names, trademarks, pixel artwork in `public/art/`, or third-party game imagery visible in `docs/pokemon.png`. Those rights remain with their respective owners. Third-party software and fonts retain their own licenses listed below. The project license and disclaimer grant no additional rights to game content.
+The MIT license in `LICENSE` applies only to the original application code and original documentation contributed to Poké Pocket. It does not license Pokémon ROMs, characters, names, trademarks, pixel artwork in `public/art/`, or third-party game imagery visible in `docs/pokepocket.png`. Those rights remain with their respective owners. Third-party software and fonts retain their own licenses listed below. The project license and disclaimer grant no additional rights to game content.
 
 ## mGBA and the WebAssembly port
 

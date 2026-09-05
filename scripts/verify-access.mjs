@@ -1,4 +1,4 @@
-const origin = 'https://pokemon.hexly.ai';
+const origin = 'https://pokepocket.hexly.ai';
 const paths = [
   '/',
   '/api/catalog',

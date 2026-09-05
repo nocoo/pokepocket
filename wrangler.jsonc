@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "pokemon",
+  "name": "pokepocket",
   "account_id": "d51a8fde361e4be31db17d8c56737c1f",
   "main": "worker/index.ts",
   "compatibility_date": "2026-09-05",
@@ -12,7 +12,7 @@
   },
   "workers_dev": false,
   "preview_urls": false,
-  "routes": [{ "pattern": "pokemon.hexly.ai", "custom_domain": true }],
+  "routes": [{ "pattern": "pokepocket.hexly.ai", "custom_domain": true }],
   "vars": {
     "ACCESS_TEAM": "nocoo",
     "ACCESS_AUD": "7dcaf6fb44b1245dfec144db9df69cc1335a526cd9a29829f33e35f78aa306dd",

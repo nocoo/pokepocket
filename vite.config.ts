@@ -9,12 +9,12 @@ export default defineConfig(({ command, isPreview }) => ({
   server: {
     port: 7047,
     strictPort: true,
-    allowedHosts: ['pokemon.dev.hexly.ai'],
+    allowedHosts: ['pokepocket.dev.hexly.ai'],
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
-  preview: { port: 17047, strictPort: true, allowedHosts: ['pokemon.dev.hexly.ai'] },
+  preview: { port: 17047, strictPort: true, allowedHosts: ['pokepocket.dev.hexly.ai'] },
   build: { target: 'es2022' },
 }));

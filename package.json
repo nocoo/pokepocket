@@ -1,5 +1,5 @@
 {
-  "name": "poke-pocket",
+  "name": "pokepocket",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -50,6 +50,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nocoo/pokemon.git"
+    "url": "https://github.com/nocoo/pokepocket.git"
   }
 }

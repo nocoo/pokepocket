@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/pokemon.png" alt="Poké Pocket 宝可梦卡带收藏盘" width="960" />
+  <img src="docs/pokepocket.png" alt="Poké Pocket 卡带收藏盘" width="960" />
 </p>
 
 <h1 align="center">Poké Pocket</h1>
@@ -7,8 +7,8 @@
 <p align="center">小小口袋，大大冒险。</p>
 
 <p align="center">
-  <a href="https://github.com/nocoo/pokemon/actions/workflows/ci.yml"><img src="https://github.com/nocoo/pokemon/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://github.com/nocoo/pokemon/actions/workflows/release.yml"><img src="https://github.com/nocoo/pokemon/actions/workflows/release.yml/badge.svg" alt="Release" /></a>
+  <a href="https://github.com/nocoo/pokepocket/actions/workflows/ci.yml"><img src="https://github.com/nocoo/pokepocket/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/nocoo/pokepocket/actions/workflows/release.yml"><img src="https://github.com/nocoo/pokepocket/actions/workflows/release.yml/badge.svg" alt="Release" /></a>
   <img src="https://img.shields.io/badge/TypeScript-7.0.2-3178C6?logo=typescript&logoColor=white" alt="TypeScript 7.0.2" />
   <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/Original_code-MIT-739061" alt="Original code: MIT" /></a>
@@ -16,7 +16,7 @@
 
 拟物卡带收藏盘与网页版掌机模拟器。使用 **mGBA WebAssembly 真实执行 GB / GBC / GBA ROM**，随版本切换卡带配色、屏幕和机身边框，支持键盘、触屏、手柄与独立存档。
 
-**[打开收藏盘 · 需要 Cloudflare Access 登录](https://pokemon.hexly.ai)** · 本地：[pokemon.dev.hexly.ai](https://pokemon.dev.hexly.ai)
+**[打开收藏盘 · 需要 Cloudflare Access 登录](https://pokepocket.hexly.ai)** · 本地：[pokepocket.dev.hexly.ai](https://pokepocket.dev.hexly.ai)
 
 ## 卡带如何载入
 
@@ -71,13 +71,13 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-默认仅监听 **127.0.0.1:7047**；本地 Caddy 转发 `pokemon.dev.hexly.ai`。构建预览为 **17047**，独立浏览器测试服务为 **27047**，遵循 dev / dev+10000 / dev+20000 的本机端口规则。
+默认仅监听 **127.0.0.1:7047**；本地 Caddy 转发 `pokepocket.dev.hexly.ai`。构建预览为 **17047**，独立浏览器测试服务为 **27047**，遵循 dev / dev+10000 / dev+20000 的本机端口规则。
 
 ```caddyfile
-http://pokemon.dev.hexly.ai {
-    redir https://pokemon.dev.hexly.ai{uri} permanent
+http://pokepocket.dev.hexly.ai {
+    redir https://pokepocket.dev.hexly.ai{uri} permanent
 }
-pokemon.dev.hexly.ai {
+pokepocket.dev.hexly.ai {
     tls /Users/nocoo/workspace/personal/workflow/certs/cert.pem /Users/nocoo/workspace/personal/workflow/certs/key.pem
     reverse_proxy 127.0.0.1:7047
 }
@@ -105,7 +105,7 @@ pokemon.dev.hexly.ai {
 
 ## Cloudflare Access 与部署
 
-公开入口为 **`pokemon.hexly.ai`**，仅允许 Access 应用中配置的用户访问。仓库中的非秘密配置：
+公开入口为 **`pokepocket.hexly.ai`**，仅允许 Access 应用中配置的用户访问。仓库中的非秘密配置：
 
 ```text
 Team:     nocoo

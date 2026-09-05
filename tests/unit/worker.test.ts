@@ -56,7 +56,7 @@ async function token(claims: JWTPayload = {}, key = privateKey) {
 }
 
 function request(path: string, jwt?: string, method = 'GET') {
-  return new Request(`https://pokemon.hexly.ai${path}`, {
+  return new Request(`https://pokepocket.hexly.ai${path}`, {
     method,
     headers: jwt ? { 'Cf-Access-Jwt-Assertion': jwt } : {},
   });
@@ -106,7 +106,7 @@ describe('Cloudflare Access protects the whole Worker', () => {
 
   it('cannot enable development with a local hostname, query parameter or forged identity header', async () => {
     const { env, assetFetch } = environment();
-    for (const host of ['localhost:7047', 'pokemon.dev.hexly.ai', 'pokemon.hexly.ai']) {
+    for (const host of ['localhost:7047', 'pokepocket.dev.hexly.ai', 'pokepocket.hexly.ai']) {
       const response = await worker.fetch(
         new Request(`https://${host}/?mode=development`, {
           headers: {
