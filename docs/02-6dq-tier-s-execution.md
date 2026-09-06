@@ -1346,6 +1346,32 @@ Fixture handoff is accepted. Snapshot correction, mandatory browser journeys, is
 coverage, and B8 remain outstanding. All review browser contexts and owned runtimes have closed;
 the daily dev7047 and preview17047 remain outside their ownership.
 
+### B7 snapshot correction review checkpoint
+
+Reviewed implementation: `19f0b0f`. The shared restore helper pauses the core around the pinned
+`loadStateSlot(slot, 61)` operation. Automatic slot 0 restores running ownership; manual restores
+preserve an existing pause until persistence settles. Battery files remain the last flushed
+in-game save, while CPU, video and active SRAM immediately reflect the snapshot.
+
+Independent checks on the fixed commit:
+
+- `quality:commit` passes in 6.62 seconds: 474 tests across 43 files, 101 Biome files with zero
+  warnings/errors, strict TypeScript and formatting. Coverage is 94.41% statements, 90.18%
+  branches, 94.61% functions and 95.59% lines. Production build and distribution checks pass.
+- The actual production App, loaded through an owned Worker on loopback 27047 with real RS256
+  verification, passes all six manual/automatic recovery cases across GB, GBC and GBA. A snapshot
+  at 1 restores its live frame after advancing to 2; the next A produces 2, not 3. Automatic
+  recovery also starts from snapshot 1 when the separately stored battery contains 2.
+- Two isolated negative experiments expose remaining unit-test gaps: moving resume before
+  persistence settles, and persisting after a false restore result, both pass the current
+  emulator test suite. Neither defect is present in the reviewed production implementation.
+
+Before accepting this correction, the next atomic test-only handoff must assert deferred
+persistence, unchanged storage after false/thrown restores, successful retry, actual core pause
+state during raw restore, and final core pause after an automatic thrown failure. The same two
+negative experiments must then fail. Browser execution evidence above remains valid; a test-only
+refinement does not require repeating those six cases.
+
 ## 5. Final acceptance record
 
 | Check                   | State   | Evidence to record                                                            |
