@@ -43,8 +43,6 @@ export async function runL2Gate(options = {}) {
     }
   } finally {
     clearTimeout(timer);
-    process.removeListener('SIGINT', handleSigint);
-    process.removeListener('SIGTERM', handleSigterm);
 
     if (ownedResourceRoot) {
       try {
@@ -56,21 +54,25 @@ export async function runL2Gate(options = {}) {
         }
       }
     }
+
+    process.removeListener('SIGINT', handleSigint);
+    process.removeListener('SIGTERM', handleSigterm);
   }
 
-  if (executionError) {
-    if (controller.signal.aborted) {
-      const reason = controller.signal.reason?.message || '';
-      if (reason.includes('SIGINT')) {
-        process.exitCode = 130;
-      } else if (reason.includes('SIGTERM')) {
-        process.exitCode = 143;
-      } else {
-        process.exitCode = 1;
-      }
+  if (controller.signal.aborted) {
+    const reason = controller.signal.reason?.message || '';
+    if (reason.includes('SIGINT')) {
+      process.exitCode = 130;
+    } else if (reason.includes('SIGTERM')) {
+      process.exitCode = 143;
     } else {
       process.exitCode = 1;
     }
+    return false;
+  }
+
+  if (executionError) {
+    process.exitCode = 1;
     return false;
   }
 

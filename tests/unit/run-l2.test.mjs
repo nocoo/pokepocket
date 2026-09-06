@@ -129,7 +129,6 @@ describe('run-l2 gate runner policies', () => {
       expect(process.exitCode).toBe(1);
       expect(commandRunnerCalled).toBe(false);
 
-      // Verify owned listeners were removed while unrelated listeners survived
       expect(process.listeners('SIGINT')).toEqual(initialSigint);
       expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
     } finally {
@@ -194,12 +193,63 @@ describe('run-l2 gate runner policies', () => {
       });
 
       expect(res).toBe(false);
-      // Initiating SIGTERM maps to 143, not overwritten by cleanup failure
       expect(process.exitCode).toBe(143);
       expect(loggedErrors.some((e) => e.includes('L2 Gate execution failed:'))).toBe(true);
       expect(loggedErrors.some((e) => e.includes('L2 Gate cleanup failed:'))).toBe(true);
     } finally {
       console.error = origError;
+      process.exitCode = savedExitCode;
+    }
+  });
+
+  it('deferred-rm regression: commands succeed, cleanup waits, SIGTERM emitted during cleanup, directory removed, exit143 and listeners restored', async () => {
+    const savedExitCode = process.exitCode;
+    const initialSigint = process.listeners('SIGINT');
+    const initialSigterm = process.listeners('SIGTERM');
+
+    let releaseCleanup;
+    const cleanupDeferred = new Promise((resolve) => {
+      releaseCleanup = resolve;
+    });
+
+    let removedDir = null;
+    const deferredRm = async (dir, opts) => {
+      await cleanupDeferred;
+      removedDir = dir;
+      return rm(dir, opts);
+    };
+
+    const fakeRunner = async () => {};
+
+    try {
+      const gatePromise = runL2Gate({
+        commandRunner: fakeRunner,
+        rmFn: deferredRm,
+        silent: true,
+      });
+
+      // Yield macro-task so commands finish and cleanup starts waiting on deferredRm
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // Emit SIGTERM while cleanup is in progress
+      process.emit('SIGTERM');
+
+      // Release cleanup
+      releaseCleanup();
+
+      const res = await gatePromise;
+      expect(res).toBe(false);
+      expect(process.exitCode).toBe(143);
+
+      // Verify directory was removed
+      expect(removedDir).toBeDefined();
+      const statResult = await stat(removedDir).catch((e) => e);
+      expect(statResult.code).toBe('ENOENT');
+
+      // Verify listeners were restored
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
+    } finally {
       process.exitCode = savedExitCode;
     }
   });
@@ -211,21 +261,17 @@ describe('run-l2 gate runner policies', () => {
     const commandRunner = async (commands) => {
       const cmd = commands[0];
       if (cmd.command === 'npm') {
-        // Build succeeds
         return;
       }
       if (cmd.command === 'npx') {
-        // Child vitest runs: simulate creating runtime state inside the passed resource root
         capturedChildRoot = cmd.env?.[RUNTIME_RESOURCE_ROOT_ENV];
         expect(capturedChildRoot).toBeDefined();
         simulatedChildState = path.join(capturedChildRoot, 'simulated-child-runtime-state');
         await mkdir(simulatedChildState, { recursive: true });
         await writeFile(path.join(simulatedChildState, 'data.txt'), 'isolated-content');
 
-        // Verify simulated state exists before child interruption
         expect((await stat(simulatedChildState)).isDirectory()).toBe(true);
 
-        // Child is interrupted by signal
         throw new Error('Command terminated by signal SIGTERM');
       }
     };
@@ -233,7 +279,6 @@ describe('run-l2 gate runner policies', () => {
     const res = await runL2Gate({ commandRunner, silent: true });
     expect(res).toBe(false);
 
-    // Parent finally must have removed the owned resource root and all state inside it
     expect(capturedChildRoot).toBeDefined();
     const statResult = await stat(capturedChildRoot).catch((e) => e);
     expect(statResult.code).toBe('ENOENT');
@@ -256,13 +301,11 @@ describe('run-l2 gate runner policies', () => {
 
     const gatePromise = runL2Gate({ commandRunner, silent: true });
 
-    // Yield macro-task: while build is pending, only the build command has started
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(started.map((c) => ({ command: c.command, args: c.args }))).toEqual([
       { command: 'npm', args: ['run', 'build'] },
     ]);
 
-    // Release build, allowing vitest command to start
     releaseBuild();
     const result = await gatePromise;
     expect(result).toBe(true);
