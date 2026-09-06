@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   IDBCursor,
@@ -82,6 +82,7 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
   afterEach(() => {
     cleanup();
     harness.cleanup();
+    vi.useRealTimers();
     globalThis.fetch = originalFetch;
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
@@ -123,7 +124,7 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     return utils;
   }
 
-  it('manages snapshot creation, replacement confirmation, cancellation without mutation, and load close', async () => {
+  it('manages manual slot creation and replacement with deferred busy, failure retry, and load execution', async () => {
     const emeraldCart = createCartridge('stored-emerald');
     await startLoadedApp(emeraldCart);
 
@@ -131,81 +132,198 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     const savesNavBtn = screen.getByRole('button', { name: '我的存档' });
     await userEvent.click(savesNavBtn);
 
-    const dialog = screen.getByRole('dialog');
-    expect(dialog).toBeDefined();
+    const savesDialog = await screen.findByRole('dialog');
+    expect(
+      within(savesDialog).getByRole('heading', { level: 2, name: '把这一刻，好好收起来。' }),
+    ).toBeDefined();
 
-    // In saves modal, find slot 1 blank save button within dialog
-    const saveSlot1Btn = within(dialog).getByRole('button', { name: '保存到位置 1' });
-    const slot1PutCallsBefore = (
-      harness.fakeStorage.putSnapshot as ReturnType<typeof vi.fn>
-    ).mock.calls.filter((c: unknown[]) => (c[0] as Snapshot | undefined)?.slot === 1).length;
+    // 1. Creation on blank slot 1
+    const initialSlot1Bytes = new Uint8Array([11, 22, 33, 44]);
+    harness.testCore.saveState = vi.fn().mockImplementation((slot: number) => {
+      (harness.testCore.FS.writeFile as unknown as (p: string, d: Uint8Array) => void)(
+        `/states/stored-emerald.ss${slot}`,
+        initialSlot1Bytes,
+      );
+      return true;
+    });
+
+    const saveSlot1Btn = within(savesDialog).getByRole('button', { name: '保存到位置 1' });
     await userEvent.click(saveSlot1Btn);
 
-    const slot1PutCallsAfter = (
-      harness.fakeStorage.putSnapshot as ReturnType<typeof vi.fn>
-    ).mock.calls.filter((c: unknown[]) => (c[0] as Snapshot | undefined)?.slot === 1).length;
-    expect(slot1PutCallsAfter).toBe(slot1PutCallsBefore + 1);
-    expect(harness.fakeStorage.putSnapshot).toHaveBeenCalledWith(
-      expect.objectContaining({ slot: 1, romId: 'stored-emerald' }),
-    );
+    // Initial creation succeeds and saves slot 1
+    const storedAfterCreate = await harness.fakeStorage.listSnapshots('stored-emerald');
+    const slot1Created = storedAfterCreate.find((s) => s.slot === 1);
+    expect(slot1Created).toBeDefined();
+    expect(new Uint8Array(slot1Created?.data ?? new ArrayBuffer(0))).toEqual(initialSlot1Bytes);
 
-    // Now slot 1 exists; clicking replace button opens confirmation modal
-    const replaceBtn = within(dialog).getByRole('button', { name: '替换即时存档 1' });
+    // 2. Click replace on slot 1 -> opens confirmation modal
+    const replaceBtn = within(savesDialog).getByRole('button', { name: '替换即时存档 1' });
     await userEvent.click(replaceBtn);
 
-    // Dialog transitions to snapshot confirmation
+    const confirmDialog = await screen.findByRole('dialog');
     expect(
-      await screen.findByRole('heading', { level: 2, name: '替换即时存档 01？' }),
+      within(confirmDialog).getByRole('heading', { level: 2, name: '替换即时存档 01？' }),
     ).toBeDefined();
 
-    // Cancelling snapshot confirmation returns to saves modal without extra mutations to slot 1
-    const cancelBtn = screen.getByRole('button', { name: '取消' });
-    await userEvent.click(cancelBtn);
-    const slot1PutCallsFinal = (
-      harness.fakeStorage.putSnapshot as ReturnType<typeof vi.fn>
-    ).mock.calls.filter((c: unknown[]) => (c[0] as Snapshot | undefined)?.slot === 1).length;
-    expect(slot1PutCallsFinal).toBe(slot1PutCallsAfter);
+    // Cancel first -> original bytes remain completely untouched
+    const cancelConfirmBtn = within(confirmDialog).getByRole('button', { name: '取消' });
+    await userEvent.click(cancelConfirmBtn);
 
-    // Returned to saves dialog
-    const returnDialog = await screen.findByRole('dialog');
+    const returnedSavesDialog = await screen.findByRole('dialog');
     expect(
-      within(returnDialog).getByRole('heading', { level: 2, name: '把这一刻，好好收起来。' }),
+      within(returnedSavesDialog).getByRole('heading', {
+        level: 2,
+        name: '把这一刻，好好收起来。',
+      }),
+    ).toBeDefined();
+    const storedAfterCancel = await harness.fakeStorage.listSnapshots('stored-emerald');
+    const slot1AfterCancel = storedAfterCancel.find((s) => s.slot === 1);
+    expect(new Uint8Array(slot1AfterCancel?.data ?? new ArrayBuffer(0))).toEqual(initialSlot1Bytes);
+
+    // 3. Test failed replacement write followed by successful retry
+    const replaceBtn2 = within(returnedSavesDialog).getByRole('button', { name: '替换即时存档 1' });
+    await userEvent.click(replaceBtn2);
+
+    const confirmDialog2 = await screen.findByRole('dialog');
+    const confirmBtn = within(confirmDialog2).getByRole('button', { name: '确认替换' });
+
+    // Set new distinct replacement bytes
+    const newReplacementBytes = new Uint8Array([88, 77, 66, 55]);
+    harness.testCore.saveState = vi.fn().mockImplementation((slot: number) => {
+      (harness.testCore.FS.writeFile as unknown as (p: string, d: Uint8Array) => void)(
+        `/states/stored-emerald.ss${slot}`,
+        newReplacementBytes,
+      );
+      return true;
+    });
+
+    // Defer the real storage write
+    let rejectStoragePut: ((err: Error) => void) | null = null;
+    let deferredPutPromise = new Promise<void>((_resolve, reject) => {
+      rejectStoragePut = reject;
+    });
+
+    const origPutSnapshot = harness.fakeStorage.putSnapshot;
+    let putAttempts = 0;
+    harness.fakeStorage.putSnapshot = vi.fn().mockImplementation(async (snap: Snapshot) => {
+      if (snap.slot === 1) {
+        putAttempts++;
+        await deferredPutPromise;
+      }
+      return origPutSnapshot(snap);
+    });
+
+    // Click confirm -> mutation is in-flight
+    await userEvent.click(confirmBtn);
+
+    // Advance event loop turn: dialog is busy, confirm button shows processing
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const processingBtn = within(confirmDialog2).getByRole('button', { name: '处理中…' });
+    expect(processingBtn.hasAttribute('disabled')).toBe(true);
+
+    // Repeat confirm, cancel button click, Escape key, backdrop click, and return to gallery while busy are rejected
+    await userEvent.click(processingBtn);
+    const cancelBtnWhileBusy = within(confirmDialog2).getByRole('button', { name: '取消' });
+    expect(cancelBtnWhileBusy.hasAttribute('disabled')).toBe(true);
+    await userEvent.click(cancelBtnWhileBusy);
+
+    // Attempt return to gallery while busy -> rejected, view remains play and dialog stays open
+    const backBtnWhileBusy = screen.getByRole('button', { name: '返回卡带盘' });
+    expect(backBtnWhileBusy.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(backBtnWhileBusy);
+
+    const escapePrevented = !fireEvent.keyDown(confirmDialog2, { key: 'Escape', cancelable: true });
+    expect(escapePrevented).toBe(true);
+    fireEvent.click(confirmDialog2);
+    expect(confirmDialog2.getAttribute('open')).not.toBeNull();
+
+    // Opening saves modal paused the game; play layout remains active and not hidden
+    expect(screen.getByText('已暂停')).toBeDefined();
+    const playLayout = document.querySelector('.app-layout');
+    expect(playLayout?.hasAttribute('hidden')).toBe(false);
+    expect(document.querySelector('.pocket-app.view-play')).not.toBeNull();
+
+    // Data in storage is STILL original bytes while mutation is in flight
+    const snapshotsDuringBusy = await harness.fakeStorage.listSnapshots('stored-emerald');
+    const slot1DuringBusy = snapshotsDuringBusy.find((s) => s.slot === 1);
+    expect(new Uint8Array(slot1DuringBusy?.data ?? new ArrayBuffer(0))).toEqual(initialSlot1Bytes);
+
+    // First attempt rejects with storage error
+    const reject = rejectStoragePut as unknown as (err: Error) => void;
+    reject(new Error('IndexedDB storage quota exceeded'));
+    expect(await screen.findByRole('alert')).toBeDefined();
+    expect(screen.getByText('IndexedDB storage quota exceeded')).toBeDefined();
+
+    // Original bytes retained after error
+    const snapshotsAfterError = await harness.fakeStorage.listSnapshots('stored-emerald');
+    const slot1AfterError = snapshotsAfterError.find((s) => s.slot === 1);
+    expect(new Uint8Array(slot1AfterError?.data ?? new ArrayBuffer(0))).toEqual(initialSlot1Bytes);
+
+    // Set up successful retry
+    deferredPutPromise = Promise.resolve();
+    await userEvent.click(confirmBtn);
+
+    // Successful retry resolves, closes confirmation, and updates stored bytes
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { level: 2, name: '替换即时存档 01？' })).toBeNull(),
+    );
+    const postReplaceDialog = await screen.findByRole('dialog');
+    expect(
+      within(postReplaceDialog).getByRole('heading', { level: 2, name: '把这一刻，好好收起来。' }),
     ).toBeDefined();
 
-    // Load slot 1 from saves manager opens load confirmation
-    const loadPreviewBtn = within(returnDialog).getByRole('button', { name: '读取即时存档 1' });
+    const snapshotsFinal = await harness.fakeStorage.listSnapshots('stored-emerald');
+    const slot1Final = snapshotsFinal.find((s) => s.slot === 1);
+    expect(new Uint8Array(slot1Final?.data ?? new ArrayBuffer(0))).toEqual(newReplacementBytes);
+    expect(putAttempts).toBe(2);
+
+    // 4. Load slot 1 from saves dialog -> verifies core path receives exact snapshot data
+    (harness.testCore.FS.writeFile as ReturnType<typeof vi.fn>).mockClear();
+    const loadPreviewBtn = within(postReplaceDialog).getByRole('button', {
+      name: '读取即时存档 1',
+    });
     await userEvent.click(loadPreviewBtn);
 
-    const loadDialog = await screen.findByRole('dialog');
+    const loadConfirmDialog = await screen.findByRole('dialog');
     expect(
-      within(loadDialog).getByRole('heading', { level: 2, name: '读取即时存档 01？' }),
+      within(loadConfirmDialog).getByRole('heading', { level: 2, name: '读取即时存档 01？' }),
     ).toBeDefined();
 
-    // Confirm load closes modal and resumes play view
-    const confirmLoadBtn = within(loadDialog).getByRole('button', { name: '确认读取' });
+    // Before confirming load: core loadState has not been called
+    expect(harness.testCore.loadState).not.toHaveBeenCalledWith(1);
+    expect(harness.testCore.FS.writeFile).not.toHaveBeenCalled();
+
+    const confirmLoadBtn = within(loadConfirmDialog).getByRole('button', { name: '确认读取' });
     await userEvent.click(confirmLoadBtn);
 
+    // Modal closes upon load completion
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(harness.testCore.loadState).toHaveBeenCalledWith(1);
+    expect(harness.testCore.FS.writeFile).toHaveBeenCalledWith(
+      '/states/stored-emerald.ss1',
+      newReplacementBytes,
+    );
   });
 
   it('manages auto-save slot 0 confirmation and delete confirmation with error retry', async () => {
     const emeraldCart = createCartridge('stored-emerald');
     // Pre-seed manual slot 2 and automatic slot 0 before boot
+    const autoSlot0Bytes = new Uint8Array([100, 100, 100, 100]);
     const snap0 = {
       key: 'stored-emerald:0',
       romId: 'stored-emerald',
       slot: 0,
-      data: new Uint8Array([0, 0, 0, 0]).buffer,
+      data: autoSlot0Bytes.buffer,
       thumbnail: 'data:image/png;base64,auto-preview',
       updatedAt: 1700000000000,
       coreVersion: CORE_VERSION,
     };
+    const slot2Bytes = new Uint8Array([2, 2, 2, 2]);
     const snap2 = {
       key: 'stored-emerald:2',
       romId: 'stored-emerald',
       slot: 2,
-      data: new Uint8Array([2, 2, 2, 2]).buffer,
+      data: slot2Bytes.buffer,
       thumbnail: 'data:image/png;base64,slot2-preview',
       updatedAt: 1700000020000,
       coreVersion: CORE_VERSION,
@@ -271,15 +389,34 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     const confirmDeleteBtn = within(deleteConfirmDialog).getByRole('button', { name: '确认清除' });
     await userEvent.click(confirmDeleteBtn);
 
+    // Shows error alert inside confirmation modal
     expect(await screen.findByRole('alert')).toBeDefined();
     expect(screen.getByText('IndexedDB blocked')).toBeDefined();
 
-    // Retry delete succeeds
+    // Original snapshot still exists with identical data after rejection
+    const storedDuringError = await harness.fakeStorage.listSnapshots('stored-emerald');
+    const slot2DuringError = storedDuringError.find((s) => s.slot === 2);
+    expect(slot2DuringError).toBeDefined();
+    expect(new Uint8Array(slot2DuringError?.data ?? new ArrayBuffer(0))).toEqual(slot2Bytes);
+
+    // Retry delete succeeds and calls original delete implementation
     await userEvent.click(confirmDeleteBtn);
     expect(harness.fakeStorage.deleteSnapshot).toHaveBeenCalledWith('stored-emerald:2');
+    expect((harness.fakeStorage.deleteSnapshot as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+      2,
+    );
+
+    // Confirm dialog closes and returns to empty slot in saves manager
+    const dialogAfterDelete = await screen.findByRole('dialog');
+    expect(within(dialogAfterDelete).getByRole('button', { name: '保存到位置 2' })).toBeDefined();
+    expect(within(dialogAfterDelete).queryByRole('button', { name: '清除即时存档 2' })).toBeNull();
+
+    // Slot 2 is completely removed from storage
+    const storedAfterSuccess = await harness.fakeStorage.listSnapshots('stored-emerald');
+    expect(storedAfterSuccess.find((s) => s.slot === 2)).toBeUndefined();
   });
 
-  it('handles battery save export downloading the exact sav filename and bytes', async () => {
+  it('handles battery save export downloading the exact sav filename and bytes with owned clock advancement', async () => {
     const emeraldCart = createCartridge('stored-emerald');
     await startLoadedApp(emeraldCart);
 
@@ -296,7 +433,7 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       downloadedBlob = blob as Blob;
       return 'blob:http://localhost/sav-uuid';
     });
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
       this: HTMLAnchorElement,
@@ -310,15 +447,31 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     const dialog = screen.getByRole('dialog');
 
     const exportBtn = within(dialog).getByRole('button', { name: '导出存档' });
-    await userEvent.click(exportBtn);
 
-    expect(clickSpy).toHaveBeenCalled();
-    expect(downloadedName).toBe('stored-emerald.sav');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await act(async () => {
+        fireEvent.click(exportBtn);
+        await vi.advanceTimersByTimeAsync(0);
+      });
 
-    // Unconditionally assert exact Blob bytes
-    expect(downloadedBlob).toBeInstanceOf(Blob);
-    const buffer = await (downloadedBlob as unknown as Blob).arrayBuffer();
-    expect(new Uint8Array(buffer)).toEqual(new Uint8Array([1, 2, 3, 4]));
+      expect(clickSpy).toHaveBeenCalled();
+      expect(downloadedName).toBe('stored-emerald.sav');
+
+      // Unconditionally assert exact Blob bytes
+      expect(downloadedBlob).toBeInstanceOf(Blob);
+      const buffer = await (downloadedBlob as unknown as Blob).arrayBuffer();
+      expect(new Uint8Array(buffer)).toEqual(new Uint8Array([1, 2, 3, 4]));
+
+      // Advance 1000ms timer so download's URL.revokeObjectURL executes before restoring timers
+      expect(revokeSpy).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(revokeSpy).toHaveBeenCalledWith('blob:http://localhost/sav-uuid');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('validates and confirms battery import from file input, or rejects invalid files', async () => {
@@ -465,46 +618,86 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
 
     let downloadedName = '';
     let downloadedBlob: Blob | null = null;
+    let capturedHref = '';
+    let anchorConnectedDuringClick = false;
+    let anchorDisconnectedAfter = false;
+    let capturedAnchor: HTMLAnchorElement | null = null;
+
     vi.spyOn(URL, 'createObjectURL').mockImplementation((blob: Blob | MediaSource) => {
       downloadedBlob = blob as Blob;
       return 'blob:http://localhost/shot-uuid';
     });
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
       this: HTMLAnchorElement,
     ) {
+      capturedAnchor = this;
       downloadedName = this.download;
+      capturedHref = this.href;
+      anchorConnectedDuringClick = this.isConnected;
+      queueMicrotask(() => {
+        anchorDisconnectedAfter = !this.isConnected;
+      });
     });
 
     const shotBtn = screen.getByRole('button', { name: '保存游戏截图' });
-    await userEvent.click(shotBtn);
 
-    const toastText = '1080p 截图已保存，这一刻留下了。';
-    expect(await screen.findByText(toastText)).toBeDefined();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await act(async () => {
+        fireEvent.click(shotBtn);
+        await vi.advanceTimersByTimeAsync(0);
+      });
 
-    // Verify Image source received data URL from emulator screenshot (exact iVBORw0KGgo base64 for PNG)
-    expect(imageSrc).toBe('data:image/png;base64,iVBORw==');
-    // Draw size: 240x160 scaled to 1080p height -> 1620 x 1080
-    expect(drawWidth).toBe(1620);
-    expect(drawHeight).toBe(1080);
-    expect(imageSmoothing).toBe(false);
-    expect(exportMimeType).toBe('image/png');
+      const toastText = '1080p 截图已保存，这一刻留下了。';
+      expect(screen.getByText(toastText)).toBeDefined();
 
-    expect(clickSpy).toHaveBeenCalled();
-    expect(downloadedName).toMatch(/^pocket-.*\.png$/);
-    expect(downloadedBlob).toBeInstanceOf(Blob);
-    expect((downloadedBlob as unknown as Blob).type).toBe('image/png');
-    const buf = await (downloadedBlob as unknown as Blob).arrayBuffer();
-    expect(new Uint8Array(buf)).toEqual(shotPayload);
+      // Verify Image source received data URL from emulator screenshot (exact iVBORw0KGgo base64 for PNG)
+      expect(imageSrc).toBe('data:image/png;base64,iVBORw==');
+      expect(drawWidth).toBe(1620);
+      expect(drawHeight).toBe(1080);
+      expect(imageSmoothing).toBe(false);
+      expect(exportMimeType).toBe('image/png');
 
-    // Close toast manually and assert status element is removed
-    const statusToast = screen.getByRole('status');
-    expect(statusToast).toBeDefined();
-    const closeToastBtn = within(statusToast).getByRole('button', { name: '关闭提示' });
-    await userEvent.click(closeToastBtn);
-    expect(screen.queryByText(toastText)).toBeNull();
-    expect(screen.queryByRole('status')).toBeNull();
+      expect(clickSpy).toHaveBeenCalled();
+      expect(downloadedName).toMatch(/^pocket-.*\.png$/);
+      expect(capturedHref).toBe('blob:http://localhost/shot-uuid');
+      expect(anchorConnectedDuringClick).toBe(true);
+      await new Promise((resolve) => queueMicrotask(resolve));
+      expect(anchorDisconnectedAfter).toBe(true);
+      expect(capturedAnchor ? (capturedAnchor as HTMLAnchorElement).isConnected : true).toBe(false);
+      expect(downloadedBlob).toBeInstanceOf(Blob);
+      expect((downloadedBlob as unknown as Blob).type).toBe('image/png');
+      const buf = await (downloadedBlob as unknown as Blob).arrayBuffer();
+      expect(new Uint8Array(buf)).toEqual(shotPayload);
+
+      // Verify delayed URL revocation (1000ms delay in download function)
+      expect(revokeSpy).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(999);
+      });
+      expect(revokeSpy).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(revokeSpy).toHaveBeenCalledWith('blob:http://localhost/shot-uuid');
+
+      // Verify toast auto-expiry (3800ms)
+      expect(screen.getByText(toastText)).toBeDefined();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2799); // total 3799ms
+      });
+      expect(screen.getByText(toastText)).toBeDefined();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1); // total 3800ms
+      });
+      expect(screen.queryByText(toastText)).toBeNull();
+      expect(screen.queryByRole('status')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('aborts download and displays error toast when screenshot decode fails', async () => {
@@ -524,15 +717,39 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click');
 
     const shotBtn = screen.getByRole('button', { name: '保存游戏截图' });
-    await userEvent.click(shotBtn);
 
-    expect(await screen.findByText('Image decoding corrupted')).toBeDefined();
-    expect(clickSpy).not.toHaveBeenCalled();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await act(async () => {
+        fireEvent.click(shotBtn);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      const errorToast = screen.getByText('Image decoding corrupted');
+      expect(errorToast).toBeDefined();
+      expect(clickSpy).not.toHaveBeenCalled();
+
+      // Error toast auto-expires after 7500ms
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(7499);
+      });
+      expect(screen.getByText('Image decoding corrupted')).toBeDefined();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(screen.queryByText('Image decoding corrupted')).toBeNull();
+      expect(screen.queryByRole('alert')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('handles battery export failure and displays error toast', async () => {
+  it('handles battery export failure without download and displays error toast', async () => {
     const emeraldCart = createCartridge('stored-emerald');
     await startLoadedApp(emeraldCart);
+
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click');
 
     // Make exportBattery reject
     vi.spyOn(harness.fakeStorage, 'getBattery').mockRejectedValueOnce(
@@ -547,5 +764,29 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     await userEvent.click(exportBtn);
 
     expect(await screen.findByText('Disk read failure')).toBeDefined();
+    expect(clickSpy).not.toHaveBeenCalled();
+  });
+
+  it('handles screenshot capture rejection when core screenshot returns false without downloading and manually closes error toast', async () => {
+    const emeraldCart = createCartridge('stored-emerald');
+    await startLoadedApp(emeraldCart);
+
+    harness.testCore.screenshot = vi.fn().mockReturnValue(false);
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click');
+
+    const shotBtn = screen.getByRole('button', { name: '保存游戏截图' });
+    await userEvent.click(shotBtn);
+
+    const errorMsg = '截图失败，请稍后重试。';
+    expect(await screen.findByText(errorMsg)).toBeDefined();
+    expect(clickSpy).not.toHaveBeenCalled();
+
+    // Manually close error toast
+    const alertToast = screen.getByRole('alert');
+    expect(alertToast).toBeDefined();
+    const closeToastBtn = within(alertToast).getByRole('button', { name: '关闭提示' });
+    await userEvent.click(closeToastBtn);
+    expect(screen.queryByText(errorMsg)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
