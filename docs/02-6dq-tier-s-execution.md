@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1, B2, B3, B4a, B4b, B4c1, and B4c2 accepted; B4c3 assigned. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1, B2, B3, B4a, B4b, B4c1, and B4c2 accepted. B4c3 foundation verified; command follow-ups remain open. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -212,22 +212,22 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State    | Implementation commits                                                      | Review and evidence                                                                                       |
-| ----- | -------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                        | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below |
-| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                       | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                 |
-| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742` | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass             |
-| B4a   | Accepted | `fff1da2`, `8f9f008`                                                        | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed      |
-| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                       | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass         |
-| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                             | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed           |
-| B4c2  | Accepted | `b1933ca`, `d08a034`                                                        | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed     |
-| B4c3  | Assigned | —                                                                           | Rendered App commands with production controllers                                                         |
-| B4c4  | Pending  | —                                                                           | App keyboard/gamepad and browser lifecycle                                                                |
-| B4d   | Pending  | —                                                                           | All four coverage metrics >=90%; L1/G1 pre-commit and commit-message gates                                |
-| B5    | Pending  | —                                                                           | —                                                                                                         |
-| B6    | Pending  | —                                                                           | —                                                                                                         |
-| B7    | Pending  | —                                                                           | —                                                                                                         |
-| B8    | Pending  | —                                                                           | —                                                                                                         |
+| Batch | State    | Implementation commits                                                      | Review and evidence                                                                                         |
+| ----- | -------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                        | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below   |
+| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                       | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                   |
+| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742` | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass               |
+| B4a   | Accepted | `fff1da2`, `8f9f008`                                                        | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed        |
+| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                       | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass           |
+| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                             | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed             |
+| B4c2  | Accepted | `b1933ca`, `d08a034`                                                        | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed       |
+| B4c3  | Open     | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`                                  | 255 unit tests; independent G1, coverage, and build pass; command recovery and busy-state follow-ups remain |
+| B4c4  | Pending  | —                                                                           | App keyboard/gamepad and browser lifecycle                                                                  |
+| B4d   | Pending  | —                                                                           | All four coverage metrics >=90%; L1/G1 pre-commit and commit-message gates                                  |
+| B5    | Pending  | —                                                                           | —                                                                                                           |
+| B6    | Pending  | —                                                                           | —                                                                                                           |
+| B7    | Pending  | —                                                                           | —                                                                                                           |
+| B8    | Pending  | —                                                                           | —                                                                                                           |
 
 ### B1 review evidence
 
@@ -398,6 +398,11 @@ Each handoff includes G1, unit coverage, and a production build before its revie
 receive their own fix commits. Neither DOM coverage nor the fast unit gate replaces B7's real browser
 and WASM execution requirements.
 
+The B4c3 foundation checkpoint below leaves three smaller command follow-ups. Complete and review
+them in order: saves/downloads, cartridge commands, and settings/modals. Only the saves/downloads
+follow-up is assigned now. Each uses separate atomic commits and stops for review; B4c4 remains
+pending until all three resolve the original B4c3 requirements.
+
 ### B4a acceptance evidence
 
 Reviewed implementation: `8f9f008`, following `fff1da2`. The exact-pinned `happy-dom@20.12.0`
@@ -511,6 +516,54 @@ Review required actual disabled-action attempts and separate cached/catalog-only
 The implementer also reports the unchanged developer HTTP test passing. Browser/WASM regressions
 remain B7 work; these component callbacks do not replace B4c3's actual App/controller wiring tests.
 All B4c2 findings are resolved, and both agents' runners are stopped before the next handoff.
+
+### B4c3 foundation checkpoint and open review
+
+Reviewed implementation: `58c320b`, following `dcd1071`, `dcd2b64`, and `4c24720`. The mounted App
+uses the production cartridge, snapshot, modal-pause, and input controllers. The shared
+[App harness](../tests/helpers/app-test-helper.ts) subclasses the actual PocketEmulator and injects
+only its core, storage, clock, and isolation boundaries. Each test owns its IndexedDB factory,
+core filesystem data, RAF queues, and emulator interval tracking. Production source, dependencies,
+and coverage scope are unchanged.
+
+Independent checks on 2026-09-06:
+
+- `bun run test:coverage`: 255 tests across 28 files pass in 2.60 seconds. Coverage is 86.09%
+  statements (1628/1891), 79.28% branches (1148/1448), 86.98% functions (381/438), and 88.35% lines
+  (1464/1657). App remains in scope at 69.11% statements and 72.00% lines.
+- `bun run quality:g1`: Biome checks 77 files with zero errors/warnings; strict TypeScript and
+  formatting pass. `bun run build` passes for the production Worker/client and distribution checks.
+- Reviewed paths include cartridge startup/drop/local selection and canvas identity, settings
+  persistence and live volume, modal pause ownership, restart confirmation, manual snapshot creation
+  and load, automatic-slot confirmation/cancellation, and a rejected delete followed by retry.
+- Battery import checks extension/capacity, zero replacement before confirmation or after cancel,
+  and exactly one confirmed replacement with all 131072 supplied bytes. Export asserts the actual
+  current-core bytes. Screenshot wiring checks the exact source URL, 1620x1080 drawing, PNG MIME and
+  supplied encoder bytes, manual toast dismissal, and rejection of a failed image decode.
+
+The implementer also reports the unchanged developer HTTP test passing. These results verify the
+foundation; B4c3 is not accepted because the following assigned behavior is still missing or lacks
+an observable completion assertion:
+
+1. **Saves/downloads.** Verify actual replacement with changed bytes, unchanged original data after
+   cancel or a rejected write, and the final stored/UI result of delete retry. Exercise deferred
+   confirmation busy guards through real controls and events. Check exact snapshot bytes at the core
+   boundary, download filename/href and cleanup, toast expiry, and no download on export/capture
+   failures. A test name mentioning expiry is insufficient without advancing owned timers and
+   asserting disappearance.
+2. **Cartridge commands.** Verify independent pending catalog/storage initialization, actual ROM
+   input change/value reset, picker cancellation from running and already-paused games, invalid
+   imports and catalog-ROM failures followed by retry, and deferred load/return guards. Assert the
+   originating cartridge bytes and paths. Await visible command completion after UI events.
+3. **Settings/modals.** Verify restored settings/bindings on a fresh mount and in help, in-memory
+   settings after persistence rejection, modal persistence errors with correct pause ownership, and
+   deferred/failed restart followed by retry. Keep failures at the real core/storage boundary.
+
+Review already corrected assertions that accepted null DOM elements, stale interval tracking, and
+the assumption that awaiting a click waits for an asynchronous App command. Snapshot assertions must
+account for the automatic checkpoint produced when opening a running game's modal. Seed snapshots
+before emulator load, count mutations for the intended slot, and distinguish boot restoration from
+the later user-confirmed load. The follow-ups retain these verified constraints.
 
 ## 5. Final acceptance record
 
