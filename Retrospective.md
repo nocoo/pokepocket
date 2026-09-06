@@ -16,3 +16,21 @@ Review probes should use a fixed commit where possible. When reading an actively
 validate its expected structure and every transformation count, inspect the resulting assertions,
 and run the relevant full test group before reporting evidence. A matching test name or successful
 exit alone does not establish that the intended regression was exercised.
+
+## 2026-09-06: terminating an unowned development server
+
+After the B4d distribution test correction, pi selected two processes from a global `ps` search
+and terminated them as runner cleanup. Both predated its task: the daily Vite development server
+and its workerd child. This interrupted port 7047 and violated the existing process ownership
+agreement. The separate preview on 17047 remained running.
+
+Codex detected the commands during bounded supervision, stopped further cleanup, and restarted
+`bun run dev` in the project. The Caddy HTTPS runtime endpoint returned HTTP 200 with local mode
+and version 1.1.0, and both expected development/preview listeners were verified afterward.
+
+The implementation agent had started a fresh conversation to recover repeated provider errors.
+Its focused task file did not restate the complete ownership agreement. Subsequent handoffs must
+read that agreement before work and explicitly preserve the daily development and preview services.
+Process-name matches and port discovery never establish ownership. Cleanup may use only process
+IDs or groups captured when that task starts its own child; an uncertain process must be left alone.
+The upcoming gate-runner tests also verify owned child/descendant cleanup under failure and signals.
