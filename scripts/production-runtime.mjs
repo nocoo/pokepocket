@@ -173,14 +173,27 @@ export async function createProductionRuntime(options = {}) {
     const readyUrl = await mf.ready;
     const baseUrl = readyUrl instanceof URL ? readyUrl.origin : String(readyUrl);
 
-    const signToken = async (claims = {}) => {
-      const jwt = new SignJWT({ sub: 'test-user', ...claims })
-        .setProtectedHeader({ alg: 'RS256', kid: keyId })
-        .setIssuedAt()
-        .setExpirationTime(claims.exp ?? '5m')
-        .setIssuer('https://nocoo.cloudflareaccess.com')
-        .setAudience(claims.aud ?? wranglerConfig.vars.ACCESS_AUD);
-      return jwt.sign(keyPair.privateKey);
+    const signToken = async (claims = {}, options = {}) => {
+      const jwt = new SignJWT(options.rawPayload ? claims : { sub: 'test-user', ...claims });
+      jwt.setProtectedHeader({
+        alg: options.alg ?? 'RS256',
+        kid: options.kid ?? keyId,
+      });
+      if (!options.rawPayload) {
+        if (!('iat' in claims)) {
+          jwt.setIssuedAt();
+        }
+        if (!('exp' in claims)) {
+          jwt.setExpirationTime('5m');
+        }
+        if (!('iss' in claims)) {
+          jwt.setIssuer('https://nocoo.cloudflareaccess.com');
+        }
+        if (!('aud' in claims)) {
+          jwt.setAudience(wranglerConfig.vars.ACCESS_AUD);
+        }
+      }
+      return jwt.sign(options.key ?? keyPair.privateKey);
     };
 
     return {

@@ -32,6 +32,61 @@ async function authorized(request: Request, env: Env) {
   }
 }
 
+export interface RouteContext {
+  localDevelopment: boolean;
+}
+
+export type RouteHandler = (
+  request: Request,
+  env: Env,
+  context: RouteContext,
+) => Response | Promise<Response>;
+
+export const PRODUCTION_API_ROUTES: ReadonlyMap<string, RouteHandler> = new Map<
+  string,
+  RouteHandler
+>([
+  [
+    '/api/live',
+    () => {
+      return json({ status: 'ok', version: APP_VERSION });
+    },
+  ],
+  [
+    '/api/catalog',
+    (_request, _env, { localDevelopment }) => {
+      return json({
+        mode: localDevelopment ? 'local' : 'private',
+        editions: EDITIONS.map(({ id }) => ({ id, available: false, url: null })),
+        systems: ['GB', 'GBC', 'GBA'],
+      });
+    },
+  ],
+  [
+    '/api/cartridge',
+    () => {
+      return json({ available: false, url: null });
+    },
+  ],
+  [
+    '/api/runtime',
+    (_request, _env, { localDevelopment }) => {
+      return json({
+        name: 'Poké Pocket',
+        version: APP_VERSION,
+        platform: 'cloudflare-workers',
+        emulation: 'browser-wasm',
+        mode: localDevelopment ? 'local' : 'private',
+        systems: ['GB', 'GBC', 'GBA'],
+      });
+    },
+  ],
+]);
+
+export const AUTHORITATIVE_ROUTE_PATHS: readonly string[] = Object.freeze(
+  Array.from(PRODUCTION_API_ROUTES.keys()),
+);
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // Vite replaces this at build time. Hosts, request headers and query strings cannot enable it.
@@ -39,6 +94,7 @@ export default {
     const localDevelopment = typeof __LOCAL_DEVELOPMENT__ !== 'undefined' && __LOCAL_DEVELOPMENT__;
     const url = new URL(request.url);
     const live = url.pathname === '/api/live';
+    const handler = PRODUCTION_API_ROUTES.get(url.pathname);
     let response: Response;
     // The public liveness endpoint exposes only build metadata, never application data.
     if (!live && !localDevelopment && !(await authorized(request, env))) {
@@ -46,25 +102,8 @@ export default {
     } else {
       if (request.method !== 'GET' && request.method !== 'HEAD') {
         response = json({ error: 'Method not allowed' }, 405, { Allow: 'GET, HEAD' });
-      } else if (live) {
-        response = json({ status: 'ok', version: APP_VERSION });
-      } else if (url.pathname === '/api/catalog') {
-        response = json({
-          mode: localDevelopment ? 'local' : 'private',
-          editions: EDITIONS.map(({ id }) => ({ id, available: false, url: null })),
-          systems: ['GB', 'GBC', 'GBA'],
-        });
-      } else if (url.pathname === '/api/cartridge') {
-        response = json({ available: false, url: null });
-      } else if (url.pathname === '/api/runtime') {
-        response = json({
-          name: 'Poké Pocket',
-          version: APP_VERSION,
-          platform: 'cloudflare-workers',
-          emulation: 'browser-wasm',
-          mode: localDevelopment ? 'local' : 'private',
-          systems: ['GB', 'GBC', 'GBA'],
-        });
+      } else if (handler) {
+        response = await handler(request, env, { localDevelopment });
       } else if (
         /^\/(api|roms?)(?:\/|$)/i.test(url.pathname) ||
         /\.(gb|gbc|gba)$/i.test(url.pathname)

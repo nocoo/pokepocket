@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { exportJWK, generateKeyPair, SignJWT, type JWTPayload } from 'jose';
 import worker from '../../worker/index';
 import { APP_VERSION } from '../../src/lib/version';
+import { AUTHORITATIVE_ROUTE_PATHS, PRODUCTION_API_ROUTES } from '../../worker/index';
 
 const issuer = 'https://nocoo.cloudflareaccess.com';
 const audience = '7dcaf6fb44b1245dfec144db9df69cc1335a526cd9a29829f33e35f78aa306dd';
@@ -134,6 +135,27 @@ describe('Cloudflare Access protects the whole Worker', () => {
     expect(assetFetch).not.toHaveBeenCalled();
   });
 
+  it('fails closed when ACCESS_TEAM is wrong or ACCESS_AUD is empty despite a valid signed token', async () => {
+    const validJwt = await token();
+    const { env: baseEnv, assetFetch } = environment();
+
+    const badTeamEnv = {
+      ...baseEnv,
+      ACCESS_TEAM: 'wrong-team',
+    } as unknown as Env;
+    const badTeamRes = await worker.fetch(request('/', validJwt), badTeamEnv);
+    expect(badTeamRes.status).toBe(403);
+    expect(assetFetch).not.toHaveBeenCalled();
+
+    const emptyAudEnv = {
+      ...baseEnv,
+      ACCESS_AUD: '',
+    } as unknown as Env;
+    const emptyAudRes = await worker.fetch(request('/', validJwt), emptyAudEnv);
+    expect(emptyAudRes.status).toBe(403);
+    expect(assetFetch).not.toHaveBeenCalled();
+  });
+
   it.each(['/', '/art/rayquaza.png', '/emulator/2.5.1/mgba.wasm'])(
     'serves %s only with a verified token and isolation headers',
     async (path) => {
@@ -209,5 +231,20 @@ describe('production never supplies cartridge ROMs', () => {
     const denied = await worker.fetch(request('/', undefined, 'HEAD'), env);
     expect(denied.status).toBe(403);
     expect(await denied.text()).toBe('');
+  });
+
+  it('exposes authoritative route handlers that match route paths and reject prototype pollution', () => {
+    expect(AUTHORITATIVE_ROUTE_PATHS).toEqual([
+      '/api/live',
+      '/api/catalog',
+      '/api/cartridge',
+      '/api/runtime',
+    ]);
+    expect(PRODUCTION_API_ROUTES instanceof Map).toBe(true);
+    expect(PRODUCTION_API_ROUTES.has('toString')).toBe(false);
+    expect(PRODUCTION_API_ROUTES.has('constructor')).toBe(false);
+    for (const routePath of AUTHORITATIVE_ROUTE_PATHS) {
+      expect(typeof PRODUCTION_API_ROUTES.get(routePath)).toBe('function');
+    }
   });
 });

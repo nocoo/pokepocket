@@ -3,6 +3,7 @@ import net from 'node:net';
 import { stat, mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { decodeJwt, decodeProtectedHeader } from 'jose';
 import {
   checkPortAvailable,
   createProductionRuntime,
@@ -383,8 +384,45 @@ describe('production-runtime policy and contracts', () => {
 
       const defaultToken = await runtime.signToken();
       expect(typeof defaultToken).toBe('string');
-      const customToken = await runtime.signToken({ exp: '1h', aud: 'custom-aud' });
+      const defaultHeader = decodeProtectedHeader(defaultToken);
+      const defaultPayload = decodeJwt(defaultToken);
+      expect(defaultHeader.alg).toBe('RS256');
+      expect(defaultHeader.kid).toBe(runtime.jwk.kid);
+      expect(defaultPayload.sub).toBe('test-user');
+      expect(defaultPayload.iss).toBe('https://nocoo.cloudflareaccess.com');
+      expect(defaultPayload.aud).toBe(runtime.wranglerConfig.vars.ACCESS_AUD);
+      expect(typeof defaultPayload.iat).toBe('number');
+      expect(typeof defaultPayload.exp).toBe('number');
+      expect(defaultPayload.exp).toBeGreaterThan(defaultPayload.iat);
+
+      const explicitExp = Math.floor(Date.now() / 1000) + 3600;
+      const customToken = await runtime.signToken({
+        exp: explicitExp,
+        aud: 'custom-aud',
+        sub: 'custom-user',
+      });
       expect(typeof customToken).toBe('string');
+      const customPayload = decodeJwt(customToken);
+      expect(customPayload.sub).toBe('custom-user');
+      expect(customPayload.aud).toBe('custom-aud');
+      expect(customPayload.iss).toBe('https://nocoo.cloudflareaccess.com');
+      expect(customPayload.exp).toBe(explicitExp);
+
+      const rawToken = await runtime.signToken(
+        { sub: 'raw-sub', aud: 'raw-aud' },
+        { rawPayload: true, kid: 'custom-kid', alg: 'RS256' },
+      );
+      expect(typeof rawToken).toBe('string');
+      const rawHeader = decodeProtectedHeader(rawToken);
+      const rawPayload = decodeJwt(rawToken);
+      expect(rawHeader.alg).toBe('RS256');
+      expect(rawHeader.kid).toBe('custom-kid');
+      expect(rawPayload.sub).toBe('raw-sub');
+      expect(rawPayload.aud).toBe('raw-aud');
+      // Deliberately omitted claims in rawPayload must remain absent, not reinstated by defaults
+      expect(rawPayload.iss).toBeUndefined();
+      expect(rawPayload.exp).toBeUndefined();
+      expect(rawPayload.iat).toBeUndefined();
     } finally {
       await runtime.dispose();
     }
