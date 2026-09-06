@@ -187,7 +187,7 @@ describe('App ordinary-modal pause ownership, checkpoint recovery, and library c
           await new Promise((resolve) => setTimeout(resolve, 0));
         });
 
-        // Verify opening checkpoint invocation and slot 0 auto-save payload
+        // Verify opening checkpoint invocation, exact identity, and slot 0 auto-save payload [1, 2, 3, 4]
         expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(
           putSnapshotCallsBaseline + 1,
         );
@@ -195,7 +195,19 @@ describe('App ordinary-modal pause ownership, checkpoint recovery, and library c
         const autoSnap = autoSnaps.find((s) => s.slot === 0);
         expect(autoSnap).toBeDefined();
         expect(autoSnap?.slot).toBe(0);
-        expect(new Uint8Array(autoSnap?.data ?? new ArrayBuffer(0))).toBeInstanceOf(Uint8Array);
+        expect(autoSnap?.romId).toBe('stored-emerald');
+        expect(autoSnap?.key).toBe('stored-emerald:0');
+        expect(new Uint8Array(autoSnap?.data ?? new ArrayBuffer(0))).toEqual(
+          new Uint8Array([1, 2, 3, 4]),
+        );
+
+        // Verify stored battery bytes match the exact cartridge state
+        const storedBattery = await harness.fakeStorage.getBattery('stored-emerald');
+        expect(storedBattery).not.toBeNull();
+        expect(storedBattery?.romId).toBe('stored-emerald');
+        expect(new Uint8Array(storedBattery?.data ?? new ArrayBuffer(0))).toEqual(
+          new Uint8Array([1, 2, 3, 4]),
+        );
 
         // Core pause count increments if running, untouched if already paused
         if (initialStatus === 'running') {
@@ -270,6 +282,12 @@ describe('App ordinary-modal pause ownership, checkpoint recovery, and library c
     const originalPutSnapshot = vi.mocked(harness.fakeStorage.putSnapshot).getMockImplementation();
     if (!originalPutSnapshot) throw new Error('Missing original putSnapshot implementation');
 
+    const pauseCallsBaseline = vi.mocked(harness.testCore.pauseGame).mock.calls.length;
+    const resumeCallsBaseline = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
+    const loadCallsBaseline = vi.mocked(harness.testCore.loadGame).mock.calls.length;
+    const quitCallsBaseline = vi.mocked(harness.testCore.quitGame).mock.calls.length;
+    const putSnapshotCallsBaseline = vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length;
+
     // Injected storage failure on opening checkpoint
     vi.mocked(harness.fakeStorage.putSnapshot).mockRejectedValueOnce(
       new Error('QuotaExceededError: Auto-save failed'),
@@ -282,19 +300,30 @@ describe('App ordinary-modal pause ownership, checkpoint recovery, and library c
     expect(await screen.findByRole('alert')).toBeDefined();
     expect(screen.getByText(/QuotaExceededError: Auto-save failed/)).toBeDefined();
 
-    // Modal is open and usable
+    // Opening attempt invoked putSnapshot once, which was rejected
+    expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(
+      putSnapshotCallsBaseline + 1,
+    );
+    // Modal paused the running game: core pause count incremented exactly once
+    expect(vi.mocked(harness.testCore.pauseGame).mock.calls.length).toBe(pauseCallsBaseline + 1);
+
+    // No stored automatic snapshot exists after rejected checkpoint
+    const snapsAfterRejection = await harness.fakeStorage.listSnapshots('stored-emerald');
+    expect(snapsAfterRejection.find((s) => s.slot === 0)).toBeUndefined();
+
+    // Modal is open, intact, and usable
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toBeDefined();
     expect(within(dialog).getByRole('heading', { level: 2, name: '你好，训练家。' })).toBeDefined();
 
+    // Close modal -> resumes running game exactly once
     const closeBtn = within(dialog).getByRole('button', { name: '关闭窗口' });
     await userEvent.click(closeBtn);
     expect(screen.queryByRole('dialog')).toBeNull();
-
-    // Game resumed running as expected
     expect(screen.getByText('正在冒险')).toBeDefined();
+    expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline + 1);
 
-    // Prove emulator queue recovery: subsequent modal opening performs successful checkpoint
+    // Prove emulator queue recovery: subsequent modal opening performs exactly one new checkpoint
     let resolveSecondCheckpoint: () => void = () => {};
     const secondCheckpointPromise = new Promise<void>((resolve) => {
       resolveSecondCheckpoint = resolve;
@@ -317,16 +346,44 @@ describe('App ordinary-modal pause ownership, checkpoint recovery, and library c
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    // Auto-save checkpoint slot 0 is successfully written into storage
+    // Exactly one new checkpoint invoked
+    expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(
+      putSnapshotCallsBaseline + 2,
+    );
+    // Core pause incremented again for settings modal
+    expect(vi.mocked(harness.testCore.pauseGame).mock.calls.length).toBe(pauseCallsBaseline + 2);
+
+    // Auto-save checkpoint slot 0 is now successfully written into storage with exact payload [1, 2, 3, 4]
     const recoveredSnaps = await harness.fakeStorage.listSnapshots('stored-emerald');
     const recoveredSnap = recoveredSnaps.find((s) => s.slot === 0);
     expect(recoveredSnap).toBeDefined();
     expect(recoveredSnap?.slot).toBe(0);
+    expect(recoveredSnap?.romId).toBe('stored-emerald');
+    expect(recoveredSnap?.key).toBe('stored-emerald:0');
+    expect(new Uint8Array(recoveredSnap?.data ?? new ArrayBuffer(0))).toEqual(
+      new Uint8Array([1, 2, 3, 4]),
+    );
 
+    // Stored battery bytes match exact state
+    const batteryAfterSuccess = await harness.fakeStorage.getBattery('stored-emerald');
+    expect(batteryAfterSuccess).not.toBeNull();
+    expect(batteryAfterSuccess?.romId).toBe('stored-emerald');
+    expect(new Uint8Array(batteryAfterSuccess?.data ?? new ArrayBuffer(0))).toEqual(
+      new Uint8Array([1, 2, 3, 4]),
+    );
+
+    // Original loadGame and quitGame counts remain untouched throughout
+    expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(loadCallsBaseline);
+    expect(vi.mocked(harness.testCore.quitGame).mock.calls.length).toBe(quitCallsBaseline);
+
+    // Final close restores running intent with exact pause/resume totals
     const closeSettingsBtn = within(settingsDialog).getByRole('button', { name: '关闭窗口' });
     await userEvent.click(closeSettingsBtn);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByText('正在冒险')).toBeDefined();
+
+    expect(vi.mocked(harness.testCore.pauseGame).mock.calls.length).toBe(pauseCallsBaseline + 2);
+    expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline + 2);
   });
 
   it('closes modal in library view without cartridge, causing zero resume, persist, or load calls', async () => {
