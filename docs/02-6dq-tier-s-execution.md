@@ -6,6 +6,10 @@ Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `19
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
 This document is the current implementation contract, review ledger, and acceptance record.
 
+The shared checkout was accidentally deleted during an unaccepted B7 isolation probe. The accepted
+main history and working files are restored to `5e50221`; the [recovery record](03-workspace-recovery.md)
+documents the evidence and required containment. The isolation draft remains quarantined.
+
 ## 1. Ownership and working agreement
 
 The user requested staged implementation by the existing pi agent in Herdr, with Codex coordinating,
@@ -15,8 +19,10 @@ reviewing every batch, maintaining numbered documentation, and independently val
   tests together; make atomic commits; report commit hashes, commands, results, and remaining issues.
 - **Codex owns review and documentation:** inspect the complete changed modules, reproduce relevant
   checks, return concrete findings, and accept the batch only after every finding is resolved.
-- Both agents share the existing checkout and branch. Codex does not edit pi-owned code while pi is
-  working. pi does not edit this document, the assessment, or documentation indexes.
+- After the B7 recovery, pi implements each handoff in a fresh independent clone outside the main
+  development checkout. Shared objects, alternates, hardlinks, and linked worktrees are forbidden.
+  Codex verifies the clone and baseline, reviews the exact offered commit, and imports accepted
+  history without rewriting it. pi does not edit this document, the assessment, or documentation indexes.
 - Each task may mutate only its assigned paths. Do not restore, checkout, or stash unrelated diffs
   to clean the working tree. Codex completes documentation writes and commits at stopped handoff boundaries.
 - Each logical change gets a separate Conventional Commit with a lowercase subject of at most
@@ -33,6 +39,9 @@ reviewing every batch, maintaining numbered documentation, and independently val
   temporary processes, ports, directories, and browser contexts.
 - Browser verification starts only after the implementer has explicitly stopped. Use a separate
   output directory for independent review; B7 must reject concurrent runs before clearing artifacts.
+- Any potentially destructive probe uses an additional disposable copy with verified canonical
+  paths and independent Git objects. A sentinel or expected rejection does not authorize using a
+  working checkout, its ancestors, another project, or a user profile as test output.
 
 Documentation is committed before implementation begins. After each accepted batch, Codex updates
 the ledger and any changed design decisions in a separate documentation commit. Final documentation
@@ -229,7 +238,11 @@ negative gate probes, isolation guards, and combined runtime under 3 minutes. **
     - Make import/start/pause/resume/reload and cross-platform switching mandatory for GB/GBC/GBA.
     - Assert snapshot CRUD/confirmation/cancellation/retry and meaningful `.sav` import/export results.
     - Keep local 12-ROM compatibility tests in an explicitly optional suite.
-18. `test: verify browser authorization and isolation`
+18. Browser authorization and isolation, split after the recovery into stopped handoffs:
+    - First, `fix: guard browser artifact paths`: enforce early output/invocation checks in both
+      browser configurations and prove raw CLI sentinel preservation in a disposable copy. Keep
+      normal required and optional commands usable; this foundation alone does not accept isolation.
+    - Then, `test: verify browser authorization and isolation`, completing the requirements below.
     - Test anonymous denial and authorized application load against the production harness.
     - Add `quality:l3`, restricted to owned loopback 27047. Validate target, invocation, output
       ownership and symlink ancestry, then acquire the cross-checkout port lock before any cleanup.

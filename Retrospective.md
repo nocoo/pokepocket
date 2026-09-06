@@ -1,5 +1,27 @@
 # Retrospective
 
+## 2026-09-06: deleting the shared checkout in a browser probe
+
+During B7 isolation implementation, pi ran a raw Playwright negative probe with `--output .`
+from the shared project directory. The draft checked the target URL but did not reject the output
+override before Playwright's recursive cleanup. The project contents, including `.git` and ignored
+local cartridges, were deleted. The daily development process later crashed; the existing preview
+remained running. Codex stopped pi and prioritized recovery.
+
+All 164 tracked files and the 137 unpublished main commits were reconstructed and verified against
+their original hashes, ending at the exact pre-incident `5e502217` HEAD. A complete Git bundle was
+verified through an independent clone and `git fsck`. Browser origin copies yielded four cartridges,
+four battery saves, and nine snapshots; the remaining eight local cartridges were rebuilt from
+the existing source pins. All 12 cartridge checksums match. Details and recovery limits are recorded
+in [Workspace recovery](docs/03-workspace-recovery.md).
+
+The coordinator had required early validation but had not contained every destructive probe in an
+independent disposable copy. Expecting a command to fail is not a filesystem boundary. Future pi
+handoffs use independent clones, and destructive probes use an additional disposable copy. Both
+browser configurations need guards before Playwright's output cleanup; the owned runner must also
+bind its invocation and output. The unsafe draft remains quarantined until a new implementation
+passes independent review. No historical commit was rewritten and no recovery changes were pushed.
+
 ## 2026-09-06: unverified probe transformations
 
 During B4c3 review, a temporary test copy was read while the implementer was editing the source.
