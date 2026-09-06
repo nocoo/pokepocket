@@ -127,16 +127,29 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
   }
 
   it('manages visibilitychange under autoPause=true and autoPause=false, releases held inputs/speed, exposes persistence errors, ignores visible events, and verifies cleanup', async () => {
-    const hiddenDescriptorBefore = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden');
+    // 1) Save original own descriptor on document instance
+    const hiddenDescBefore = Object.getOwnPropertyDescriptor(document, 'hidden');
+    const hadHiddenOwn = Object.hasOwn(document, 'hidden');
     let isDocumentHidden = false;
 
     Object.defineProperty(document, 'hidden', {
       configurable: true,
+      enumerable: true,
       get: () => isDocumentHidden,
     });
 
+    // 4) Spy on addEventListener and removeEventListener with call-through
+    const docAddSpy = vi.spyOn(document, 'addEventListener');
+    const docRemoveSpy = vi.spyOn(document, 'removeEventListener');
+
     try {
       const { unmount } = await startAppWithRunningCartridge();
+
+      // Find registered visibilitychange listener
+      const visibilityCalls = docAddSpy.mock.calls.filter(([type]) => type === 'visibilitychange');
+      expect(visibilityCalls.length).toBeGreaterThanOrEqual(1);
+      const installedVisibilityHandler = visibilityCalls[visibilityCalls.length - 1]?.[1];
+      expect(typeof installedVisibilityHandler).toBe('function');
 
       const origPutSnapshot = vi.mocked(harness.fakeStorage.putSnapshot).getMockImplementation();
       if (!origPutSnapshot) throw new Error('Missing putSnapshot');
@@ -199,10 +212,21 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
         new Uint8Array([1, 2, 3, 4]),
       );
 
+      // Verify stored battery save identity and payload
+      const battery1 = await harness.fakeStorage.getBattery('stored-emerald');
+      expect(battery1).not.toBeNull();
+      expect(battery1?.romId).toBe('stored-emerald');
+      expect(new Uint8Array(battery1?.data ?? new ArrayBuffer(0))).toEqual(
+        new Uint8Array([1, 2, 3, 4]),
+      );
+
       // 2. Visible events do NOT pause or persist:
       isDocumentHidden = false;
       document.dispatchEvent(new Event('visibilitychange'));
-      // No extra pauseGame, no extra putSnapshot
+      // Await task turn to ensure no delayed writes escape
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
       expect(vi.mocked(harness.testCore.pauseGame).mock.calls.length).toBe(pauseCallsBaseline + 1);
       expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(
         putSnapshotCallsBaseline + 1,
@@ -214,10 +238,25 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
       await screen.findByText('正在冒险');
 
       // 3. autoPause=false:
-      // Open settings to disable autoPause
+      // Await settings-opening checkpoint before autoPause=false baselines
+      let resolveSettingsCheckpoint: () => void = () => {};
+      const settingsCheckpointPromise = new Promise<void>((resolve) => {
+        resolveSettingsCheckpoint = resolve;
+      });
+      vi.mocked(harness.fakeStorage.putSnapshot).mockImplementationOnce(async (snap) => {
+        const res = await origPutSnapshot(snap);
+        resolveSettingsCheckpoint();
+        return res;
+      });
+
       const settingsBtn = screen.getByRole('button', { name: '打开设置' });
       await userEvent.click(settingsBtn);
       const settingsDialog = await screen.findByRole('dialog');
+
+      await settingsCheckpointPromise;
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
 
       const autoPauseSwitch = within(settingsDialog).getByRole('switch', {
         name: '离开时自动暂停',
@@ -262,13 +301,22 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
       // (b) Game is NOT paused by emulator (pauseCalls unchanged)
       expect(vi.mocked(harness.testCore.pauseGame).mock.calls.length).toBe(pauseCallsBeforeHidden2);
 
-      // (c) Persistence still occurs
+      // (c) Persistence still occurs: exact write delta +1 and matching bytes
       await checkpoint2Promise;
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
       expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(
         putSnapshotCallsBeforeHidden2 + 1,
+      );
+      const snaps2 = await harness.fakeStorage.listSnapshots('stored-emerald');
+      const snap2 = snaps2.find((s) => s.slot === 0);
+      expect(snap2).toBeDefined();
+      expect(snap2?.slot).toBe(0);
+      expect(snap2?.key).toBe('stored-emerald:0');
+      expect(snap2?.romId).toBe('stored-emerald');
+      expect(new Uint8Array(snap2?.data ?? new ArrayBuffer(0))).toEqual(
+        new Uint8Array([1, 2, 3, 4]),
       );
 
       // 4. Persistence rejection exposes visible error toast:
@@ -287,20 +335,32 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
       expect(screen.getByText(/Disk quota exceeded on visibility checkpoint/)).toBeDefined();
 
       // 5. Unmount cleanup and post-unmount event dispatching:
+      // Verify pending window RAF size is 1 during active execution
+      expect(harness.windowRafMap.size).toBe(1);
+
       unmount();
+
+      // Verify pending window RAF size is 0 BEFORE harness.cleanup
+      expect(harness.windowRafMap.size).toBe(0);
+
+      // Verify matching removeEventListener was called with the exact installed handler
+      expect(docRemoveSpy).toHaveBeenCalledWith('visibilitychange', installedVisibilityHandler);
 
       const pauseCallsFinal = vi.mocked(harness.testCore.pauseGame).mock.calls.length;
       const putSnapshotCallsFinal = vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length;
 
-      // Dispatched events after unmount produce zero side effects
+      // Dispatched events after unmount produce zero side effects even after task turn
       document.dispatchEvent(new Event('visibilitychange'));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
       expect(vi.mocked(harness.testCore.pauseGame).mock.calls.length).toBe(pauseCallsFinal);
       expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(
         putSnapshotCallsFinal,
       );
     } finally {
-      if (hiddenDescriptorBefore) {
-        Object.defineProperty(Document.prototype, 'hidden', hiddenDescriptorBefore);
+      if (hadHiddenOwn && hiddenDescBefore) {
+        Object.defineProperty(document, 'hidden', hiddenDescBefore);
       } else {
         delete (document as unknown as Record<string, unknown>).hidden;
       }
@@ -308,8 +368,19 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
   });
 
   it('manages pagehide persistence with real and rejected storage settlement, keeps no-cartridge quiet, and removes listeners on unmount', async () => {
+    // Call-through spies on window event listeners
+    const winAddSpy = vi.spyOn(window, 'addEventListener');
+    const winRemoveSpy = vi.spyOn(window, 'removeEventListener');
+
     // 1. With running cartridge: pagehide persists cartridge save and releases inputs
     const { unmount } = await startAppWithRunningCartridge();
+
+    const pagehideCalls = (
+      winAddSpy.mock.calls as [string, EventListenerOrEventListenerObject][]
+    ).filter(([type]) => type === 'pagehide');
+    expect(pagehideCalls.length).toBeGreaterThanOrEqual(1);
+    const installedPagehideHandler = pagehideCalls[pagehideCalls.length - 1]?.[1];
+    expect(typeof installedPagehideHandler).toBe('function');
 
     const origPutSnapshot = vi.mocked(harness.fakeStorage.putSnapshot).getMockImplementation();
     if (!origPutSnapshot) throw new Error('Missing putSnapshot');
@@ -350,26 +421,85 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
     const snaps = await harness.fakeStorage.listSnapshots('stored-emerald');
     const snap = snaps.find((s) => s.slot === 0);
     expect(snap).toBeDefined();
+    expect(snap?.slot).toBe(0);
+    expect(snap?.romId).toBe('stored-emerald');
+    expect(snap?.key).toBe('stored-emerald:0');
     expect(new Uint8Array(snap?.data ?? new ArrayBuffer(0))).toEqual(new Uint8Array([1, 2, 3, 4]));
 
-    // 2. Pagehide with rejected storage settles safely without unhandled rejection:
-    vi.mocked(harness.fakeStorage.putSnapshot).mockRejectedValueOnce(
-      new Error('Storage failure during pagehide'),
+    const storedBattery = await harness.fakeStorage.getBattery('stored-emerald');
+    expect(storedBattery).not.toBeNull();
+    expect(new Uint8Array(storedBattery?.data ?? new ArrayBuffer(0))).toEqual(
+      new Uint8Array([1, 2, 3, 4]),
     );
 
-    // Should not throw unhandled rejection
-    expect(() => {
-      window.dispatchEvent(new Event('pagehide'));
-    }).not.toThrow();
+    // 2. Pagehide with rejected storage settles safely without unhandled rejection:
+    let rejectPagehidePut: (err: Error) => void = () => {};
+    let resolvePagehideStarted: () => void = () => {};
+    const pagehideStartedPromise = new Promise<void>((res) => {
+      resolvePagehideStarted = res;
+    });
+    const rejectedPutPromise = new Promise<void>((_res, rej) => {
+      rejectPagehidePut = rej;
+    });
 
+    vi.mocked(harness.fakeStorage.putSnapshot).mockImplementationOnce(async () => {
+      resolvePagehideStarted();
+      await rejectedPutPromise;
+    });
+
+    // Dispatch pagehide
+    window.dispatchEvent(new Event('pagehide'));
+    await pagehideStartedPromise;
+    expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(
+      putSnapshotCallsBaseline + 2,
+    );
+
+    // Trigger rejection and settle outer catch
+    rejectPagehidePut(new Error('Storage failure during pagehide'));
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    // 3. Unmount and verify post-unmount pagehide does not call persist
+    // Actual snapshot/battery data remain preserved
+    const snapsAfterFail = await harness.fakeStorage.listSnapshots('stored-emerald');
+    const snapAfterFail = snapsAfterFail.find((s) => s.slot === 0);
+    expect(snapAfterFail).toBeDefined();
+    expect(new Uint8Array(snapAfterFail?.data ?? new ArrayBuffer(0))).toEqual(
+      new Uint8Array([1, 2, 3, 4]),
+    );
+
+    // Prove next pagehide checkpoint succeeds
+    let resolvePagehideSuccess2: () => void = () => {};
+    const pagehideSuccess2Promise = new Promise<void>((resolve) => {
+      resolvePagehideSuccess2 = resolve;
+    });
+    vi.mocked(harness.fakeStorage.putSnapshot).mockImplementationOnce(async (s) => {
+      const res = await origPutSnapshot(s);
+      resolvePagehideSuccess2();
+      return res;
+    });
+
+    window.dispatchEvent(new Event('pagehide'));
+    await pagehideSuccess2Promise;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(
+      putSnapshotCallsBaseline + 3,
+    );
+
+    // 3. Unmount and verify matching removeEventListener
+    expect(harness.windowRafMap.size).toBe(1);
     unmount();
+    expect(harness.windowRafMap.size).toBe(0);
+
+    expect(winRemoveSpy).toHaveBeenCalledWith('pagehide', installedPagehideHandler);
+
     const putCallsAfterUnmount = vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length;
     window.dispatchEvent(new Event('pagehide'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(putCallsAfterUnmount);
 
     // 4. In library view with NO cartridge: pagehide is completely quiet
@@ -381,123 +511,176 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
     const putBatteryInLibrary = vi.mocked(harness.fakeStorage.putBattery).mock.calls.length;
 
     window.dispatchEvent(new Event('pagehide'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(putCallsInLibrary);
     expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(putBatteryInLibrary);
   });
 
   it('handles native requestFullscreen/fullscreenchange/exit, exit errors, rejecting fallback to focusMode, KeyF, Escape, and return-to-gallery cleanup', async () => {
+    // 1) Save original own descriptor on document instance
+    const fsElementDescBefore = Object.getOwnPropertyDescriptor(document, 'fullscreenElement');
+    const hadFsElementOwn = Object.hasOwn(document, 'fullscreenElement');
     let fullscreenElementMock: Element | null = null;
-    const fullscreenElementDescriptor = Object.getOwnPropertyDescriptor(
-      Document.prototype,
-      'fullscreenElement',
-    );
 
     Object.defineProperty(document, 'fullscreenElement', {
       configurable: true,
+      enumerable: true,
       get: () => fullscreenElementMock,
     });
 
+    // Save and restore document.exitFullscreen on document instance
+    const exitFsDescBefore = Object.getOwnPropertyDescriptor(document, 'exitFullscreen');
+    const hadExitFsOwn = Object.hasOwn(document, 'exitFullscreen');
+
+    const docAddSpy = vi.spyOn(document, 'addEventListener');
+    const docRemoveSpy = vi.spyOn(document, 'removeEventListener');
+
     try {
-      const { container } = await startAppWithRunningCartridge();
+      const { container, unmount } = await startAppWithRunningCartridge();
+
+      const fsChangeCalls = docAddSpy.mock.calls.filter(([type]) => type === 'fullscreenchange');
+      expect(fsChangeCalls.length).toBeGreaterThanOrEqual(1);
+      const installedFsChangeHandler = fsChangeCalls[fsChangeCalls.length - 1]?.[1];
+      expect(typeof installedFsChangeHandler).toBe('function');
 
       const stage = container.querySelector('#game-stage') as HTMLElement;
       expect(stage).not.toBeNull();
+      if (!stage) throw new Error('Missing game-stage element');
 
-      // 1. Native requestFullscreen supported on stage:
-      let requestFullscreenCalled = 0;
-      let exitFullscreenCalled = 0;
-      let exitReject = false;
+      // Own and restore stage.requestFullscreen
+      const stageRequestFsDescBefore = Object.getOwnPropertyDescriptor(stage, 'requestFullscreen');
+      const hadStageRequestFsOwn = Object.hasOwn(stage, 'requestFullscreen');
 
-      stage.requestFullscreen = vi.fn().mockImplementation(async () => {
-        requestFullscreenCalled++;
-        fullscreenElementMock = stage;
-        document.dispatchEvent(new Event('fullscreenchange'));
-      });
+      try {
+        // 1. Native requestFullscreen supported on stage:
+        let requestFullscreenCalled = 0;
+        let exitFullscreenCalled = 0;
+        let exitReject = false;
 
-      document.exitFullscreen = vi.fn().mockImplementation(async () => {
-        exitFullscreenCalled++;
-        if (exitReject) throw new Error('Failed to exit fullscreen');
-        fullscreenElementMock = null;
-        document.dispatchEvent(new Event('fullscreenchange'));
-      });
+        stage.requestFullscreen = vi.fn().mockImplementation(async () => {
+          requestFullscreenCalled++;
+          fullscreenElementMock = stage;
+          document.dispatchEvent(new Event('fullscreenchange'));
+        });
 
-      // Press KeyF to enter fullscreen
-      fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
+        document.exitFullscreen = vi.fn().mockImplementation(async () => {
+          exitFullscreenCalled++;
+          if (exitReject) throw new Error('Failed to exit fullscreen');
+          fullscreenElementMock = null;
+          document.dispatchEvent(new Event('fullscreenchange'));
+        });
 
-      await waitFor(() => expect(requestFullscreenCalled).toBe(1));
-      expect(fullscreenElementMock).toBe(stage);
+        // Press KeyF to enter fullscreen
+        fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
 
-      // Toolbar button reflects full screen state: aria-label="退出全屏"
-      const exitFsBtn = await screen.findByRole('button', { name: '退出全屏' });
-      expect(exitFsBtn).toBeDefined();
+        await waitFor(() => expect(requestFullscreenCalled).toBe(1));
+        expect(fullscreenElementMock).toBe(stage);
 
-      // Press KeyF again to exit fullscreen
-      fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
+        // Toolbar button reflects full screen state: aria-label="退出全屏"
+        const exitFsBtn = await screen.findByRole('button', { name: '退出全屏' });
+        expect(exitFsBtn).toBeDefined();
 
-      await waitFor(() => expect(exitFullscreenCalled).toBe(1));
-      expect(fullscreenElementMock).toBeNull();
-      expect(screen.getByRole('button', { name: '全屏游戏' })).toBeDefined();
+        // Press KeyF again to exit fullscreen
+        fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
 
-      // 2. Exit fullscreen rejection produces visible error toast:
-      // Re-enter fullscreen
-      fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
-      await waitFor(() => expect(requestFullscreenCalled).toBe(2));
+        await waitFor(() => expect(exitFullscreenCalled).toBe(1));
+        expect(fullscreenElementMock).toBeNull();
+        expect(screen.getByRole('button', { name: '全屏游戏' })).toBeDefined();
 
-      exitReject = true;
-      fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
+        // 2. Exit fullscreen rejection retains fullscreen UI, then retries through actual exit control:
+        // Re-enter fullscreen
+        fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
+        await waitFor(() => expect(requestFullscreenCalled).toBe(2));
 
-      expect(await screen.findByRole('alert')).toBeDefined();
-      expect(screen.getByText(/Failed to exit fullscreen/)).toBeDefined();
+        exitReject = true;
+        // Attempt exit: rejection occurs
+        fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
 
-      // Reset mock state
-      exitReject = false;
-      fullscreenElementMock = null;
-      document.dispatchEvent(new Event('fullscreenchange'));
-      await screen.findByRole('button', { name: '全屏游戏' });
+        expect(await screen.findByRole('alert')).toBeDefined();
+        expect(screen.getByText(/Failed to exit fullscreen/)).toBeDefined();
 
-      // 3. Rejecting/unavailable native requestFullscreen falls back to focusMode:
-      stage.requestFullscreen = vi.fn().mockRejectedValue(new Error('Fullscreen not allowed'));
+        // Fullscreen UI is retained (still in fullscreen mode with "退出全屏" button)
+        const exitFsBtnAfterError = screen.getByRole('button', { name: '退出全屏' });
+        expect(exitFsBtnAfterError).toBeDefined();
+        expect(fullscreenElementMock).toBe(stage);
 
-      // Click toolbar button
-      const fsBtn = screen.getByRole('button', { name: '全屏游戏' });
-      await userEvent.click(fsBtn);
+        // Retry through actual exit control button: this time exitFullscreen succeeds
+        exitReject = false;
+        await userEvent.click(exitFsBtnAfterError);
 
-      // focusMode fallback activated: stage has 'focus-mode' class and button has '退出全屏'
-      await waitFor(() => expect(container.querySelector('.game-stage.focus-mode')).not.toBeNull());
-      expect(screen.getByRole('button', { name: '退出全屏' })).toBeDefined();
+        await waitFor(() => expect(fullscreenElementMock).toBeNull());
+        expect(screen.getByRole('button', { name: '全屏游戏' })).toBeDefined();
 
-      // Press Escape in focusMode: exits focusMode
-      fireEvent.keyDown(window, { code: 'Escape', key: 'Escape' });
-      expect(container.querySelector('.game-stage.focus-mode')).toBeNull();
-      expect(screen.getByRole('button', { name: '全屏游戏' })).toBeDefined();
+        // 3. Rejecting native requestFullscreen falls back to focusMode:
+        stage.requestFullscreen = vi.fn().mockRejectedValue(new Error('Fullscreen not allowed'));
 
-      // Enter focusMode again via KeyF
-      fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
-      await waitFor(() => expect(container.querySelector('.game-stage.focus-mode')).not.toBeNull());
+        // Click toolbar button
+        const fsBtn = screen.getByRole('button', { name: '全屏游戏' });
+        await userEvent.click(fsBtn);
 
-      // Click toolbar button to exit focusMode
-      const exitFocusBtn = screen.getByRole('button', { name: '退出全屏' });
-      await userEvent.click(exitFocusBtn);
-      expect(container.querySelector('.game-stage.focus-mode')).toBeNull();
+        // focusMode fallback activated: stage has 'focus-mode' class and button has '退出全屏'
+        await waitFor(() =>
+          expect(container.querySelector('.game-stage.focus-mode')).not.toBeNull(),
+        );
+        expect(screen.getByRole('button', { name: '退出全屏' })).toBeDefined();
 
-      // 4. When requestFullscreen is unavailable (null/undefined): falls back directly to focusMode
-      // @ts-expect-error test unavailable method
-      delete stage.requestFullscreen;
-      fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
-      expect(container.querySelector('.game-stage.focus-mode')).not.toBeNull();
+        // Press Escape in focusMode: exits focusMode
+        fireEvent.keyDown(window, { code: 'Escape', key: 'Escape' });
+        expect(container.querySelector('.game-stage.focus-mode')).toBeNull();
+        expect(screen.getByRole('button', { name: '全屏游戏' })).toBeDefined();
 
-      // 5. Returning to gallery clears focusMode:
-      const backBtn = screen.getByRole('button', { name: '返回卡带盘' });
-      await userEvent.click(backBtn);
+        // Enter focusMode again via KeyF
+        fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
+        await waitFor(() =>
+          expect(container.querySelector('.game-stage.focus-mode')).not.toBeNull(),
+        );
 
-      await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
-      expect(container.querySelector('.app-layout')?.hasAttribute('hidden')).toBe(true);
-      expect(container.querySelector('.game-stage.focus-mode')).toBeNull();
+        // Click toolbar button to exit focusMode
+        const exitFocusBtn = screen.getByRole('button', { name: '退出全屏' });
+        await userEvent.click(exitFocusBtn);
+        expect(container.querySelector('.game-stage.focus-mode')).toBeNull();
+
+        // 4. When stage has no requestFullscreen method (simulated by setting property to undefined):
+        Object.defineProperty(stage, 'requestFullscreen', {
+          configurable: true,
+          enumerable: true,
+          writable: true,
+          value: undefined,
+        });
+
+        fireEvent.keyDown(window, { code: 'KeyF', key: 'f' });
+        expect(container.querySelector('.game-stage.focus-mode')).not.toBeNull();
+
+        // 5. Returning to gallery clears focusMode:
+        const backBtn = screen.getByRole('button', { name: '返回卡带盘' });
+        await userEvent.click(backBtn);
+
+        await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
+        expect(container.querySelector('.app-layout')?.hasAttribute('hidden')).toBe(true);
+        expect(container.querySelector('.game-stage.focus-mode')).toBeNull();
+
+        // 6. Unmount cleanup: verify matching removeEventListener
+        unmount();
+        expect(docRemoveSpy).toHaveBeenCalledWith('fullscreenchange', installedFsChangeHandler);
+      } finally {
+        if (hadStageRequestFsOwn && stageRequestFsDescBefore) {
+          Object.defineProperty(stage, 'requestFullscreen', stageRequestFsDescBefore);
+        } else {
+          delete (stage as unknown as Record<string, unknown>).requestFullscreen;
+        }
+      }
     } finally {
-      if (fullscreenElementDescriptor) {
-        Object.defineProperty(Document.prototype, 'fullscreenElement', fullscreenElementDescriptor);
+      if (hadFsElementOwn && fsElementDescBefore) {
+        Object.defineProperty(document, 'fullscreenElement', fsElementDescBefore);
       } else {
         delete (document as unknown as Record<string, unknown>).fullscreenElement;
+      }
+      if (hadExitFsOwn && exitFsDescBefore) {
+        Object.defineProperty(document, 'exitFullscreen', exitFsDescBefore);
+      } else {
+        delete (document as unknown as Record<string, unknown>).exitFullscreen;
       }
     }
   });
