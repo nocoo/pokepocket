@@ -11,6 +11,7 @@ const { Miniflare, Response: WorkerResponse } = require('miniflare');
 export const DEFAULT_L2_PORT = 17048;
 export const DEFAULT_L2_HOST = '127.0.0.1';
 export const EXPECTED_CERTS_URL = 'https://nocoo.cloudflareaccess.com/cdn-cgi/access/certs';
+export const RUNTIME_RESOURCE_ROOT_ENV = 'POKEPOCKET_RUNTIME_RESOURCE_ROOT';
 
 export async function checkPortAvailable(port, host = DEFAULT_L2_HOST) {
   return new Promise((resolve) => {
@@ -66,7 +67,13 @@ export async function createProductionRuntime(options = {}) {
     use: 'sig',
   };
 
-  const isolatedPersistenceDir = await mkdtemp(path.join(tmpdir(), 'pokepocket-l2-runtime-'));
+  const resourceRoot =
+    options.resourceRoot ??
+    (process.env[RUNTIME_RESOURCE_ROOT_ENV]
+      ? path.resolve(process.env[RUNTIME_RESOURCE_ROOT_ENV])
+      : tmpdir());
+
+  const isolatedPersistenceDir = await mkdtemp(path.join(resourceRoot, 'pokepocket-l2-runtime-'));
 
   let mf;
   let disposalPromise = null;

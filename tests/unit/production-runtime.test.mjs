@@ -9,6 +9,7 @@ import {
   DEFAULT_L2_HOST,
   DEFAULT_L2_PORT,
   EXPECTED_CERTS_URL,
+  RUNTIME_RESOURCE_ROOT_ENV,
 } from '../../scripts/production-runtime.mjs';
 
 describe('production-runtime policy and contracts', () => {
@@ -174,7 +175,50 @@ describe('production-runtime policy and contracts', () => {
     expect(statResult.code).toBe('ENOENT');
   });
 
-  it('shares single disposal promise across concurrent dispose calls', async () => {
+  it('allocates isolated directory under resourceRoot option or environment variable', async () => {
+    const customRoot = await mkdtemp(path.join(tmpdir(), 'custom-resource-root-'));
+    cleanups.push(() => rm(customRoot, { recursive: true, force: true }));
+    const buildDir = await createMockBuildFixture();
+
+    class FakeMiniflare {
+      constructor(options) {
+        this.isolated = options.isolatedResourcePersistencePath;
+        this.ready = Promise.resolve(new URL('http://127.0.0.1:17048'));
+      }
+      async dispose() {}
+    }
+
+    // Pass via option
+    const rt1 = await createProductionRuntime({
+      buildDir,
+      port: 0,
+      resourceRoot: customRoot,
+      Miniflare: FakeMiniflare,
+    });
+    expect(rt1.isolatedDir.startsWith(customRoot)).toBe(true);
+    await rt1.dispose();
+
+    // Pass via environment variable
+    const origEnv = process.env[RUNTIME_RESOURCE_ROOT_ENV];
+    process.env[RUNTIME_RESOURCE_ROOT_ENV] = customRoot;
+    try {
+      const rt2 = await createProductionRuntime({
+        buildDir,
+        port: 0,
+        Miniflare: FakeMiniflare,
+      });
+      expect(rt2.isolatedDir.startsWith(customRoot)).toBe(true);
+      await rt2.dispose();
+    } finally {
+      if (origEnv !== undefined) {
+        process.env[RUNTIME_RESOURCE_ROOT_ENV] = origEnv;
+      } else {
+        delete process.env[RUNTIME_RESOURCE_ROOT_ENV];
+      }
+    }
+  });
+
+  it('shares single disposal promise across concurrent dispose calls with event loop turn', async () => {
     const buildDir = await createMockBuildFixture();
     let release;
     const deferred = new Promise((resolve) => {
@@ -198,32 +242,51 @@ describe('production-runtime policy and contracts', () => {
       Miniflare: DeferredMiniflare,
     });
 
+    let firstSettled = false;
     let secondSettled = false;
-    const first = runtime.dispose();
+    const first = runtime.dispose().then(() => {
+      firstSettled = true;
+    });
     const second = runtime.dispose().then(() => {
       secondSettled = true;
     });
 
-    expect(disposeCalls).toBe(1);
-    expect(secondSettled).toBe(false);
+    try {
+      // Advance an event-loop turn with disposal still deferred: both calls must remain pending
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(firstSettled).toBe(false);
+      expect(secondSettled).toBe(false);
+      expect(disposeCalls).toBe(1);
+    } finally {
+      release();
+      await Promise.all([first, second]);
+    }
 
-    release();
-    await Promise.all([first, second]);
+    expect(firstSettled).toBe(true);
     expect(secondSettled).toBe(true);
     expect(disposeCalls).toBe(1);
   });
 
-  it('disposes runtime and cleans up temp state on process signal', async () => {
+  it('disposes runtime, settles cleanup, and removes signal listeners on process signal', async () => {
     const buildDir = await createMockBuildFixture();
+    let release;
+    const deferred = new Promise((resolve) => {
+      release = resolve;
+    });
     let disposedCalled = false;
+
     class SignalTrackingMiniflare {
       constructor() {
         this.ready = Promise.resolve(new URL('http://127.0.0.1:17048'));
       }
       async dispose() {
         disposedCalled = true;
+        await deferred;
       }
     }
+
+    const initialSigintListeners = process.listeners('SIGINT');
+    const initialSigtermListeners = process.listeners('SIGTERM');
 
     const runtime = await createProductionRuntime({
       buildDir,
@@ -233,11 +296,18 @@ describe('production-runtime policy and contracts', () => {
 
     // Emitting SIGINT triggers runtime disposal
     process.emit('SIGINT');
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    release();
+
+    // Await settlement of runtime disposal
+    await runtime.dispose();
     expect(disposedCalled).toBe(true);
 
     const statResult = await stat(runtime.isolatedDir).catch((e) => e);
     expect(statResult.code).toBe('ENOENT');
+
+    // Verify owned signal listeners were cleaned up and unrelated ones survive
+    expect(process.listeners('SIGINT')).toEqual(initialSigintListeners);
+    expect(process.listeners('SIGTERM')).toEqual(initialSigtermListeners);
   });
 
   it('handles dispose failure and rm failure during runtime.dispose()', async () => {

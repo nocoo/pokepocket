@@ -1,4 +1,8 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { RUNTIME_RESOURCE_ROOT_ENV } from './production-runtime.mjs';
 import { runParallelCommands } from './run-parallel.mjs';
 
 export async function runL2Gate(options = {}) {
@@ -18,8 +22,15 @@ export async function runL2Gate(options = {}) {
   process.once('SIGINT', handleSigint);
   process.once('SIGTERM', handleSigterm);
 
+  // Parent gate allocates and owns a unique temporary resource root for the run
+  const ownedResourceRoot = await mkdtemp(path.join(tmpdir(), 'pokepocket-l2-gate-'));
+
   try {
-    const runOptions = { commandRunner, signal: controller.signal };
+    const runOptions = {
+      commandRunner,
+      signal: controller.signal,
+      resourceRoot: ownedResourceRoot,
+    };
     if (options.runner) {
       await options.runner(runOptions);
     } else {
@@ -47,6 +58,8 @@ export async function runL2Gate(options = {}) {
     clearTimeout(timer);
     process.removeListener('SIGINT', handleSigint);
     process.removeListener('SIGTERM', handleSigterm);
+    // Guarantees removal of the parent-owned resource root after child settlement
+    await rm(ownedResourceRoot, { recursive: true, force: true }).catch(() => {});
   }
 }
 
@@ -57,9 +70,19 @@ export async function runL2Default(options = {}) {
   // Step 1: Sequential build of production bundle
   await commandRunner([{ command: 'npm', args: ['run', 'build'] }], commandOptions);
 
-  // Step 2: Run L2 test suite against built bundle
+  // Step 2: Run L2 test suite against built bundle with owned resource root passed to child env
+  const childEnv = options.resourceRoot
+    ? { ...process.env, [RUNTIME_RESOURCE_ROOT_ENV]: options.resourceRoot }
+    : process.env;
+
   await commandRunner(
-    [{ command: 'npx', args: ['vitest', 'run', '--config', 'vitest.l2.config.ts'] }],
+    [
+      {
+        command: 'npx',
+        args: ['vitest', 'run', '--config', 'vitest.l2.config.ts'],
+        env: childEnv,
+      },
+    ],
     commandOptions,
   );
 }
