@@ -124,6 +124,54 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     return utils;
   }
 
+  async function startBatteryImportApp(initialStatus: 'running' | 'paused') {
+    const { container } = await startLoadedApp(createCartridge('stored-emerald'));
+
+    if (initialStatus === 'paused') {
+      await userEvent.click(screen.getByRole('button', { name: '暂停游戏' }));
+      await screen.findByText('已暂停');
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    const saveInput = container.querySelector(
+      'input[type="file"][accept=".sav"]',
+    ) as HTMLInputElement;
+    expect(saveInput).toBeDefined();
+
+    const initialBytes = new Uint8Array(131072).fill(7);
+    const initialFile = new File([initialBytes], 'backup-initial.sav');
+
+    const openImportModalAwaitingCheckpoint = async (fileToSelect: File = initialFile) => {
+      const originalPutSnapshot = vi
+        .mocked(harness.fakeStorage.putSnapshot)
+        .getMockImplementation();
+      if (!originalPutSnapshot) throw new Error('Missing original putSnapshot implementation');
+
+      let resolveCheckpoint: () => void = () => {};
+      const checkpointPromise = new Promise<void>((resolve) => {
+        resolveCheckpoint = resolve;
+      });
+
+      vi.mocked(harness.fakeStorage.putSnapshot).mockImplementationOnce(async (snap) => {
+        const result = await originalPutSnapshot(snap);
+        resolveCheckpoint();
+        return result;
+      });
+
+      fireEvent.change(saveInput, { target: { files: [fileToSelect] } });
+      const dialog = await screen.findByRole('dialog');
+      await checkpointPromise;
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      return dialog;
+    };
+
+    return { saveInput, openImportModalAwaitingCheckpoint };
+  }
+
   it('manages manual slot creation and replacement with deferred busy, failure retry, and load execution', async () => {
     const emeraldCart = createCartridge('stored-emerald');
     await startLoadedApp(emeraldCart);
@@ -495,67 +543,18 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
   });
 
   it.each(['running', 'paused'] as const)(
-    'validates and confirms battery import from file input when initially %s: handles pre-confirmation cancellation, rejects dismissals during pending mutation, and recovers on failure',
+    'rejects invalid battery files and preserves pause state across all import dismissals when initially %s',
     async (initialStatus) => {
-      const emeraldCart = createCartridge('stored-emerald');
-      const { container } = await startLoadedApp(emeraldCart);
-
-      if (initialStatus === 'paused') {
-        const pauseToggle = screen.getByRole('button', { name: '暂停游戏' });
-        await userEvent.click(pauseToggle);
-        await screen.findByText('已暂停');
-        // Ensure manual-pause checkpoint write settles
-        await act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-      }
-
-      const saveInput = container.querySelector(
-        'input[type="file"][accept=".sav"]',
-      ) as HTMLInputElement;
-      expect(saveInput).toBeDefined();
-
+      const { saveInput, openImportModalAwaitingCheckpoint } =
+        await startBatteryImportApp(initialStatus);
       const resumeCallsBaseline = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
 
-      // 1. Non-sav file rejected with toast
+      // Non-sav file rejected with toast
       const invalidFile = new File([new Uint8Array(100)], 'invalid.txt');
       fireEvent.change(saveInput, { target: { files: [invalidFile] } });
       expect(await screen.findByText('请选择 .sav 格式的游戏存档。')).toBeDefined();
 
-      // Helper to open import dialog with a valid file and wait unconditionally for opening checkpoint
-      const validSavDataInitial = new Uint8Array(131072);
-      validSavDataInitial.fill(7);
-      const validFileInitial = new File([validSavDataInitial], 'backup-initial.sav');
-
-      const openImportModalAwaitingCheckpoint = async (fileToSelect: File = validFileInitial) => {
-        const originalPutSnapshot = vi
-          .mocked(harness.fakeStorage.putSnapshot)
-          .getMockImplementation();
-        if (!originalPutSnapshot) throw new Error('Missing original putSnapshot implementation');
-
-        let resolveCheckpoint: () => void = () => {};
-        const checkpointPromise = new Promise<void>((resolve) => {
-          resolveCheckpoint = resolve;
-        });
-
-        vi.mocked(harness.fakeStorage.putSnapshot).mockImplementationOnce(async (snap) => {
-          const res = await originalPutSnapshot(snap);
-          resolveCheckpoint();
-          return res;
-        });
-
-        fireEvent.change(saveInput, { target: { files: [fileToSelect] } });
-        const dialog = await screen.findByRole('dialog');
-
-        await checkpointPromise;
-        await act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-
-        return dialog;
-      };
-
-      // 2. Pre-confirmation cancellation: button click
+      // Pre-confirmation cancellation: button click
       let dialog = await openImportModalAwaitingCheckpoint();
       expect(dialog).toBeDefined();
       expect(
@@ -638,8 +637,15 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
           resumeCallsBaseline + 5,
         );
       }
+    },
+  );
 
-      // 3. Deferred import mutation: protect against Cancel, Escape, backdrop, X button, native cancel event, and same-event dismissal
+  it.each(['running', 'paused'] as const)(
+    'protects pending battery import from duplicate confirmation and every dismissal when initially %s, then boots the exact saved bytes',
+    async (initialStatus) => {
+      const { openImportModalAwaitingCheckpoint } = await startBatteryImportApp(initialStatus);
+
+      // Protect against Cancel, Escape, backdrop, X, native cancel, and same-event dismissal
       const pendingSavData = new Uint8Array(131072);
       pendingSavData.fill(9);
       const pendingFile = new File([pendingSavData], 'backup-pending.sav');
@@ -773,8 +779,21 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(
         loadGameCallsBaseline + 1,
       );
+    },
+  );
 
-      // 4. Test import mutation failure and REAL same-dialog retry
+  it.each(['running', 'paused'] as const)(
+    'preserves battery bytes after a failed import and supports same-dialog retry when initially %s',
+    async (initialStatus) => {
+      const pendingSavData = new Uint8Array(131072).fill(9);
+      await harness.fakeStorage.putBattery({
+        romId: 'stored-emerald',
+        data: pendingSavData.buffer,
+        updatedAt: 1000,
+      });
+      const { openImportModalAwaitingCheckpoint } = await startBatteryImportApp(initialStatus);
+
+      // Import mutation failure and real same-dialog retry
       const failSavData = new Uint8Array(131072);
       failSavData.fill(3);
       const failFile = new File([failSavData], 'backup-fail.sav');

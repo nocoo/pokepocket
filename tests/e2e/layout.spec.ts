@@ -198,73 +198,98 @@ for (const { system, ext, builder } of platforms) {
       'text/shell ratio in native fullscreen',
     );
 
-    // Actually resize viewport while native fullscreen is active
-    await page.setViewportSize({ width: 1280, height: 800 });
+    // Linux Chromium refuses Browser.setWindowBounds while the OS window is fullscreen.
+    // Resize the rendered viewport directly, preserving genuine native fullscreen and
+    // allowing ResizeObserver to react to actual viewport geometry changes.
+    const nativeResizeSession = await page.context().newCDPSession(page);
+    const deviceScaleFactor = await page.evaluate(() => window.devicePixelRatio);
+    const resizeNativeViewport = async (width: number, height: number) => {
+      await nativeResizeSession.send('Emulation.setDeviceMetricsOverride', {
+        width,
+        height,
+        screenWidth: width,
+        screenHeight: height,
+        deviceScaleFactor,
+        mobile: false,
+      });
+      await expect
+        .poll(() => page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight })))
+        .toEqual({ width, height });
+    };
 
-    // Poll until ResizeObserver settles reduced shell dimensions and proper fit within the resized viewport
-    await expect
-      .poll(async () => {
-        const g = await measureGeometry();
-        return (
-          g.viewport.width !== nativeFs.viewport.width &&
-          g.consoleShell.width < nativeFs.consoleShell.width &&
-          g.consoleShell.height < nativeFs.consoleShell.height &&
-          g.consoleWrap.width <= g.viewport.width + 1 &&
-          g.consoleWrap.height <= g.viewport.height + 1
-        );
-      })
-      .toBe(true);
+    let nativeFsResized: GeometrySnapshot;
+    let buttonToShellNativeResized: number;
+    let textToShellNativeResized: number;
+    try {
+      await resizeNativeViewport(1280, 800);
 
-    // Assert document.fullscreenElement remains #game-stage after resize
-    expect(
-      await page.evaluate(
-        () => document.fullscreenElement === document.querySelector('#game-stage'),
-      ),
-    ).toBe(true);
+      // Poll until ResizeObserver settles reduced shell dimensions and proper fit within the resized viewport
+      await expect
+        .poll(async () => {
+          const g = await measureGeometry();
+          return (
+            g.viewport.width !== nativeFs.viewport.width &&
+            g.consoleShell.width < nativeFs.consoleShell.width &&
+            g.consoleShell.height < nativeFs.consoleShell.height &&
+            g.consoleWrap.width <= g.viewport.width + 1 &&
+            g.consoleWrap.height <= g.viewport.height + 1
+          );
+        })
+        .toBe(true);
 
-    const nativeFsResized = await measureGeometry();
-    expect(nativeFsResized.isWindowFull).toBe(true);
-    expect(nativeFsResized.hasHorizontalOverflow).toBe(false);
-    expect(Math.abs(nativeFsResized.centerOffset.dx)).toBeLessThanOrEqual(2);
-    expect(Math.abs(nativeFsResized.centerOffset.dy)).toBeLessThanOrEqual(2);
-    expect(nativeFsResized.consoleWrap.width).toBeLessThanOrEqual(
-      nativeFsResized.viewport.width + 1,
-    );
-    expect(nativeFsResized.consoleWrap.height).toBeLessThanOrEqual(
-      nativeFsResized.viewport.height + 1,
-    );
+      // Assert document.fullscreenElement remains #game-stage after resize
+      expect(
+        await page.evaluate(
+          () => document.fullscreenElement === document.querySelector('#game-stage'),
+        ),
+      ).toBe(true);
 
-    // Shell dimensions must reduce and scale must change
-    expect(nativeFsResized.consoleShell.width).toBeLessThan(nativeFs.consoleShell.width);
-    expect(nativeFsResized.consoleShell.height).toBeLessThan(nativeFs.consoleShell.height);
-    expect(nativeFsResized.transform).not.toBe(nativeFs.transform);
+      nativeFsResized = await measureGeometry();
+      expect(nativeFsResized.isWindowFull).toBe(true);
+      expect(nativeFsResized.hasHorizontalOverflow).toBe(false);
+      expect(Math.abs(nativeFsResized.centerOffset.dx)).toBeLessThanOrEqual(2);
+      expect(Math.abs(nativeFsResized.centerOffset.dy)).toBeLessThanOrEqual(2);
+      expect(nativeFsResized.consoleWrap.width).toBeLessThanOrEqual(
+        nativeFsResized.viewport.width + 1,
+      );
+      expect(nativeFsResized.consoleWrap.height).toBeLessThanOrEqual(
+        nativeFsResized.viewport.height + 1,
+      );
 
-    const buttonToShellNativeResized =
-      nativeFsResized.actionA.width / nativeFsResized.consoleShell.width;
-    const textToShellNativeResized =
-      nativeFsResized.pauseTextRange.width / nativeFsResized.consoleShell.width;
-    checkRelativeTolerance(
-      buttonToShellNativeResized,
-      buttonToShellBaseline,
-      'button/shell ratio in native fullscreen after resize',
-    );
-    checkRelativeTolerance(
-      textToShellNativeResized,
-      textToShellBaseline,
-      'text/shell ratio in native fullscreen after resize',
-    );
+      // Shell dimensions must reduce and scale must change
+      expect(nativeFsResized.consoleShell.width).toBeLessThan(nativeFs.consoleShell.width);
+      expect(nativeFsResized.consoleShell.height).toBeLessThan(nativeFs.consoleShell.height);
+      expect(nativeFsResized.transform).not.toBe(nativeFs.transform);
 
-    // Restore viewport size before exiting native fullscreen
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await expect
-      .poll(async () => (await measureGeometry()).viewport.width)
-      .toBe(nativeFs.viewport.width);
+      buttonToShellNativeResized =
+        nativeFsResized.actionA.width / nativeFsResized.consoleShell.width;
+      textToShellNativeResized =
+        nativeFsResized.pauseTextRange.width / nativeFsResized.consoleShell.width;
+      checkRelativeTolerance(
+        buttonToShellNativeResized,
+        buttonToShellBaseline,
+        'button/shell ratio in native fullscreen after resize',
+      );
+      checkRelativeTolerance(
+        textToShellNativeResized,
+        textToShellBaseline,
+        'text/shell ratio in native fullscreen after resize',
+      );
 
-    // Exit native fullscreen via 'F'
-    await page.keyboard.press('KeyF');
-    await page.waitForFunction(
-      () => !document.fullscreenElement && !document.querySelector('.focus-mode'),
-    );
+      // Restore viewport size before exiting native fullscreen
+      await resizeNativeViewport(1440, 1000);
+      await expect
+        .poll(async () => (await measureGeometry()).viewport.width)
+        .toBe(nativeFs.viewport.width);
+
+      // Exit native fullscreen via 'F'
+      await page.keyboard.press('KeyF');
+      await page.waitForFunction(
+        () => !document.fullscreenElement && !document.querySelector('.focus-mode'),
+      );
+    } finally {
+      await nativeResizeSession.detach();
+    }
 
     // 4. Fallback fullscreen (focus mode) via deliberately rejected requestFullscreen
     await page.evaluate(() => {
