@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1, B2, B3, B4a, and B4b accepted; B4c1 assigned. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1, B2, B3, B4a, B4b, and B4c1 accepted; B4c2 assigned. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -219,8 +219,8 @@ findings through additional atomic fixes, and commits the final implementation/e
 | B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742` | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass             |
 | B4a   | Accepted | `fff1da2`, `8f9f008`                                                        | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed      |
 | B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                       | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass         |
-| B4c1  | Assigned | —                                                                           | Console/MobileControls, Modal, and KeyBindings interactions                                               |
-| B4c2  | Pending  | —                                                                           | CartridgeGallery, SeriesLibrary, SaveSlots, and SnapshotConfirmation interactions                         |
+| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                             | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed           |
+| B4c2  | Assigned | —                                                                           | CartridgeGallery, SeriesLibrary, SaveSlots, and SnapshotConfirmation interactions                         |
 | B4c3  | Pending  | —                                                                           | Rendered App commands with production controllers                                                         |
 | B4c4  | Pending  | —                                                                           | App keyboard/gamepad and browser lifecycle                                                                |
 | B4d   | Pending  | —                                                                           | All four coverage metrics >=90%; L1/G1 pre-commit and commit-message gates                                |
@@ -370,8 +370,8 @@ All B3 review findings are resolved. Browser runners are stopped before the next
 
 ### B4 handoff sequence
 
-The B4 atomic boundaries in section 3 are separate implementation/review handoffs. B4a and B4b are
-accepted. B4c is divided into the four bounded handoffs below; only B4c1 is currently assigned, and pi
+The B4 atomic boundaries in section 3 are separate implementation/review handoffs. B4a, B4b, and B4c1
+are accepted. B4c is divided into the four bounded handoffs below; only B4c2 is currently assigned, and pi
 must stop for review after each. Keep coverage scope and thresholds unchanged until the reviewed
 behavior tests meet all four metrics. DOM dependencies must be pinned exactly, and TSX tests must be
 discovered and strictly typechecked. The existing TypeScript test configuration includes `tests/`;
@@ -454,6 +454,35 @@ The ROM build output now correctly resolves to the repository's `roms/` director
 plugin exports its existing inspection implementation directly rather than adding a forwarding
 wrapper. B4b introduces no dependencies or coverage exclusions. B4c owns the remaining rendered
 application behavior; threshold enforcement and hooks remain B4d work.
+
+### B4c1 acceptance evidence
+
+Reviewed implementation: `10d1e6e`, following `8e1b53d` and `264675d`. Tests mount the actual Console,
+MobileControls, Modal, and KeyBindings components with the production InputController. The first
+atomic commit includes TSX discovery and exact development pins for Testing Library React 16.3.3,
+DOM 10.4.1, and user-event 14.6.6. Existing strict test typechecking covers the new files.
+
+Independent checks on 2026-09-06:
+
+- `bun run test:coverage`: 225 tests across 23 files pass in 0.72 seconds wall time. Coverage is
+  66.94% statements (1266/1891), 53.31% branches (772/1448), 55.02% functions (241/438), and 69.28%
+  lines (1148/1657). The denominator and exclusions are unchanged.
+- `bun run quality:g1`: Biome checks 71 files with zero errors/warnings; TypeScript and formatting
+  pass. `bun run build` passes for the production Worker/client and both distribution checks.
+- Device tests verify ordered pointer down/up/cancel/lost-capture and virtual-key/blur transitions,
+  platform/inactive shoulder controls, boot/loading/error/paused states, and canvas object identity.
+  Resize tests exercise nonzero padding, both limiting dimensions, invalid geometry, collapse,
+  re-expansion, observer ownership, and unmount cleanup.
+- Dialog tests verify title/description references, native opening/closing, content versus backdrop
+  clicks, and prevention of native cancellation while nondismissible. Key capture tests verify
+  modifiers, conflicts and retry, cancellation, repeat handling, reset, secondary removal, and actual
+  listener removal with no response to a DOM event after unmount.
+
+Review replaced manually assigned DOM globals with per-file browser environments, explicit root
+cleanup, and restored mocks. It also replaced assertions that could reuse earlier input events with
+complete transition sequences and required a collapse test while the canvas remains mounted.
+No production source changed. The implementer also reports the unchanged developer HTTP case passing;
+browser geometry and actual WASM remain B7 requirements. B4c2 now owns library and save components.
 
 ## 5. Final acceptance record
 
