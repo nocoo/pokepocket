@@ -237,12 +237,12 @@ describe('App real keyboard and gamepad wiring', () => {
     fireEvent.keyDown(brandLink, { code: 'Space', key: ' ' });
     fireEvent.keyDown(brandLink, { code: 'Enter', key: 'Enter' });
 
-    // Test nested element inside link/button
+    // Test nested element inside link/button: must exist and dispatch unconditionally
     const nestedSpan = brandLink.querySelector('span');
-    if (nestedSpan) {
-      fireEvent.keyDown(nestedSpan, { code: 'Space', key: ' ', bubbles: true });
-      fireEvent.keyDown(nestedSpan, { code: 'Enter', key: 'Enter', bubbles: true });
-    }
+    expect(nestedSpan).not.toBeNull();
+    if (!nestedSpan) throw new Error('Missing nested span inside brandLink');
+    fireEvent.keyDown(nestedSpan, { code: 'Space', key: ' ', bubbles: true });
+    fireEvent.keyDown(nestedSpan, { code: 'Enter', key: 'Enter', bubbles: true });
 
     // Assert exact baselines unchanged: no extra buttonPress (Start), no pauseGame, no putSnapshot
     expect(vi.mocked(harness.testCore.buttonPress).mock.calls.length).toBe(pressCountBeforeGuards);
@@ -659,6 +659,19 @@ describe('App real keyboard and gamepad wiring', () => {
       await returnBatteryPromise;
       await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
       expect(container.querySelector('.app-layout')?.hasAttribute('hidden')).toBe(true);
+
+      // Transition to gallery releases held Pad 0 button A -> assert exact +1 unpress call for A
+      expect(vi.mocked(harness.testCore.buttonUnpress).mock.calls.length).toBe(unpressCalls + 1);
+      expect(harness.testCore.buttonUnpress).toHaveBeenLastCalledWith('A');
+      unpressCalls += 1;
+
+      // Verify exact stored battery ROM identity and payload [1, 2, 3, 4] bytes
+      const storedBattery = await harness.fakeStorage.getBattery('stored-emerald');
+      expect(storedBattery).not.toBeNull();
+      expect(storedBattery?.romId).toBe('stored-emerald');
+      expect(new Uint8Array(storedBattery?.data ?? new ArrayBuffer(0))).toEqual(
+        new Uint8Array([1, 2, 3, 4]),
+      );
 
       // While in library view, poll with still-held pad -> NO new presses occur
       mockPads = [makePad(0, 'pad-one', [0, 1])];
