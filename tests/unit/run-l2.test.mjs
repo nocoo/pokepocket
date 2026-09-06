@@ -195,7 +195,9 @@ describe('run-l2 gate runner policies', () => {
       expect(res).toBe(false);
       expect(process.exitCode).toBe(143);
       expect(loggedErrors.some((e) => e.includes('L2 Gate execution failed:'))).toBe(true);
+      expect(loggedErrors.some((e) => e.includes('Primary execution failure'))).toBe(true);
       expect(loggedErrors.some((e) => e.includes('L2 Gate cleanup failed:'))).toBe(true);
+      expect(loggedErrors.some((e) => e.includes('Injected cleanup secondary failure'))).toBe(true);
     } finally {
       console.error = origError;
       process.exitCode = savedExitCode;
@@ -207,6 +209,11 @@ describe('run-l2 gate runner policies', () => {
     const initialSigint = process.listeners('SIGINT');
     const initialSigterm = process.listeners('SIGTERM');
 
+    let resolveEnteredCleanup;
+    const enteredCleanup = new Promise((resolve) => {
+      resolveEnteredCleanup = resolve;
+    });
+
     let releaseCleanup;
     const cleanupDeferred = new Promise((resolve) => {
       releaseCleanup = resolve;
@@ -214,6 +221,7 @@ describe('run-l2 gate runner policies', () => {
 
     let removedDir = null;
     const deferredRm = async (dir, opts) => {
+      resolveEnteredCleanup();
       await cleanupDeferred;
       removedDir = dir;
       return rm(dir, opts);
@@ -221,15 +229,19 @@ describe('run-l2 gate runner policies', () => {
 
     const fakeRunner = async () => {};
 
+    let gatePromise;
     try {
-      const gatePromise = runL2Gate({
+      gatePromise = runL2Gate({
         commandRunner: fakeRunner,
         rmFn: deferredRm,
         silent: true,
       });
 
-      // Yield macro-task so commands finish and cleanup starts waiting on deferredRm
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      // Wait until rmFn has explicitly entered cleanup
+      await enteredCleanup;
+
+      // Require the extra owned SIGTERM listener is still present
+      expect(process.listeners('SIGTERM').length).toBe(initialSigterm.length + 1);
 
       // Emit SIGTERM while cleanup is in progress
       process.emit('SIGTERM');
@@ -250,38 +262,49 @@ describe('run-l2 gate runner policies', () => {
       expect(process.listeners('SIGINT')).toEqual(initialSigint);
       expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
     } finally {
+      if (releaseCleanup) {
+        releaseCleanup();
+      }
+      if (gatePromise) {
+        await gatePromise.catch(() => {});
+      }
       process.exitCode = savedExitCode;
     }
   });
 
   it('runL2Gate cleans simulated child runtime state when commandRunner is interrupted and fails', async () => {
+    const savedExitCode = process.exitCode;
     let capturedChildRoot = null;
     let simulatedChildState = null;
 
-    const commandRunner = async (commands) => {
-      const cmd = commands[0];
-      if (cmd.command === 'npm') {
-        return;
-      }
-      if (cmd.command === 'npx') {
-        capturedChildRoot = cmd.env?.[RUNTIME_RESOURCE_ROOT_ENV];
-        expect(capturedChildRoot).toBeDefined();
-        simulatedChildState = path.join(capturedChildRoot, 'simulated-child-runtime-state');
-        await mkdir(simulatedChildState, { recursive: true });
-        await writeFile(path.join(simulatedChildState, 'data.txt'), 'isolated-content');
+    try {
+      const commandRunner = async (commands) => {
+        const cmd = commands[0];
+        if (cmd.command === 'npm') {
+          return;
+        }
+        if (cmd.command === 'npx') {
+          capturedChildRoot = cmd.env?.[RUNTIME_RESOURCE_ROOT_ENV];
+          expect(capturedChildRoot).toBeDefined();
+          simulatedChildState = path.join(capturedChildRoot, 'simulated-child-runtime-state');
+          await mkdir(simulatedChildState, { recursive: true });
+          await writeFile(path.join(simulatedChildState, 'data.txt'), 'isolated-content');
 
-        expect((await stat(simulatedChildState)).isDirectory()).toBe(true);
+          expect((await stat(simulatedChildState)).isDirectory()).toBe(true);
 
-        throw new Error('Command terminated by signal SIGTERM');
-      }
-    };
+          throw new Error('Command terminated by signal SIGTERM');
+        }
+      };
 
-    const res = await runL2Gate({ commandRunner, silent: true });
-    expect(res).toBe(false);
+      const res = await runL2Gate({ commandRunner, silent: true });
+      expect(res).toBe(false);
 
-    expect(capturedChildRoot).toBeDefined();
-    const statResult = await stat(capturedChildRoot).catch((e) => e);
-    expect(statResult.code).toBe('ENOENT');
+      expect(capturedChildRoot).toBeDefined();
+      const statResult = await stat(capturedChildRoot).catch((e) => e);
+      expect(statResult.code).toBe('ENOENT');
+    } finally {
+      process.exitCode = savedExitCode;
+    }
   });
 
   it('runL2Gate runs default orchestration through commandRunner seam with deferred build', async () => {
