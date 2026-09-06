@@ -427,18 +427,22 @@ export async function runG2Gate(options = {}) {
 
   let processSigReceived = null;
   const handleSigint = () => {
-    processSigReceived = 'SIGINT';
+    if (processSigReceived === null) {
+      processSigReceived = 'SIGINT';
+    }
     controller.abort(new Error('G2 gate interrupted by SIGINT'));
   };
   const handleSigterm = () => {
-    processSigReceived = 'SIGTERM';
+    if (processSigReceived === null) {
+      processSigReceived = 'SIGTERM';
+    }
     controller.abort(new Error('G2 gate interrupted by SIGTERM'));
   };
 
   const listenToProcess = options.listenToProcess ?? true;
   if (listenToProcess) {
-    process.once('SIGINT', handleSigint);
-    process.once('SIGTERM', handleSigterm);
+    process.on('SIGINT', handleSigint);
+    process.on('SIGTERM', handleSigterm);
   }
 
   try {

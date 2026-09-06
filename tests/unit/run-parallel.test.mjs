@@ -400,8 +400,8 @@ describe('runParallelCommands runner', () => {
 
   it('restores process signal listeners and preserves exitCode in runPreCommitGate', async () => {
     const savedExitCode = process.exitCode;
-    const initialSigintCount = process.listenerCount('SIGINT');
-    const initialSigtermCount = process.listenerCount('SIGTERM');
+    const initialSigint = process.listeners('SIGINT');
+    const initialSigterm = process.listeners('SIGTERM');
 
     try {
       const result = await runPreCommitGate({
@@ -410,8 +410,8 @@ describe('runParallelCommands runner', () => {
         silent: true,
       });
       expect(result).toBe(true);
-      expect(process.listenerCount('SIGINT')).toBe(initialSigintCount);
-      expect(process.listenerCount('SIGTERM')).toBe(initialSigtermCount);
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
 
       // Verify failure path restores listeners as well
       const failResult = await runPreCommitGate({
@@ -422,8 +422,8 @@ describe('runParallelCommands runner', () => {
         silent: true,
       });
       expect(failResult).toBe(false);
-      expect(process.listenerCount('SIGINT')).toBe(initialSigintCount);
-      expect(process.listenerCount('SIGTERM')).toBe(initialSigtermCount);
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
     } finally {
       process.exitCode = savedExitCode;
     }
@@ -495,6 +495,190 @@ describe('runParallelCommands runner', () => {
       expect(process.exitCode).toBe(143);
     } finally {
       console.error = origError;
+      process.exitCode = savedExitCode;
+    }
+  });
+
+  it('retains owned listeners during deferred runner settlement with repeated and mixed signals (SIGTERM first), preserves first abort status, and keeps gate pending until settlement', async () => {
+    const savedExitCode = process.exitCode;
+    const initialSigint = process.listeners('SIGINT');
+    const initialSigterm = process.listeners('SIGTERM');
+
+    let resolveRunnerEntered;
+    const runnerEntered = new Promise((resolve) => {
+      resolveRunnerEntered = resolve;
+    });
+
+    let releaseRunner;
+    const runnerDeferred = new Promise((resolve) => {
+      releaseRunner = resolve;
+    });
+
+    let capturedRunnerSignal = null;
+    let gateSettled = false;
+
+    const deferredRunner = async (_commands, { signal }) => {
+      capturedRunnerSignal = signal;
+      resolveRunnerEntered();
+      await runnerDeferred;
+      if (signal.aborted) {
+        throw new Error(signal.reason?.message || 'Runner aborted');
+      }
+    };
+
+    let gatePromise;
+    try {
+      gatePromise = runPreCommitGate({
+        runner: deferredRunner,
+        silent: true,
+      });
+      gatePromise.finally(() => {
+        gateSettled = true;
+      });
+
+      await runnerEntered;
+
+      // Identify exact owned listeners
+      const currentSigtermListeners = process.listeners('SIGTERM');
+      const currentSigintListeners = process.listeners('SIGINT');
+      expect(currentSigtermListeners.length).toBe(initialSigterm.length + 1);
+      expect(currentSigintListeners.length).toBe(initialSigint.length + 1);
+      const ownedSigtermListener = currentSigtermListeners.find(
+        (fn) => !initialSigterm.includes(fn),
+      );
+      const ownedSigintListener = currentSigintListeners.find((fn) => !initialSigint.includes(fn));
+      expect(ownedSigtermListener).toBeDefined();
+      expect(ownedSigintListener).toBeDefined();
+
+      // Emit first signal: SIGTERM
+      process.emit('SIGTERM');
+
+      // Assert owned listeners remain attached (not dropped by process.once)
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+      expect(capturedRunnerSignal.aborted).toBe(true);
+
+      // Emit repeat signal, then other signal
+      process.emit('SIGTERM');
+      process.emit('SIGINT');
+
+      // Assert owned listeners still remain attached
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+
+      // Verify gate remains pending while runner settlement is delayed
+      expect(gateSettled).toBe(false);
+
+      // Release runner to settle and reject
+      releaseRunner();
+
+      const ok = await gatePromise;
+      expect(ok).toBe(false);
+      // First signal status (SIGTERM -> 143) survives despite subsequent SIGINT
+      expect(process.exitCode).toBe(143);
+
+      // Listener arrays are fully restored
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
+    } finally {
+      if (releaseRunner) {
+        releaseRunner();
+      }
+      if (gatePromise) {
+        await gatePromise.catch(() => {});
+      }
+      process.exitCode = savedExitCode;
+    }
+  });
+
+  it('retains owned listeners during deferred runner settlement with repeated and mixed signals (SIGINT first), preserves first abort status, and keeps gate pending until settlement', async () => {
+    const savedExitCode = process.exitCode;
+    const initialSigint = process.listeners('SIGINT');
+    const initialSigterm = process.listeners('SIGTERM');
+
+    let resolveRunnerEntered;
+    const runnerEntered = new Promise((resolve) => {
+      resolveRunnerEntered = resolve;
+    });
+
+    let releaseRunner;
+    const runnerDeferred = new Promise((resolve) => {
+      releaseRunner = resolve;
+    });
+
+    let capturedRunnerSignal = null;
+    let gateSettled = false;
+
+    const deferredRunner = async (_commands, { signal }) => {
+      capturedRunnerSignal = signal;
+      resolveRunnerEntered();
+      await runnerDeferred;
+      if (signal.aborted) {
+        throw new Error(signal.reason?.message || 'Runner aborted');
+      }
+    };
+
+    let gatePromise;
+    try {
+      gatePromise = runPreCommitGate({
+        runner: deferredRunner,
+        silent: true,
+      });
+      gatePromise.finally(() => {
+        gateSettled = true;
+      });
+
+      await runnerEntered;
+
+      // Identify exact owned listeners
+      const currentSigtermListeners = process.listeners('SIGTERM');
+      const currentSigintListeners = process.listeners('SIGINT');
+      expect(currentSigtermListeners.length).toBe(initialSigterm.length + 1);
+      expect(currentSigintListeners.length).toBe(initialSigint.length + 1);
+      const ownedSigtermListener = currentSigtermListeners.find(
+        (fn) => !initialSigterm.includes(fn),
+      );
+      const ownedSigintListener = currentSigintListeners.find((fn) => !initialSigint.includes(fn));
+      expect(ownedSigtermListener).toBeDefined();
+      expect(ownedSigintListener).toBeDefined();
+
+      // Emit first signal: SIGINT
+      process.emit('SIGINT');
+
+      // Assert owned listeners remain attached
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+      expect(capturedRunnerSignal.aborted).toBe(true);
+
+      // Emit repeat signal, then other signal
+      process.emit('SIGINT');
+      process.emit('SIGTERM');
+
+      // Assert owned listeners still remain attached
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+
+      // Verify gate remains pending while runner settlement is delayed
+      expect(gateSettled).toBe(false);
+
+      // Release runner to settle and reject
+      releaseRunner();
+
+      const ok = await gatePromise;
+      expect(ok).toBe(false);
+      // First signal status (SIGINT -> 130) survives despite subsequent SIGTERM
+      expect(process.exitCode).toBe(130);
+
+      // Listener arrays are fully restored
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
+    } finally {
+      if (releaseRunner) {
+        releaseRunner();
+      }
+      if (gatePromise) {
+        await gatePromise.catch(() => {});
+      }
       process.exitCode = savedExitCode;
     }
   });

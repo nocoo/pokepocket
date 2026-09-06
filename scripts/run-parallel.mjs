@@ -153,16 +153,20 @@ export async function runPreCommitGate(options = {}) {
 
   let signalReceived = null;
   const onSigint = () => {
-    signalReceived = 'SIGINT';
+    if (signalReceived === null) {
+      signalReceived = 'SIGINT';
+    }
     abortController.abort();
   };
   const onSigterm = () => {
-    signalReceived = 'SIGTERM';
+    if (signalReceived === null) {
+      signalReceived = 'SIGTERM';
+    }
     abortController.abort();
   };
 
-  process.once('SIGINT', onSigint);
-  process.once('SIGTERM', onSigterm);
+  process.on('SIGINT', onSigint);
+  process.on('SIGTERM', onSigterm);
 
   try {
     await runner(commands, {

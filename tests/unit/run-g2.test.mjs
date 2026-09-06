@@ -587,6 +587,8 @@ describe('run-g2 policy and unit logic', () => {
 describe('runG2Gate CLI entry and signal handling', () => {
   it('handles SIGINT and maps exitCode to 130', async () => {
     const savedExitCode = process.exitCode;
+    const initialSigint = process.listeners('SIGINT');
+    const initialSigterm = process.listeners('SIGTERM');
     try {
       const mockHangingRunner = async (_cmd, args, opts) => {
         if (args[0] === '--version')
@@ -611,6 +613,8 @@ describe('runG2Gate CLI entry and signal handling', () => {
       });
       expect(ok).toBe(false);
       expect(process.exitCode).toBe(130);
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
     } finally {
       process.exitCode = savedExitCode;
     }
@@ -618,6 +622,8 @@ describe('runG2Gate CLI entry and signal handling', () => {
 
   it('handles SIGTERM and maps exitCode to 143', async () => {
     const savedExitCode = process.exitCode;
+    const initialSigint = process.listeners('SIGINT');
+    const initialSigterm = process.listeners('SIGTERM');
     try {
       const mockHangingRunner = async (_cmd, args, opts) => {
         if (args[0] === '--version')
@@ -642,7 +648,217 @@ describe('runG2Gate CLI entry and signal handling', () => {
       });
       expect(ok).toBe(false);
       expect(process.exitCode).toBe(143);
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
     } finally {
+      process.exitCode = savedExitCode;
+    }
+  });
+
+  it('retains owned listeners during deferred runner settlement with repeated and mixed signals (SIGTERM first), preserves first abort status, and keeps gate pending until settlement', async () => {
+    const savedExitCode = process.exitCode;
+    const initialSigint = process.listeners('SIGINT');
+    const initialSigterm = process.listeners('SIGTERM');
+
+    let resolveScanEntered;
+    const scanEntered = new Promise((resolve) => {
+      resolveScanEntered = resolve;
+    });
+
+    let releaseScan;
+    const scanDeferred = new Promise((resolve) => {
+      releaseScan = resolve;
+    });
+
+    let capturedScanSignal = null;
+    let gateSettled = false;
+
+    const mockDeferredRunner = async (_cmd, args, opts) => {
+      if (args[0] === '--version') {
+        return { code: 0, signal: null, stdout: 'osv-scanner version: 2.5.1\n', stderr: '' };
+      }
+      if (args[0] === 'version') {
+        return { code: 0, signal: null, stdout: '8.30.1\n', stderr: '' };
+      }
+
+      // Finish valid version responses before holding the actual scan
+      capturedScanSignal = opts.signal;
+      resolveScanEntered();
+      await scanDeferred;
+      if (opts.signal?.aborted) {
+        throw new Error(opts.signal.reason?.message || 'Scan aborted');
+      }
+      return { code: 0, signal: null, stdout: 'Scan ok', stderr: '' };
+    };
+
+    let gatePromise;
+    try {
+      gatePromise = runG2Gate({
+        runner: mockDeferredRunner,
+        silent: true,
+        listenToProcess: true,
+      });
+      gatePromise.finally(() => {
+        gateSettled = true;
+      });
+
+      await scanEntered;
+
+      // Identify exact owned listeners
+      const currentSigtermListeners = process.listeners('SIGTERM');
+      const currentSigintListeners = process.listeners('SIGINT');
+      expect(currentSigtermListeners.length).toBe(initialSigterm.length + 1);
+      expect(currentSigintListeners.length).toBe(initialSigint.length + 1);
+      const ownedSigtermListener = currentSigtermListeners.find(
+        (fn) => !initialSigterm.includes(fn),
+      );
+      const ownedSigintListener = currentSigintListeners.find((fn) => !initialSigint.includes(fn));
+      expect(ownedSigtermListener).toBeDefined();
+      expect(ownedSigintListener).toBeDefined();
+
+      // Emit first signal: SIGTERM
+      process.emit('SIGTERM');
+
+      // Assert owned listeners remain attached (not dropped by process.once)
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+      expect(capturedScanSignal.aborted).toBe(true);
+      expect(capturedScanSignal.reason?.message).toBe('G2 gate interrupted by SIGTERM');
+
+      // Emit repeat signal, then other signal
+      process.emit('SIGTERM');
+      process.emit('SIGINT');
+
+      // Assert owned listeners still remain attached and reason preserved
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+      expect(capturedScanSignal.reason?.message).toBe('G2 gate interrupted by SIGTERM');
+
+      // Verify gate remains pending while runner settlement is delayed
+      expect(gateSettled).toBe(false);
+
+      // Release runner to settle and reject
+      releaseScan();
+
+      const ok = await gatePromise;
+      expect(ok).toBe(false);
+      // First signal status (SIGTERM -> 143) survives despite subsequent SIGINT
+      expect(process.exitCode).toBe(143);
+
+      // Listener arrays are fully restored
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
+    } finally {
+      if (releaseScan) {
+        releaseScan();
+      }
+      if (gatePromise) {
+        await gatePromise.catch(() => {});
+      }
+      process.exitCode = savedExitCode;
+    }
+  });
+
+  it('retains owned listeners during deferred runner settlement with repeated and mixed signals (SIGINT first), preserves first abort status, and keeps gate pending until settlement', async () => {
+    const savedExitCode = process.exitCode;
+    const initialSigint = process.listeners('SIGINT');
+    const initialSigterm = process.listeners('SIGTERM');
+
+    let resolveScanEntered;
+    const scanEntered = new Promise((resolve) => {
+      resolveScanEntered = resolve;
+    });
+
+    let releaseScan;
+    const scanDeferred = new Promise((resolve) => {
+      releaseScan = resolve;
+    });
+
+    let capturedScanSignal = null;
+    let gateSettled = false;
+
+    const mockDeferredRunner = async (_cmd, args, opts) => {
+      if (args[0] === '--version') {
+        return { code: 0, signal: null, stdout: 'osv-scanner version: 2.5.1\n', stderr: '' };
+      }
+      if (args[0] === 'version') {
+        return { code: 0, signal: null, stdout: '8.30.1\n', stderr: '' };
+      }
+
+      // Finish valid version responses before holding the actual scan
+      capturedScanSignal = opts.signal;
+      resolveScanEntered();
+      await scanDeferred;
+      if (opts.signal?.aborted) {
+        throw new Error(opts.signal.reason?.message || 'Scan aborted');
+      }
+      return { code: 0, signal: null, stdout: 'Scan ok', stderr: '' };
+    };
+
+    let gatePromise;
+    try {
+      gatePromise = runG2Gate({
+        runner: mockDeferredRunner,
+        silent: true,
+        listenToProcess: true,
+      });
+      gatePromise.finally(() => {
+        gateSettled = true;
+      });
+
+      await scanEntered;
+
+      // Identify exact owned listeners
+      const currentSigtermListeners = process.listeners('SIGTERM');
+      const currentSigintListeners = process.listeners('SIGINT');
+      expect(currentSigtermListeners.length).toBe(initialSigterm.length + 1);
+      expect(currentSigintListeners.length).toBe(initialSigint.length + 1);
+      const ownedSigtermListener = currentSigtermListeners.find(
+        (fn) => !initialSigterm.includes(fn),
+      );
+      const ownedSigintListener = currentSigintListeners.find((fn) => !initialSigint.includes(fn));
+      expect(ownedSigtermListener).toBeDefined();
+      expect(ownedSigintListener).toBeDefined();
+
+      // Emit first signal: SIGINT
+      process.emit('SIGINT');
+
+      // Assert owned listeners remain attached (not dropped by process.once)
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+      expect(capturedScanSignal.aborted).toBe(true);
+      expect(capturedScanSignal.reason?.message).toBe('G2 gate interrupted by SIGINT');
+
+      // Emit repeat signal, then other signal
+      process.emit('SIGINT');
+      process.emit('SIGTERM');
+
+      // Assert owned listeners still remain attached and reason preserved
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+      expect(capturedScanSignal.reason?.message).toBe('G2 gate interrupted by SIGINT');
+
+      // Verify gate remains pending while runner settlement is delayed
+      expect(gateSettled).toBe(false);
+
+      // Release runner to settle and reject
+      releaseScan();
+
+      const ok = await gatePromise;
+      expect(ok).toBe(false);
+      // First signal status (SIGINT -> 130) survives despite subsequent SIGTERM
+      expect(process.exitCode).toBe(130);
+
+      // Listener arrays are fully restored
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
+    } finally {
+      if (releaseScan) {
+        releaseScan();
+      }
+      if (gatePromise) {
+        await gatePromise.catch(() => {});
+      }
       process.exitCode = savedExitCode;
     }
   });
