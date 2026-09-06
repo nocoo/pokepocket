@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "scanners": {
+    "osv": {
+      "name": "osv-scanner",
+      "version": "2.5.1"
+    },
+    "gitleaks": {
+      "name": "gitleaks",
+      "version": "8.30.1"
+    }
+  }
+}

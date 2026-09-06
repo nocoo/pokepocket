@@ -28,6 +28,7 @@
     "verify:access": "node scripts/verify-access.mjs",
     "verify:release": "node scripts/verify-access.mjs --release",
     "quality:l1": "vitest run --coverage",
+    "quality:g2": "node scripts/run-g2.mjs",
     "quality:commit": "node scripts/run-parallel.mjs",
     "prepare": "husky",
     "quality:l2": "node scripts/run-l2.mjs"
