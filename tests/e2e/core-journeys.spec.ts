@@ -26,6 +26,38 @@ function computeRomId(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+function isInitialFixtureFrame(pixels: number[], system: string): boolean {
+  if (!Array.isArray(pixels) || pixels.length < 32) return false;
+  for (let i = 0; i < 8; i++) {
+    if (pixels[i * 4 + 3] !== 255) return false;
+  }
+  if (system === 'GBA') {
+    for (let i = 0; i < 8; i++) {
+      const r = pixels[i * 4] ?? 0;
+      const g = pixels[i * 4 + 1] ?? 0;
+      const b = pixels[i * 4 + 2] ?? 0;
+      if (r < 200 || g > 50 || b > 50) return false;
+    }
+    return true;
+  }
+  for (let i = 0; i < 7; i++) {
+    const curLum = ((pixels[i * 4] ?? 0) + (pixels[i * 4 + 1] ?? 0) + (pixels[i * 4 + 2] ?? 0)) / 3;
+    const nextLum =
+      ((pixels[(i + 1) * 4] ?? 0) +
+        (pixels[(i + 1) * 4 + 1] ?? 0) +
+        (pixels[(i + 1) * 4 + 2] ?? 0)) /
+      3;
+    const curIsLight = curLum > 180;
+    const curIsDark = curLum < 75;
+    const nextIsLight = nextLum > 180;
+    const nextIsDark = nextLum < 75;
+    if (!((curIsLight && nextIsDark) || (curIsDark && nextIsLight))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 test.describe('Core Cartridge Journeys', () => {
   for (const { system, ext, builder } of PLATFORMS) {
     test(`${system}: import, start, pause, resume, and reload from IndexedDB without network`, async ({
@@ -316,8 +348,21 @@ test.describe('Core Cartridge Journeys', () => {
       // Poll until initial real battery is 1
       await expect.poll(getBatteryByte0, { timeout: 15000 }).toBe(1);
 
-      // Sample live frame 1
-      const initialPixels = await sampleCanvasPixels(page);
+      // Poll until live canvas reflects meaningful opaque initial fixture frame, retaining sample as initialPixels
+      let initialPixels: number[] = [];
+      await expect
+        .poll(
+          async () => {
+            const sample = await sampleCanvasPixels(page);
+            if (isInitialFixtureFrame(sample, system)) {
+              initialPixels = sample;
+              return true;
+            }
+            return false;
+          },
+          { timeout: 15000 },
+        )
+        .toBe(true);
       expect(initialPixels.some((v, i) => i % 4 !== 3 && v > 0)).toBe(true);
 
       // Save real snapshot at state 1
