@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   define: { __LOCAL_DEVELOPMENT__: false },
   test: {
-    include: ['tests/unit/**/*.test.{ts,mjs}'],
+    include: ['tests/unit/**/*.test.{ts,tsx,mjs}'],
     environment: 'node',
     coverage: {
       provider: 'v8',
