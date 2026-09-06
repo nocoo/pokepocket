@@ -237,17 +237,17 @@ describe('App cartridge command recovery and competing-command guards', () => {
     if (!originalListSnapshots) throw new Error('Missing original listSnapshots implementation');
 
     let releaseLoad: () => void = () => {};
-    let loadWorkPromise: Promise<unknown> | null = null;
+    let loadWorkPromise: ReturnType<typeof originalListSnapshots> | null = null;
     const loadDeferred = new Promise<void>((resolve) => {
       releaseLoad = resolve;
     });
 
-    vi.mocked(harness.fakeStorage.listSnapshots).mockImplementation(async (romId: string) => {
+    vi.mocked(harness.fakeStorage.listSnapshots).mockImplementation((romId: string) => {
       loadWorkPromise = (async () => {
         await loadDeferred;
         return originalListSnapshots(romId);
       })();
-      return (await loadWorkPromise) as ReturnType<typeof originalListSnapshots>;
+      return loadWorkPromise;
     });
 
     // Spy on actual storage.putCartridge without replacing implementation
@@ -279,8 +279,13 @@ describe('App cartridge command recovery and competing-command guards', () => {
       // Wait until listSnapshots has been called and is deferred
       await waitFor(() => expect(harness.fakeStorage.listSnapshots).toHaveBeenCalledTimes(1));
 
-      // 1. Competing duplicate start attempt
-      await userEvent.click(startBtn);
+      // 1. Competing duplicate start attempt through current live .boot-start button
+      const bootStartBtn = container.querySelector('button.boot-start');
+      expect(bootStartBtn).not.toBeNull();
+      if (!bootStartBtn) throw new Error('Missing boot-start button');
+      expect(bootStartBtn.isConnected).toBe(true);
+      expect((bootStartBtn as HTMLButtonElement).disabled).toBe(true);
+      await userEvent.click(bootStartBtn);
 
       // 2. Competing edition selection attempt from series sidebar
       const rubyRow = container.querySelector('button[aria-label="选择宝可梦 红宝石"]');
@@ -336,13 +341,16 @@ describe('App cartridge command recovery and competing-command guards', () => {
       expect(storedList.length).toBe(3);
       expect(storedList.find((c) => c.fileName === 'dropped.gba')).toBeUndefined();
 
-      // Intended selection and preferences remain emerald
+      // Intended selection and preferences remain emerald while pending
       expect(screen.getByRole('heading', { level: 2, name: '宝可梦 绿宝石' })).toBeDefined();
       expect(localStorage.getItem('pocket-last-cartridge')).toBe('stored-emerald');
       expect(localStorage.getItem('pocket-last-edition')).toBe('emerald');
+      const emeraldSidebarItem = container.querySelector(
+        'button.edition-row[aria-label="选择宝可梦 绿宝石"]',
+      );
+      expect(emeraldSidebarItem?.classList.contains('is-selected')).toBe(true);
     } finally {
       romInput.removeEventListener('click', clickListener);
-      putCartridgeSpy.mockRestore();
       releaseLoad();
       if (loadWorkPromise) await loadWorkPromise;
       await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
@@ -350,6 +358,9 @@ describe('App cartridge command recovery and competing-command guards', () => {
       await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
       harness.flushEmulatorRafs();
       await screen.findByText('正在冒险');
+      // Assert zero post-release storage writes and restore spy
+      expect(putCartridgeSpy).not.toHaveBeenCalled();
+      putCartridgeSpy.mockRestore();
     }
 
     // Now exactly ONE loadGame call occurred for emerald with exact paths
@@ -373,6 +384,14 @@ describe('App cartridge command recovery and competing-command guards', () => {
       harness.testCore.FS.readFile as unknown as (p: string) => Uint8Array
     )('/roms/stored-emerald.gba');
     expect(new Uint8Array(coreRomBytesAfter)).toEqual(originalEmeraldBytes);
+
+    // Selection and preferences remain emerald after completion
+    expect(localStorage.getItem('pocket-last-cartridge')).toBe('stored-emerald');
+    expect(localStorage.getItem('pocket-last-edition')).toBe('emerald');
+    const emeraldSidebarItemAfter = container.querySelector(
+      'button.edition-row[aria-label="选择宝可梦 绿宝石"]',
+    );
+    expect(emeraldSidebarItemAfter?.classList.contains('is-selected')).toBe(true);
 
     expect(container.querySelector('.stage-status')?.textContent).toContain('正在冒险');
     expect(container.querySelector('canvas')).toBe(canvasBefore);
@@ -424,17 +443,17 @@ describe('App cartridge command recovery and competing-command guards', () => {
     if (!originalPutBattery) throw new Error('Missing original putBattery implementation');
 
     let releaseReturn: () => void = () => {};
-    let returnWorkPromise: Promise<unknown> | null = null;
+    let returnWorkPromise: ReturnType<typeof originalPutBattery> | null = null;
     const returnDeferred = new Promise<void>((resolve) => {
       releaseReturn = resolve;
     });
 
-    vi.mocked(harness.fakeStorage.putBattery).mockImplementation(async (save) => {
+    vi.mocked(harness.fakeStorage.putBattery).mockImplementation((save) => {
       returnWorkPromise = (async () => {
         await returnDeferred;
         return originalPutBattery(save);
       })();
-      return (await returnWorkPromise) as ReturnType<typeof originalPutBattery>;
+      return returnWorkPromise;
     });
 
     // Spy on actual storage.putCartridge without replacing implementation
@@ -516,12 +535,22 @@ describe('App cartridge command recovery and competing-command guards', () => {
       const storedList = await storage.listCartridges();
       expect(storedList.length).toBe(3);
       expect(storedList.find((c) => c.fileName === 'dropped2.gba')).toBeUndefined();
+
+      // Intended preferences and sidebar selection remain emerald while pending
+      expect(localStorage.getItem('pocket-last-cartridge')).toBe('stored-emerald');
+      expect(localStorage.getItem('pocket-last-edition')).toBe('emerald');
+      const emeraldSidebarItem = container.querySelector(
+        'button.edition-row[aria-label="选择宝可梦 绿宝石"]',
+      );
+      expect(emeraldSidebarItem?.classList.contains('is-selected')).toBe(true);
     } finally {
       romInput.removeEventListener('click', clickListener);
-      putCartridgeSpy.mockRestore();
       releaseReturn();
       if (returnWorkPromise) await returnWorkPromise;
       await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
+      // Assert zero post-release storage writes and restore spy
+      expect(putCartridgeSpy).not.toHaveBeenCalled();
+      putCartridgeSpy.mockRestore();
     }
 
     // After completion: putBattery count is exactly 1 (zero extra calls)
@@ -533,6 +562,14 @@ describe('App cartridge command recovery and competing-command guards', () => {
     expect(persistedBattery).not.toBeNull();
     if (!persistedBattery) throw new Error('Missing persisted battery');
     expect(new Uint8Array(persistedBattery.data)).toEqual(new Uint8Array([1, 2, 3, 4]));
+
+    // Intended preferences and gallery tray selection remain emerald after completion
+    expect(localStorage.getItem('pocket-last-cartridge')).toBe('stored-emerald');
+    expect(localStorage.getItem('pocket-last-edition')).toBe('emerald');
+    const emeraldTraySlot = container.querySelector(
+      'button.tray-slot[aria-label="选择宝可梦 绿宝石"]',
+    );
+    expect(emeraldTraySlot?.classList.contains('is-selected')).toBe(true);
 
     // Settles return to gallery
     expect(container.querySelector('.app-layout')?.hasAttribute('hidden')).toBe(true);
