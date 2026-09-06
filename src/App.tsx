@@ -311,6 +311,11 @@ export default function App() {
     if (shouldResume) emulator.resume();
   }, [emulator, modalPause, view]);
 
+  const dismissModal = useCallback(() => {
+    if (isOperationBusy()) return;
+    closeModal();
+  }, [closeModal, isOperationBusy]);
+
   const insertCartridge = useCallback(
     async (file: File) => {
       await cartridgeOrchestrator.insertCartridgeFile(file);
@@ -1283,18 +1288,28 @@ export default function App() {
       )}
 
       {modal === 'restart' && (
-        <Modal title="重新开启这段冒险？" eyebrow="BACK TO THE TITLE" onClose={closeModal}>
+        <Modal
+          title="重新开启这段冒险？"
+          eyebrow="BACK TO THE TITLE"
+          onClose={dismissModal}
+          dismissible={!effectiveBusy}
+        >
           <p className="modal-intro">
             掌机会回到游戏标题画面。当前进度会先记录为自动存档，也可以继续读取游戏内的 SAVE。
           </p>
           <div className="modal-actions">
-            <button type="button" className="secondary-button" onClick={closeModal}>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={effectiveBusy}
+              onClick={dismissModal}
+            >
               再玩一会儿
             </button>
             <button
               type="button"
               className="primary-button"
-              disabled={busy}
+              disabled={effectiveBusy}
               onClick={() => {
                 void run(async () => {
                   await emulator.reset();
@@ -1304,27 +1319,37 @@ export default function App() {
               }}
             >
               <RotateCcw size={15} />
-              重新启动
+              {effectiveBusy ? '正在重新启动…' : '重新启动'}
             </button>
           </div>
         </Modal>
       )}
 
       {modal === 'import-save' && (
-        <Modal title="从这份存档继续？" eyebrow="WELCOME BACK" onClose={closeModal}>
+        <Modal
+          title="从这份存档继续？"
+          eyebrow="WELCOME BACK"
+          onClose={dismissModal}
+          dismissible={!effectiveBusy}
+        >
           <p className="modal-intro">
             <strong>{pendingSave?.name}</strong>
             <br />
             将替换当前卡带的游戏存档并重新启动。已有的即时存档仍会保留。
           </p>
           <div className="modal-actions">
-            <button type="button" className="secondary-button" onClick={closeModal}>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={effectiveBusy}
+              onClick={dismissModal}
+            >
               取消
             </button>
             <button
               type="button"
               className="primary-button"
-              disabled={busy || !pendingSave}
+              disabled={effectiveBusy || !pendingSave}
               onClick={() => {
                 if (pendingSave)
                   void run(async () => {
@@ -1336,7 +1361,7 @@ export default function App() {
               }}
             >
               <Upload size={15} />
-              导入并启动
+              {effectiveBusy ? '正在导入…' : '导入并启动'}
             </button>
           </div>
         </Modal>

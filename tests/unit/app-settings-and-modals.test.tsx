@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, cleanup, waitFor, within, fireEvent } from '@testing-library/react';
+import { act, render, screen, cleanup, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   IDBCursor,
@@ -271,14 +271,118 @@ describe('App settings and modal management', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(harness.testCore.quickReload).not.toHaveBeenCalled();
 
-    // 2. Open restart modal again and confirm
+    // 2. Escape and backdrop click dismiss restart modal before confirmation
     await userEvent.click(restartToolbarBtn);
-    const dialogConfirm = await screen.findByRole('dialog');
-    const confirmRestartBtn = within(dialogConfirm).getByRole('button', { name: '重新启动' });
-    await userEvent.click(confirmRestartBtn);
-
-    expect(harness.testCore.quickReload).toHaveBeenCalledTimes(1);
+    const dialogPreConfirm = await screen.findByRole('dialog');
+    fireEvent.keyDown(dialogPreConfirm, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
+
+    await userEvent.click(restartToolbarBtn);
+    const dialogPreConfirm2 = await screen.findByRole('dialog');
+    fireEvent.click(dialogPreConfirm2);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(harness.testCore.quickReload).not.toHaveBeenCalled();
+
+    // 3. Deferred restart mutation: protect against Cancel, Escape, backdrop, and same-event dismissal while pending
+    // First, open the restart modal and wait for opening checkpoint to settle
+    await userEvent.click(restartToolbarBtn);
+    const dialogPending = await screen.findByRole('dialog');
+    const confirmBtnPending = within(dialogPending).getByRole('button', { name: '重新启动' });
+    const cancelBtnPending = within(dialogPending).getByRole('button', { name: '再玩一会儿' });
+
+    // Ensure any opening checkpoint putBattery is completed and settled
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const originalPutBattery = vi.mocked(harness.fakeStorage.putBattery).getMockImplementation();
+    if (!originalPutBattery) throw new Error('Missing original putBattery implementation');
+
+    let releaseRestart: () => void = () => {};
+    let restartWorkPromise: ReturnType<typeof originalPutBattery> | null = null;
+    const restartDeferred = new Promise<void>((resolve) => {
+      releaseRestart = resolve;
+    });
+
+    const putBatteryCallsBaseline = vi.mocked(harness.fakeStorage.putBattery).mock.calls.length;
+
+    vi.mocked(harness.fakeStorage.putBattery).mockImplementation((save) => {
+      restartWorkPromise = (async () => {
+        await restartDeferred;
+        return originalPutBattery(save);
+      })();
+      return restartWorkPromise;
+    });
+
+    try {
+      // Same-event synchronous dismissal attempt: confirm and immediately cancel before any turn
+      act(() => {
+        (confirmBtnPending as HTMLButtonElement).click();
+        (cancelBtnPending as HTMLButtonElement).click();
+      });
+
+      // Wait until reset's putBattery has been called and is deferred
+      await waitFor(() =>
+        expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(
+          putBatteryCallsBaseline + 1,
+        ),
+      );
+
+      // Advance event loop turn
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      // Dialog stays open and non-dismissible
+      expect(screen.getByRole('dialog')).toBeDefined();
+      expect(within(dialogPending).getByRole('button', { name: '正在重新启动…' })).toBeDefined();
+      expect(cancelBtnPending.hasAttribute('disabled')).toBe(true);
+
+      // Attempt cancel, Escape, and backdrop click while busy -> all rejected
+      await userEvent.click(cancelBtnPending);
+      fireEvent.keyDown(dialogPending, { key: 'Escape' });
+      fireEvent.click(dialogPending);
+
+      expect(screen.getByRole('dialog')).toBeDefined();
+      expect(harness.testCore.quickReload).not.toHaveBeenCalled();
+    } finally {
+      releaseRestart();
+      if (restartWorkPromise) await restartWorkPromise;
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    }
+
+    // After release, quickReload executes exactly once and game resumes running
+    expect(harness.testCore.quickReload).toHaveBeenCalledTimes(1);
+    await screen.findByText('正在冒险');
+
+    // 4. Test restart mutation failure: keeps dialog retryable and succeeds on retry
+    await userEvent.click(restartToolbarBtn);
+    const dialogRetry = await screen.findByRole('dialog');
+    const confirmRetryBtn = within(dialogRetry).getByRole('button', { name: '重新启动' });
+
+    // Wait for opening checkpoint to settle before installing rejection
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    vi.mocked(harness.fakeStorage.putBattery).mockRejectedValueOnce(
+      new Error('Storage quota exceeded'),
+    );
+
+    await userEvent.click(confirmRetryBtn);
+
+    // Toast error shown
+    expect(await screen.findByRole('alert')).toBeDefined();
+    expect(screen.getByText(/Storage quota exceeded/)).toBeDefined();
+
+    // Dialog remains open and retryable
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(confirmRetryBtn.hasAttribute('disabled')).toBe(false);
+
+    // Successful retry
+    await userEvent.click(confirmRetryBtn);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(harness.testCore.quickReload).toHaveBeenCalledTimes(2);
   });
 
   it('restores persisted settings on fresh mount and keeps memory state usable when localStorage.setItem rejects', async () => {
