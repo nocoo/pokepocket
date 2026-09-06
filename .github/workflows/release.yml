@@ -22,37 +22,64 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve:
+    name: Resolve Release Target
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      target-sha: ${{ steps.resolve.outputs.target_sha }}
+      version: ${{ steps.resolve.outputs.version }}
+      event-type: ${{ steps.resolve.outputs.event_type }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+
+      - name: Resolve and validate target commit
+        id: resolve
+        run: node scripts/resolve-release.mjs
+        env:
+          EVENT_PATH: ${{ github.event_path }}
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          INPUT_TAG: ${{ inputs.tag }}
+
+  quality:
+    name: Quality Gates
+    needs: [resolve]
+    uses: ./.github/workflows/quality.yml
+    with:
+      target-sha: ${{ needs.resolve.outputs.target-sha }}
+
   deploy:
     name: Deploy Worker
-    if: >-
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main' &&
-       github.event.workflow_run.head_repository.full_name == github.repository)
+    needs: [resolve, quality]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
     steps:
-      - name: Checkout the tested commit or release tag
+      - name: Checkout verified release commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || inputs.tag || github.ref }}
+          ref: ${{ needs.quality.outputs.tested-sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Verify release version
-        if: github.event_name != 'workflow_run'
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-        run: |
-          TAG="${INPUT_TAG:-$GITHUB_REF_NAME}"
-          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Expected a vMAJOR.MINOR.PATCH tag" >&2
-            exit 1
-          fi
-          PKG_VERSION=$(jq -r .version package.json)
-          if [ "$PKG_VERSION" != "${TAG#v}" ]; then
-            echo "Tag $TAG does not match package.json version $PKG_VERSION" >&2
-            exit 1
-          fi
+      - name: Fetch current remote main tip for freshness check
+        if: github.event_name == 'workflow_run'
+        run: git fetch origin main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -62,10 +89,16 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build and test
-        run: |
-          bun run build
-          bun run test
+      - name: Check freshness and verify deploy target
+        run: node scripts/verify-deploy.mjs
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_SHA: ${{ needs.quality.outputs.tested-sha }}
+          RESOLVED_SHA: ${{ needs.resolve.outputs.target-sha }}
+          EXPECTED_VERSION: ${{ needs.resolve.outputs.version }}
+
+      - name: Build release assets
+        run: bun run build
 
       - name: Verify Access before deploying
         run: bun run verify:access
