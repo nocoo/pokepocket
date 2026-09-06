@@ -203,14 +203,19 @@ describe('App cartridge command recovery and competing-command guards', () => {
     },
   );
 
-  it('guards against competing start, edition switch, file drop, and return during deferred cartridge load', async () => {
+  it('guards against competing start, edition switch, local cartridge selection, picker open, file drop, and return during deferred cartridge load', async () => {
     const emeraldCart = createCartridge('stored-emerald');
     const rubyCart = createCartridge('stored-ruby', {
       header: { ...emeraldCart.header, editionId: 'ruby', title: 'POKEMON RUBY' },
       fileName: 'pokemon-ruby.gba',
     });
+    const customCart = createCartridge('stored-custom', {
+      header: { ...emeraldCart.header, editionId: null, title: 'CUSTOM REV' },
+      fileName: 'custom-rev.gba',
+    });
     await storage.putCartridge(emeraldCart);
     await storage.putCartridge(rubyCart);
+    await storage.putCartridge(customCart);
     localStorage.setItem('pocket-last-cartridge', 'stored-emerald');
     localStorage.setItem('pocket-last-edition', 'emerald');
 
@@ -222,6 +227,9 @@ describe('App cartridge command recovery and competing-command guards', () => {
       }),
     );
 
+    // Baseline storage bytes
+    const originalEmeraldBytes = new Uint8Array(emeraldCart.data);
+
     // Defer emulator.load via fakeStorage.listSnapshots
     const originalListSnapshots = vi
       .mocked(harness.fakeStorage.listSnapshots)
@@ -229,18 +237,21 @@ describe('App cartridge command recovery and competing-command guards', () => {
     if (!originalListSnapshots) throw new Error('Missing original listSnapshots implementation');
 
     let releaseLoad: () => void = () => {};
-    let loadDeferredPromise: Promise<void> | null = null;
+    let loadWorkPromise: Promise<unknown> | null = null;
     const loadDeferred = new Promise<void>((resolve) => {
       releaseLoad = resolve;
     });
 
     vi.mocked(harness.fakeStorage.listSnapshots).mockImplementation(async (romId: string) => {
-      loadDeferredPromise = (async () => {
+      loadWorkPromise = (async () => {
         await loadDeferred;
+        return originalListSnapshots(romId);
       })();
-      await loadDeferredPromise;
-      return originalListSnapshots(romId);
+      return (await loadWorkPromise) as ReturnType<typeof originalListSnapshots>;
     });
+
+    // Spy on actual storage.putCartridge without replacing implementation
+    const putCartridgeSpy = vi.spyOn(storage, 'putCartridge');
 
     const { container } = render(<App />);
     await screen.findByText('本地存储已就绪');
@@ -249,6 +260,17 @@ describe('App cartridge command recovery and competing-command guards', () => {
     expect(canvasBefore).not.toBeNull();
 
     const startBtn = screen.getByRole('button', { name: '开始冒险' });
+
+    // Track file picker click
+    const romInput = container.querySelector(
+      'input[type="file"][accept*=".gba"]',
+    ) as HTMLInputElement;
+    expect(romInput).not.toBeNull();
+    let pickerClicked = false;
+    const clickListener = () => {
+      pickerClicked = true;
+    };
+    romInput.addEventListener('click', clickListener);
 
     try {
       // Trigger initial adventure start -> goes busy and awaits deferred load
@@ -266,7 +288,24 @@ describe('App cartridge command recovery and competing-command guards', () => {
       if (!rubyRow) throw new Error('Missing ruby row');
       await userEvent.click(rubyRow);
 
-      // 3. Competing file drop attempt
+      // 3. Competing local custom cartridge selection from sidebar details
+      const localDetails = container.querySelector('details.local-cartridges');
+      expect(localDetails).not.toBeNull();
+      if (!localDetails) throw new Error('Missing localDetails');
+      (localDetails as HTMLDetailsElement).open = true;
+
+      const customBtn = screen.getByRole('button', { name: '载入本地卡带 custom-rev.gba' });
+      expect(customBtn).toBeDefined();
+      await userEvent.click(customBtn);
+
+      // 4. Competing attempt to open ROM picker by clicking an unavailable edition
+      const leafgreenRow = container.querySelector('button[aria-label="选择宝可梦 叶绿"]');
+      expect(leafgreenRow).not.toBeNull();
+      if (!leafgreenRow) throw new Error('Missing leafgreen row');
+      await userEvent.click(leafgreenRow);
+      expect(pickerClicked).toBe(false); // Picker click must not be triggered while busy
+
+      // 5. Competing file drop attempt
       const dropZone = container.querySelector('.pocket-app');
       expect(dropZone).not.toBeNull();
       if (!dropZone) throw new Error('Missing dropZone');
@@ -278,7 +317,7 @@ describe('App cartridge command recovery and competing-command guards', () => {
         },
       });
 
-      // 4. Competing return to gallery attempt
+      // 6. Competing return to gallery attempt
       const backBtn = screen.getByRole('button', { name: '返回卡带盘' });
       expect(backBtn.hasAttribute('disabled')).toBe(true);
       await userEvent.click(backBtn);
@@ -288,34 +327,53 @@ describe('App cartridge command recovery and competing-command guards', () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
-      // loadGame has not completed yet while load is deferred
+      // Zero loadGame calls and zero storage.putCartridge calls executed while load is deferred
       expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(0);
+      expect(putCartridgeSpy).not.toHaveBeenCalled();
 
       // Stored cartridges unchanged (droppedFile was rejected)
       const storedList = await storage.listCartridges();
-      expect(storedList.length).toBe(2);
+      expect(storedList.length).toBe(3);
       expect(storedList.find((c) => c.fileName === 'dropped.gba')).toBeUndefined();
 
-      // Edition remains emerald
+      // Intended selection and preferences remain emerald
       expect(screen.getByRole('heading', { level: 2, name: '宝可梦 绿宝石' })).toBeDefined();
+      expect(localStorage.getItem('pocket-last-cartridge')).toBe('stored-emerald');
+      expect(localStorage.getItem('pocket-last-edition')).toBe('emerald');
     } finally {
+      romInput.removeEventListener('click', clickListener);
+      putCartridgeSpy.mockRestore();
       releaseLoad();
-      if (loadDeferredPromise) await loadDeferredPromise;
+      if (loadWorkPromise) await loadWorkPromise;
+      await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
+      harness.flushEmulatorRafs();
+      await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
+      harness.flushEmulatorRafs();
+      await screen.findByText('正在冒险');
     }
 
-    // Flush RAFs after load settles
-    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
-    harness.flushEmulatorRafs();
-    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
-    harness.flushEmulatorRafs();
-
-    // Now exactly ONE loadGame call occurred for emerald
+    // Now exactly ONE loadGame call occurred for emerald with exact paths
     expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(1);
     expect(vi.mocked(harness.testCore.loadGame).mock.calls[0]?.[0]).toBe(
       '/roms/stored-emerald.gba',
     );
+    expect(vi.mocked(harness.testCore.loadGame).mock.calls[0]?.[1]).toBe(
+      '/saves/stored-emerald.sav',
+    );
 
-    await screen.findByText('正在冒险');
+    // Exact stored and core FS ROM bytes match original
+    const storedEmeraldAfter = (await storage.listCartridges()).find(
+      (c) => c.id === 'stored-emerald',
+    );
+    expect(storedEmeraldAfter).toBeDefined();
+    if (!storedEmeraldAfter) throw new Error('Missing stored emerald');
+    expect(new Uint8Array(storedEmeraldAfter.data)).toEqual(originalEmeraldBytes);
+
+    const coreRomBytesAfter = (
+      harness.testCore.FS.readFile as unknown as (p: string) => Uint8Array
+    )('/roms/stored-emerald.gba');
+    expect(new Uint8Array(coreRomBytesAfter)).toEqual(originalEmeraldBytes);
+
     expect(container.querySelector('.stage-status')?.textContent).toContain('正在冒险');
     expect(container.querySelector('canvas')).toBe(canvasBefore);
   });
@@ -326,8 +384,13 @@ describe('App cartridge command recovery and competing-command guards', () => {
       header: { ...emeraldCart.header, editionId: 'ruby', title: 'POKEMON RUBY' },
       fileName: 'pokemon-ruby.gba',
     });
+    const customCart = createCartridge('stored-custom', {
+      header: { ...emeraldCart.header, editionId: null, title: 'CUSTOM REV' },
+      fileName: 'custom-rev.gba',
+    });
     await storage.putCartridge(emeraldCart);
     await storage.putCartridge(rubyCart);
+    await storage.putCartridge(customCart);
     localStorage.setItem('pocket-last-cartridge', 'stored-emerald');
     localStorage.setItem('pocket-last-edition', 'emerald');
 
@@ -361,18 +424,32 @@ describe('App cartridge command recovery and competing-command guards', () => {
     if (!originalPutBattery) throw new Error('Missing original putBattery implementation');
 
     let releaseReturn: () => void = () => {};
-    let returnDeferredPromise: Promise<void> | null = null;
+    let returnWorkPromise: Promise<unknown> | null = null;
     const returnDeferred = new Promise<void>((resolve) => {
       releaseReturn = resolve;
     });
 
     vi.mocked(harness.fakeStorage.putBattery).mockImplementation(async (save) => {
-      returnDeferredPromise = (async () => {
+      returnWorkPromise = (async () => {
         await returnDeferred;
+        return originalPutBattery(save);
       })();
-      await returnDeferredPromise;
-      return originalPutBattery(save);
+      return (await returnWorkPromise) as ReturnType<typeof originalPutBattery>;
     });
+
+    // Spy on actual storage.putCartridge without replacing implementation
+    const putCartridgeSpy = vi.spyOn(storage, 'putCartridge');
+
+    // Track file picker click
+    const romInput = container.querySelector(
+      'input[type="file"][accept*=".gba"]',
+    ) as HTMLInputElement;
+    expect(romInput).not.toBeNull();
+    let pickerClicked = false;
+    const clickListener = () => {
+      pickerClicked = true;
+    };
+    romInput.addEventListener('click', clickListener);
 
     const backBtn = screen.getByRole('button', { name: '返回卡带盘' });
     vi.mocked(harness.testCore.loadGame).mockClear();
@@ -392,7 +469,24 @@ describe('App cartridge command recovery and competing-command guards', () => {
       if (!rubyRow) throw new Error('Missing ruby row');
       await userEvent.click(rubyRow);
 
-      // 3. Competing file drop attempt
+      // 3. Competing local custom cartridge selection from sidebar details
+      const localDetails = container.querySelector('details.local-cartridges');
+      expect(localDetails).not.toBeNull();
+      if (!localDetails) throw new Error('Missing localDetails');
+      (localDetails as HTMLDetailsElement).open = true;
+
+      const customBtn = screen.getByRole('button', { name: '载入本地卡带 custom-rev.gba' });
+      expect(customBtn).toBeDefined();
+      await userEvent.click(customBtn);
+
+      // 4. Competing attempt to open ROM picker by selecting an unavailable edition
+      const leafgreenRow = container.querySelector('button[aria-label="选择宝可梦 叶绿"]');
+      expect(leafgreenRow).not.toBeNull();
+      if (!leafgreenRow) throw new Error('Missing leafgreen row');
+      await userEvent.click(leafgreenRow);
+      expect(pickerClicked).toBe(false);
+
+      // 5. Competing file drop attempt
       const dropZone = container.querySelector('.pocket-app');
       expect(dropZone).not.toBeNull();
       if (!dropZone) throw new Error('Missing dropZone');
@@ -404,32 +498,43 @@ describe('App cartridge command recovery and competing-command guards', () => {
         },
       });
 
-      // 4. Competing file input change
-      const romInput = container.querySelector(
-        'input[type="file"][accept*=".gba"]',
-      ) as HTMLInputElement;
-      expect(romInput).not.toBeNull();
-      if (!romInput) throw new Error('Missing romInput');
+      // 6. Competing file input change
       fireEvent.change(romInput, { target: { files: [droppedFile] } });
 
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
-      // No new loadGame called during return
+      // Assert putBattery count is STILL 1 while return is pending
+      expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(1);
+
+      // Zero new loadGame calls and zero storage.putCartridge calls
       expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(0);
+      expect(putCartridgeSpy).not.toHaveBeenCalled();
 
       // Stored cartridges unchanged (dropped file rejected)
       const storedList = await storage.listCartridges();
-      expect(storedList.length).toBe(2);
+      expect(storedList.length).toBe(3);
       expect(storedList.find((c) => c.fileName === 'dropped2.gba')).toBeUndefined();
     } finally {
+      romInput.removeEventListener('click', clickListener);
+      putCartridgeSpy.mockRestore();
       releaseReturn();
-      if (returnDeferredPromise) await returnDeferredPromise;
+      if (returnWorkPromise) await returnWorkPromise;
+      await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
     }
 
+    // After completion: putBattery count is exactly 1 (zero extra calls)
+    expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(1);
+    expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(0);
+
+    // Persisted original battery save bytes exist and match [1, 2, 3, 4]
+    const persistedBattery = await harness.fakeStorage.getBattery('stored-emerald');
+    expect(persistedBattery).not.toBeNull();
+    if (!persistedBattery) throw new Error('Missing persisted battery');
+    expect(new Uint8Array(persistedBattery.data)).toEqual(new Uint8Array([1, 2, 3, 4]));
+
     // Settles return to gallery
-    await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
     expect(container.querySelector('.app-layout')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('.stage-status')?.textContent).toContain('已暂停');
     expect(container.querySelector('canvas')).toBe(canvasBefore);
