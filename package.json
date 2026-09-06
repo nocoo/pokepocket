@@ -31,7 +31,8 @@
     "quality:g2": "node scripts/run-g2.mjs",
     "quality:commit": "node scripts/run-parallel.mjs",
     "prepare": "husky",
-    "quality:l2": "node scripts/run-l2.mjs"
+    "quality:l2": "node scripts/run-l2.mjs",
+    "quality:push": "node scripts/run-push.mjs"
   },
   "dependencies": {
     "@fontsource/dm-sans": "5.3.0",

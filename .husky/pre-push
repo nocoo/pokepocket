@@ -1,0 +1,2 @@
+#!/bin/sh
+node scripts/run-push.mjs --pre-push

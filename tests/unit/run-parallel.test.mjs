@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chmod, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { runParallelCommands, runPreCommitGate } from '../../scripts/run-parallel.mjs';
@@ -43,14 +43,16 @@ describe('runParallelCommands runner', () => {
               '-e',
               `
               import fs from 'node:fs';
-              fs.writeFileSync('${job1Ready}', '1');
+              fs.writeFileSync(process.argv[1], '1');
               const start = Date.now();
-              while (!fs.existsSync('${job2Ready}')) {
+              while (!fs.existsSync(process.argv[2])) {
                 if (Date.now() - start > 4000) process.exit(1);
                 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
               }
               process.exit(0);
               `,
+              job1Ready,
+              job2Ready,
             ],
           },
           {
@@ -59,14 +61,16 @@ describe('runParallelCommands runner', () => {
               '-e',
               `
               import fs from 'node:fs';
-              fs.writeFileSync('${job2Ready}', '1');
+              fs.writeFileSync(process.argv[1], '1');
               const start = Date.now();
-              while (!fs.existsSync('${job1Ready}')) {
+              while (!fs.existsSync(process.argv[2])) {
                 if (Date.now() - start > 4000) process.exit(1);
                 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
               }
               process.exit(0);
               `,
+              job2Ready,
+              job1Ready,
             ],
           },
         ],
@@ -142,13 +146,17 @@ describe('runParallelCommands runner', () => {
     const descendantPidFile = path.join(tempDir, 'descendant.pid');
     const descendantReadyFile = path.join(tempDir, 'descendant-ready');
 
-    let capturedParentPid = null;
-    let capturedDescendantPid = null;
+    const capturedPids = [];
+    const spawnWithCapture = (cmd, args, opts) => {
+      const { spawn: baseSpawn } = require('node:child_process');
+      const child = baseSpawn(cmd, args, opts);
+      if (typeof child.pid === 'number') {
+        capturedPids.push(child.pid);
+      }
+      return child;
+    };
 
     try {
-      // Descendant installs SIGTERM handler FIRST, publishes PID and ready signal.
-      // Peer waits for descendant-ready file, then fails with exit code 1.
-      // Runner must terminate both parent and TERM-ignoring descendant.
       await expect(
         runParallelCommands(
           [
@@ -158,13 +166,15 @@ describe('runParallelCommands runner', () => {
                 '-e',
                 `
                 import fs from 'node:fs';
+                const readyFile = process.argv[1];
                 const start = Date.now();
-                while (!fs.existsSync('${descendantReadyFile}')) {
+                while (!fs.existsSync(readyFile)) {
                   if (Date.now() - start > 4000) process.exit(2);
                   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
                 }
                 process.exit(1);
                 `,
+                descendantReadyFile,
               ],
             },
             {
@@ -174,47 +184,141 @@ describe('runParallelCommands runner', () => {
                 `
                 import { spawn } from 'node:child_process';
                 import fs from 'node:fs';
-                fs.writeFileSync('${parentPidFile}', String(process.pid));
-                // Descendant ignores SIGTERM
+                const [pPidFile, dPidFile, dReadyFile] = [process.argv[1], process.argv[2], process.argv[3]];
+                fs.writeFileSync(pPidFile, String(process.pid));
                 const sub = spawn('node', [
                   '-e',
                   \`
                   import fs from 'node:fs';
+                  const [pidFile, readyFile] = [process.argv[1], process.argv[2]];
                   process.on('SIGTERM', () => {});
-                  fs.writeFileSync('${descendantPidFile}', String(process.pid));
-                  fs.writeFileSync('${descendantReadyFile}', 'ready');
+                  fs.writeFileSync(pidFile, String(process.pid));
+                  fs.writeFileSync(readyFile, 'ready');
                   setInterval(() => {}, 1000);
-                  \`
+                  \`,
+                  dPidFile,
+                  dReadyFile,
                 ], { stdio: 'ignore' });
                 setInterval(() => {}, 1000);
                 `,
+                parentPidFile,
+                descendantPidFile,
+                descendantReadyFile,
               ],
             },
           ],
-          { escalationGraceMs: 300 },
+          { spawn: spawnWithCapture, escalationGraceMs: 300 },
         ),
       ).rejects.toThrow('exited with code 1');
 
-      // Unconditionally read captured PIDs
-      capturedParentPid = Number((await readFile(parentPidFile, 'utf8')).trim());
-      capturedDescendantPid = Number((await readFile(descendantPidFile, 'utf8')).trim());
+      let descendantPid = null;
+      try {
+        descendantPid = Number((await readFile(descendantPidFile, 'utf8')).trim());
+        if (descendantPid) capturedPids.push(descendantPid);
+      } catch {}
 
-      expect(capturedParentPid).toBeGreaterThan(0);
-      expect(capturedDescendantPid).toBeGreaterThan(0);
-
-      // Wait for escalation to settle any lingering processes
-      const survivors = await settleChildren([capturedParentPid, capturedDescendantPid], 2000);
+      const survivors = await settleChildren(capturedPids, 2000);
       expect(survivors).toEqual([]);
     } finally {
-      // Clean up only our captured PIDs if anything survived
-      if (capturedParentPid) {
+      for (const pid of capturedPids) {
         try {
-          process.kill(capturedParentPid, 'SIGKILL');
+          process.kill(pid, 'SIGKILL');
         } catch {}
       }
-      if (capturedDescendantPid) {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('terminates TERM-ignoring descendant when coordinator aborts with SIGTERM', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'parallel-abort-descendant-'));
+    const parentPidFile = path.join(tempDir, 'parent.pid');
+    const descendantPidFile = path.join(tempDir, 'descendant.pid');
+    const descendantReadyFile = path.join(tempDir, 'descendant-ready');
+
+    const capturedPids = [];
+    const spawnWithCapture = (cmd, args, opts) => {
+      const { spawn: baseSpawn } = require('node:child_process');
+      const child = baseSpawn(cmd, args, opts);
+      if (typeof child.pid === 'number') {
+        capturedPids.push(child.pid);
+      }
+      return child;
+    };
+
+    const abortController = new AbortController();
+    let runPromise = null;
+
+    try {
+      runPromise = runParallelCommands(
+        [
+          {
+            command: 'node',
+            args: [
+              '-e',
+              `
+              import { spawn } from 'node:child_process';
+              import fs from 'node:fs';
+              const [pPidFile, dPidFile, dReadyFile] = [process.argv[1], process.argv[2], process.argv[3]];
+              fs.writeFileSync(pPidFile, String(process.pid));
+              const sub = spawn('node', [
+                '-e',
+                \`
+                import fs from 'node:fs';
+                const [pidFile, readyFile] = [process.argv[1], process.argv[2]];
+                process.on('SIGTERM', () => {});
+                fs.writeFileSync(pidFile, String(process.pid));
+                fs.writeFileSync(readyFile, 'ready');
+                setInterval(() => {}, 1000);
+                \`,
+                dPidFile,
+                dReadyFile,
+              ], { stdio: 'ignore' });
+              setInterval(() => {}, 1000);
+              `,
+              parentPidFile,
+              descendantPidFile,
+              descendantReadyFile,
+            ],
+          },
+        ],
+        { spawn: spawnWithCapture, signal: abortController.signal, escalationGraceMs: 300 },
+      );
+      runPromise.catch(() => {});
+
+      // Wait until descendant is ready
+      const start = Date.now();
+      while (true) {
         try {
-          process.kill(capturedDescendantPid, 'SIGKILL');
+          await readFile(descendantReadyFile, 'utf8');
+          break;
+        } catch {
+          if (Date.now() - start > 4000) throw new Error('Timeout waiting for descendant ready');
+          await delay(25);
+        }
+      }
+
+      // Abort coordinator
+      abortController.abort();
+
+      await expect(runPromise).rejects.toThrow('aborted by signal');
+
+      try {
+        const descendantPid = Number((await readFile(descendantPidFile, 'utf8')).trim());
+        if (descendantPid) capturedPids.push(descendantPid);
+      } catch {}
+
+      const survivors = await settleChildren(capturedPids, 2000);
+      expect(survivors).toEqual([]);
+    } finally {
+      abortController.abort();
+      if (runPromise) {
+        try {
+          await runPromise;
+        } catch {}
+      }
+      for (const pid of capturedPids) {
+        try {
+          process.kill(pid, 'SIGKILL');
         } catch {}
       }
       await rm(tempDir, { recursive: true, force: true });
@@ -419,12 +523,14 @@ describe('runParallelCommands runner', () => {
                 '-e',
                 `
               import fs from 'node:fs';
+              const readyFile = process.argv[1];
               process.on('SIGTERM', () => {
                 process.exit(3);
               });
-              fs.writeFileSync('${peerReadyFile}', 'ready');
+              fs.writeFileSync(readyFile, 'ready');
               setInterval(() => {}, 1000);
               `,
+                peerReadyFile,
               ],
             },
             // Job waits for peer readiness, then exits 2 (triggering cleanup SIGTERM to peer)
@@ -434,13 +540,15 @@ describe('runParallelCommands runner', () => {
                 '-e',
                 `
               import fs from 'node:fs';
+              const readyFile = process.argv[1];
               const start = Date.now();
-              while (!fs.existsSync('${peerReadyFile}')) {
+              while (!fs.existsSync(readyFile)) {
                 if (Date.now() - start > 4000) process.exit(1);
                 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
               }
               process.exit(2);
               `,
+                peerReadyFile,
               ],
             },
           ],
@@ -453,6 +561,7 @@ describe('runParallelCommands runner', () => {
   });
 
   it('honors custom cwd, env, and stdio options with real child output', async () => {
+    const { realpath } = await import('node:fs/promises');
     const tempDir = await realpath(await mkdtemp(path.join(tmpdir(), 'parallel-cwd-env-')));
     const outFile = path.join(tempDir, 'out.txt');
 
@@ -464,8 +573,9 @@ describe('runParallelCommands runner', () => {
             '-e',
             `
             import fs from 'node:fs';
-            fs.writeFileSync('${outFile}', process.cwd() + '|' + process.env.TEST_FOO);
+            fs.writeFileSync(process.argv[1], process.cwd() + '|' + process.env.TEST_FOO);
             `,
+            outFile,
           ],
           cwd: tempDir,
           env: { TEST_FOO: 'pokepocket-parallel-env' },
@@ -530,6 +640,7 @@ describe('runParallelCommands runner', () => {
       }
     }
   });
+
   it('formats error message without args array using owned executable fixtures for exit code and signal', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'parallel-exec-format-'));
     const exit4Script = path.join(tempDir, 'exit4.sh');
