@@ -251,7 +251,7 @@ findings through additional atomic fixes, and commits the final implementation/e
 | B4c2  | Accepted | `b1933ca`, `d08a034`                                                                                                                                                                                                                             | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                                   |
 | B4c3  | Accepted | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`, `6f93cc3`, `5fbd930`, `fc8bb52`, `f43069d`, `7d5383f`, `c3a1a36`, `bf8cc79`, `6d629ad`, `79d725c`, `76aea87`, `7ed6ad8`, `850c683`, `e984a6f`, `624322f`, `757a0ed`, `133afc8` | 286 unit tests; independent G1/coverage and modal checkpoint payload/recovery review pass; all B4c3 follow-ups accepted                 |
 | B4c4  | Accepted | `23f9198`, `7a534ed`, `d9295ec`, `38f5e03`, `6ef2389`, `dd4aca0`                                                                                                                                                                                 | 292 units; independent G1/coverage, input/lifecycle probes, negative guards, and descriptor cleanup pass                                |
-| B4d   | Open     | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`                                                                                                                                                                                                       | Hardware/download/startup accepted; 324 units, independent G1/coverage and isolation probes pass; branch coverage 88.21%; hooks pending |
+| B4d   | Open     | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`, `fbd52cc`                                                                                                                                                                                            | Hardware/download/startup/runtime accepted; 331 units, independent G1/coverage and negative probes pass; branches 89.71%; hooks pending |
 | B5    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                                       |
 | B6    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                                       |
 | B7    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                                       |
@@ -983,6 +983,32 @@ Full-source coverage is 92.26% statements (1754/1901), 88.21% branches (1287/145
 functions (410/440), and 93.92% lines (1561/1662). Production source is unchanged, and the
 implementer reports the separate developer HTTP test passing. Startup boundaries are accepted;
 runtime contracts and commit hooks remain open.
+
+### B4d emulator runtime acceptance
+
+Reviewed implementation: `fbd52cc`, a test-only change to
+[emulator contracts](../tests/unit/emulator.test.ts). Registered video/save/crash callbacks prove
+that an old cartridge cannot change the new cartridge's frames, battery, or error state. The
+current callbacks verify exact frame/FPS counts, save identities and bytes, and timer cleanup.
+Automatic snapshots occur at 30,000 ms, remain inactive while paused, and preserve unrecorded
+playtime after a rejected write. Two timer ticks record two seconds exactly once after recovery.
+
+Initial and subsequent core-load failures verify owned timer cleanup and successful retry. A failed
+post-import reboot retains the imported battery bytes in the same storage and virtual filesystem;
+the next load consumes those bytes and a subsequent checkpoint preserves them. Idle/foreign commands
+reject before mutation. Default isolation and clock behavior use owned globals and fake timers.
+
+Independent validation at the fixed full SHA passes on 2026-09-06: 331 tests across 36 files in
+6.02 seconds, plus G1 with 85 Biome files and zero errors/warnings. Full-source coverage is 93.58%
+statements (1779/1901), 89.71% branches (1309/1459), 95.00% functions (418/440), and 95.06%
+lines (1580/1662). Production source is unchanged from the previously built revision.
+
+An independent after-suite probe confirms real timers and restoration of all owned global
+descriptors (0.33 seconds). Four separate mutations remove the stale-video guard, stale-save guard,
+paused-timer guard, or move the automatic-snapshot boundary by one millisecond; each makes the
+committed tests fail on an assertion (0.30-0.34 seconds). Probe edits restore in `finally`, and the
+review checkout is clean. Runtime contracts are accepted. Distribution guard contracts are the
+next bounded coverage handoff; all four thresholds and commit-hook activation remain required.
 
 ## 5. Final acceptance record
 
