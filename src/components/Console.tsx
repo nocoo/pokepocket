@@ -186,7 +186,7 @@ export function Console({
         </div>
         <div className="screen-frame">
           <div className="screen-frame-top">
-            <span>DOT MATRIX WITH STEREO SOUND</span>
+            <span>DOT MATRIX · STEREO</span>
             <i />
           </div>
           <div className={`game-screen ${filter === 'lcd' ? 'lcd-filter' : ''}`}>

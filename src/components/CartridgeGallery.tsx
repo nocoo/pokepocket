@@ -10,15 +10,12 @@ export function CartridgeArt({ edition }: { edition: PokemonEdition }) {
       aria-hidden="true"
       style={{ '--edition-color': edition.color } as CSSProperties}
     >
-      <div className="cart-plastic-top">
-        {edition.system === 'GBA' ? 'GAME BOY ADVANCE' : 'Nintendo GAME BOY'}
-      </div>
+      <div className="cart-plastic-top">{edition.system === 'GBA' ? 'ADVANCE' : 'GAME BOY'}</div>
       <div className="cart-label">
         <span className="cart-label-brand">POKéMON</span>
         <div className="cart-label-orbit" />
         <img src={`/art/${edition.mascot}.png`} width="64" height="64" alt="" draggable="false" />
         <strong>{edition.english.toUpperCase()}</strong>
-        <small>VERSION</small>
         <span className="cart-label-seal">★</span>
       </div>
       <div className="cart-bottom">

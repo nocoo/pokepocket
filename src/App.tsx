@@ -715,16 +715,6 @@ export default function App() {
 
       {/* mGBA owns this canvas for its lifetime. Hide the stage; never remount it when browsing. */}
       <div className="app-layout" hidden={view !== 'play'}>
-        <SeriesLibrary
-          edition={selectedEdition}
-          cartridge={selected}
-          library={library}
-          available={available}
-          busy={effectiveBusy}
-          onEdition={chooseEdition}
-          onCartridge={chooseCartridge}
-        />
-
         <main className="main-column">
           <div className="page-heading">
             <div>
@@ -755,242 +745,255 @@ export default function App() {
               </span>
             </div>
           </div>
-          <section
-            ref={stageRef}
-            id="game-stage"
-            className={`game-stage ${focusMode ? 'focus-mode' : ''}`}
-            aria-label="掌机模拟器"
-          >
-            <div className="stage-heading">
-              <div>
-                <span className={`live-dot ${game.status === 'running' ? 'is-live' : ''}`} />
-                <h2>{title}</h2>
-                <span className="stage-edition">
-                  {edition?.english.toUpperCase() ?? current?.header.gameCode}
-                </span>
+          <div className="play-layout">
+            <section
+              ref={stageRef}
+              id="game-stage"
+              className={`game-stage ${focusMode ? 'focus-mode' : ''}`}
+              aria-label="掌机模拟器"
+            >
+              <div className="stage-heading">
+                <div>
+                  <span className={`live-dot ${game.status === 'running' ? 'is-live' : ''}`} />
+                  <h2>{title}</h2>
+                  <span className="stage-edition">
+                    {edition?.english.toUpperCase() ?? current?.header.gameCode}
+                  </span>
+                </div>
+                <div className="stage-status">
+                  <span>
+                    {game.status === 'running'
+                      ? '正在冒险'
+                      : game.status === 'paused'
+                        ? '已暂停'
+                        : game.status === 'loading'
+                          ? '正在载入'
+                          : '准备就绪'}
+                  </span>
+                  <i />
+                  <span className="fps" data-testid="fps">
+                    {game.fps === null ? '—' : game.fps} FPS
+                  </span>
+                </div>
               </div>
-              <div className="stage-status">
-                <span>
-                  {game.status === 'running'
-                    ? '正在冒险'
-                    : game.status === 'paused'
-                      ? '已暂停'
-                      : game.status === 'loading'
-                        ? '正在载入'
-                        : '准备就绪'}
-                </span>
-                <i />
-                <span className="fps" data-testid="fps">
-                  {game.fps === null ? '—' : game.fps} FPS
-                </span>
-              </div>
-            </div>
-            <div className="console-viewport">
-              <Console
-                edition={edition}
-                system={current?.header.system ?? preferredEdition.system}
-                canvasRef={canvasRef}
-                status={!active && busy ? 'loading' : game.status}
-                filter={settings.filter}
-                input={input}
-                pressed={pressed}
-                hasCartridge={Boolean(selected || localAvailable)}
-                expanded={fullscreen || focusMode}
-                busy={effectiveBusy}
-                onStart={startAdventure}
-                onResume={resumeGame}
-              />
-            </div>
-            <div className="stage-toolbar">
-              <div className="toolbar-group">
-                <button
-                  type="button"
-                  className="play-toggle"
-                  disabled={!active || effectiveBusy}
-                  aria-label={game.status === 'paused' ? '继续游戏' : '暂停游戏'}
-                  onClick={() => {
-                    if (game.status === 'paused') resumeGame();
-                    else {
-                      if (isOperationBusy()) return;
-                      emulator.pause();
-                      void run(() => emulator.persist(true));
-                    }
-                  }}
-                >
-                  {game.status === 'paused' ? (
-                    <Play size={15} fill="currentColor" />
-                  ) : (
-                    <Pause size={15} fill="currentColor" />
-                  )}
-                  <span>{game.status === 'paused' ? '继续' : '暂停'}</span>
-                </button>
-                <button
-                  type="button"
-                  className="toolbar-button"
-                  disabled={!active || busy}
-                  onClick={() => openModal('restart')}
-                  aria-label="重新启动游戏"
-                  title="重新启动"
-                >
-                  <RotateCcw size={17} />
-                </button>
-                <span className="toolbar-divider" />
-                <button
-                  type="button"
-                  className="toolbar-button"
-                  aria-label={settings.muted ? '开启声音' : '静音'}
-                  title="声音 · M"
-                  onClick={() => {
-                    patchSettings({ muted: !settings.muted });
-                    emulator.resumeAudio();
-                  }}
-                >
-                  {settings.muted || settings.volume === 0 ? (
-                    <VolumeX size={18} />
-                  ) : (
-                    <Volume2 size={18} />
-                  )}
-                </button>
-                <input
-                  className="volume-slider"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={settings.muted ? 0 : settings.volume}
-                  aria-label="音量"
-                  onChange={(event) => {
-                    patchSettings({ volume: Number(event.target.value), muted: false });
-                    emulator.resumeAudio();
-                  }}
+              <div className="console-viewport">
+                <Console
+                  edition={edition}
+                  system={current?.header.system ?? preferredEdition.system}
+                  canvasRef={canvasRef}
+                  status={!active && busy ? 'loading' : game.status}
+                  filter={settings.filter}
+                  input={input}
+                  pressed={pressed}
+                  hasCartridge={Boolean(selected || localAvailable)}
+                  expanded={fullscreen || focusMode}
+                  busy={effectiveBusy}
+                  onStart={startAdventure}
+                  onResume={resumeGame}
                 />
               </div>
-              <div className="session-clock">
-                <Clock3 size={13} />
-                <span data-testid="play-time">{playTime(game.seconds)}</span>
-              </div>
-              <div className="toolbar-group right-tools">
-                <button
-                  type="button"
-                  className={`speed-button ${game.speed !== 1 ? 'is-fast' : ''}`}
-                  onClick={() => emulator.setSpeed(game.speed === 1 ? 2 : game.speed === 2 ? 3 : 1)}
-                  aria-label={`游戏速度 ${game.speed} 倍，点击切换`}
-                  title="切换倍速"
-                >
-                  <Zap size={14} />
-                  <span>{game.speed}×</span>
-                </button>
-                <span className="toolbar-divider" />
-                <button
-                  type="button"
-                  className="toolbar-button screenshot-button"
-                  onClick={screenshot}
-                  disabled={!active || busy}
-                  aria-label="保存游戏截图"
-                  title="保存 1080p 截图"
-                >
-                  <Download size={17} />
-                </button>
-                <button
-                  type="button"
-                  className="toolbar-button"
-                  onClick={toggleFullscreen}
-                  aria-label={fullscreen || focusMode ? '退出全屏' : '全屏游戏'}
-                  title="全屏 · F"
-                >
-                  {fullscreen || focusMode ? <Minimize size={17} /> : <Maximize size={17} />}
-                </button>
-              </div>
-            </div>
-            <MobileControls
-              status={game.status}
-              input={input}
-              pressed={pressed}
-              system={current?.header.system ?? preferredEdition.system}
-            />
-          </section>
-
-          <div className="below-grid">
-            <section className="info-card controls-card">
-              <div className="card-heading">
-                <h2>
-                  <Keyboard size={17} />
-                  操作指南
-                </h2>
-                <button type="button" className="text-button" onClick={() => openModal('help')}>
-                  全部按键
-                  <ArrowRight size={13} />
-                </button>
-              </div>
-              <div className="control-grid">
-                <div>
-                  <span>移动</span>
-                  <span className="key-group">
-                    {(['Up', 'Down', 'Left', 'Right'] as const).map((button) => {
-                      const code = settings.bindings[button][0];
-                      return <kbd key={button}>{code ? keyLabel(code) : ''}</kbd>;
-                    })}
-                  </span>
+              <div className="stage-toolbar">
+                <div className="toolbar-group">
+                  <button
+                    type="button"
+                    className="play-toggle"
+                    disabled={!active || effectiveBusy}
+                    aria-label={game.status === 'paused' ? '继续游戏' : '暂停游戏'}
+                    onClick={() => {
+                      if (game.status === 'paused') resumeGame();
+                      else {
+                        if (isOperationBusy()) return;
+                        emulator.pause();
+                        void run(() => emulator.persist(true));
+                      }
+                    }}
+                  >
+                    {game.status === 'paused' ? (
+                      <Play size={15} fill="currentColor" />
+                    ) : (
+                      <Pause size={15} fill="currentColor" />
+                    )}
+                    <span>{game.status === 'paused' ? '继续' : '暂停'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="toolbar-button"
+                    disabled={!active || busy}
+                    onClick={() => openModal('restart')}
+                    aria-label="重新启动游戏"
+                    title="重新启动"
+                  >
+                    <RotateCcw size={17} />
+                  </button>
+                  <span className="toolbar-divider" />
+                  <button
+                    type="button"
+                    className="toolbar-button"
+                    aria-label={settings.muted ? '开启声音' : '静音'}
+                    title="声音 · M"
+                    onClick={() => {
+                      patchSettings({ muted: !settings.muted });
+                      emulator.resumeAudio();
+                    }}
+                  >
+                    {settings.muted || settings.volume === 0 ? (
+                      <VolumeX size={18} />
+                    ) : (
+                      <Volume2 size={18} />
+                    )}
+                  </button>
+                  <input
+                    className="volume-slider"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={settings.muted ? 0 : settings.volume}
+                    aria-label="音量"
+                    onChange={(event) => {
+                      patchSettings({ volume: Number(event.target.value), muted: false });
+                      emulator.resumeAudio();
+                    }}
+                  />
                 </div>
-                <div>
-                  <span>确认 / 取消</span>
-                  <span className="key-group">
-                    <kbd>{settings.bindings.A[0] ? keyLabel(settings.bindings.A[0]) : ''}</kbd>
-                    <i>/</i>
-                    <kbd>{settings.bindings.B[0] ? keyLabel(settings.bindings.B[0]) : ''}</kbd>
-                  </span>
+                <div className="session-clock">
+                  <Clock3 size={13} />
+                  <span data-testid="play-time">{playTime(game.seconds)}</span>
                 </div>
-                <div>
-                  <span>开始</span>
-                  <kbd className="wide-key">
-                    {settings.bindings.Start[0] ? keyLabel(settings.bindings.Start[0]) : ''}
-                  </kbd>
-                </div>
-                <div>
-                  <span>选择</span>
-                  <kbd className="wide-key">
-                    {settings.bindings.Select[0] ? keyLabel(settings.bindings.Select[0]) : ''}
-                  </kbd>
+                <div className="toolbar-group right-tools">
+                  <button
+                    type="button"
+                    className={`speed-button ${game.speed !== 1 ? 'is-fast' : ''}`}
+                    onClick={() =>
+                      emulator.setSpeed(game.speed === 1 ? 2 : game.speed === 2 ? 3 : 1)
+                    }
+                    aria-label={`游戏速度 ${game.speed} 倍，点击切换`}
+                    title="切换倍速"
+                  >
+                    <Zap size={14} />
+                    <span>{game.speed}×</span>
+                  </button>
+                  <span className="toolbar-divider" />
+                  <button
+                    type="button"
+                    className="toolbar-button screenshot-button"
+                    onClick={screenshot}
+                    disabled={!active || busy}
+                    aria-label="保存游戏截图"
+                    title="保存 1080p 截图"
+                  >
+                    <Download size={17} />
+                  </button>
+                  <button
+                    type="button"
+                    className="toolbar-button"
+                    onClick={toggleFullscreen}
+                    aria-label={fullscreen || focusMode ? '退出全屏' : '全屏游戏'}
+                    title="全屏 · F"
+                  >
+                    {fullscreen || focusMode ? <Minimize size={17} /> : <Maximize size={17} />}
+                  </button>
                 </div>
               </div>
-              <div className="controls-footnote">
-                <Gamepad2 size={14} />
-                <span title={gamepad}>
-                  {gamepad ? '手柄已连接，准备出发' : '设置中可调整键位 · 也支持触屏与手柄'}
-                </span>
-              </div>
-            </section>
-            <section className="info-card saves-card">
-              <div className="card-heading">
-                <h2>
-                  <Save size={16} />
-                  即时存档
-                </h2>
-                <span className="save-location">
-                  <HardDrive size={11} />
-                  保存在此设备
-                </span>
-              </div>
-              <SaveSlots
-                snapshots={game.snapshots}
-                active={active}
-                busy={busy}
-                onSave={saveSlot}
-                onLoad={loadSlot}
-                onDelete={deleteSlot}
+              <MobileControls
+                status={game.status}
+                input={input}
+                pressed={pressed}
+                system={current?.header.system ?? preferredEdition.system}
               />
-              <div className="saves-footnote">
-                <span>
-                  <CheckCheck size={13} />
-                  {relativeTime(game.lastSavedAt)}
-                </span>
-                <button type="button" className="text-button" onClick={() => openModal('saves')}>
-                  管理
-                  <ChevronRight size={13} />
-                </button>
-              </div>
             </section>
+
+            <aside className="play-sidebar" aria-label="游玩工具">
+              <section className="info-card controls-card">
+                <div className="card-heading">
+                  <h2>
+                    <Keyboard size={17} />
+                    操作指南
+                  </h2>
+                  <button type="button" className="text-button" onClick={() => openModal('help')}>
+                    全部按键
+                    <ArrowRight size={13} />
+                  </button>
+                </div>
+                <div className="control-grid">
+                  <div>
+                    <span>移动</span>
+                    <span className="key-group">
+                      {(['Up', 'Down', 'Left', 'Right'] as const).map((button) => {
+                        const code = settings.bindings[button][0];
+                        return <kbd key={button}>{code ? keyLabel(code) : ''}</kbd>;
+                      })}
+                    </span>
+                  </div>
+                  <div>
+                    <span>确认 / 取消</span>
+                    <span className="key-group">
+                      <kbd>{settings.bindings.A[0] ? keyLabel(settings.bindings.A[0]) : ''}</kbd>
+                      <i>/</i>
+                      <kbd>{settings.bindings.B[0] ? keyLabel(settings.bindings.B[0]) : ''}</kbd>
+                    </span>
+                  </div>
+                  <div>
+                    <span>开始</span>
+                    <kbd className="wide-key">
+                      {settings.bindings.Start[0] ? keyLabel(settings.bindings.Start[0]) : ''}
+                    </kbd>
+                  </div>
+                  <div>
+                    <span>选择</span>
+                    <kbd className="wide-key">
+                      {settings.bindings.Select[0] ? keyLabel(settings.bindings.Select[0]) : ''}
+                    </kbd>
+                  </div>
+                </div>
+                <div className="controls-footnote">
+                  <Gamepad2 size={14} />
+                  <span title={gamepad}>
+                    {gamepad ? '手柄已连接，准备出发' : '设置中可调整键位 · 也支持触屏与手柄'}
+                  </span>
+                </div>
+              </section>
+              <section className="info-card saves-card">
+                <div className="card-heading">
+                  <h2>
+                    <Save size={16} />
+                    即时存档
+                  </h2>
+                  <span className="save-location">
+                    <HardDrive size={11} />
+                    保存在此设备
+                  </span>
+                </div>
+                <SaveSlots
+                  snapshots={game.snapshots}
+                  active={active}
+                  busy={busy}
+                  onSave={saveSlot}
+                  onLoad={loadSlot}
+                  onDelete={deleteSlot}
+                />
+                <div className="saves-footnote">
+                  <span>
+                    <CheckCheck size={13} />
+                    {relativeTime(game.lastSavedAt)}
+                  </span>
+                  <button type="button" className="text-button" onClick={() => openModal('saves')}>
+                    管理
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              </section>
+            </aside>
           </div>
+          <SeriesLibrary
+            edition={selectedEdition}
+            cartridge={selected}
+            library={library}
+            available={available}
+            busy={effectiveBusy}
+            onEdition={chooseEdition}
+            onCartridge={chooseCartridge}
+          />
           <footer className="main-footer">
             <span>
               <Heart size={12} /> 为每一个舍不得结束的冒险。

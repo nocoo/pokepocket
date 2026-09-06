@@ -346,7 +346,7 @@ describe('App cartridge command recovery and competing-command guards', () => {
       expect(localStorage.getItem('pocket-last-cartridge')).toBe('stored-emerald');
       expect(localStorage.getItem('pocket-last-edition')).toBe('emerald');
       const emeraldSidebarItem = container.querySelector(
-        'button.edition-row[aria-label="选择宝可梦 绿宝石"]',
+        'button.carousel-cartridge[aria-label="选择宝可梦 绿宝石"]',
       );
       expect(emeraldSidebarItem?.classList.contains('is-selected')).toBe(true);
     } finally {
@@ -389,7 +389,7 @@ describe('App cartridge command recovery and competing-command guards', () => {
     expect(localStorage.getItem('pocket-last-cartridge')).toBe('stored-emerald');
     expect(localStorage.getItem('pocket-last-edition')).toBe('emerald');
     const emeraldSidebarItemAfter = container.querySelector(
-      'button.edition-row[aria-label="选择宝可梦 绿宝石"]',
+      'button.carousel-cartridge[aria-label="选择宝可梦 绿宝石"]',
     );
     expect(emeraldSidebarItemAfter?.classList.contains('is-selected')).toBe(true);
 
@@ -540,7 +540,7 @@ describe('App cartridge command recovery and competing-command guards', () => {
       expect(localStorage.getItem('pocket-last-cartridge')).toBe('stored-emerald');
       expect(localStorage.getItem('pocket-last-edition')).toBe('emerald');
       const emeraldSidebarItem = container.querySelector(
-        'button.edition-row[aria-label="选择宝可梦 绿宝石"]',
+        'button.carousel-cartridge[aria-label="选择宝可梦 绿宝石"]',
       );
       expect(emeraldSidebarItem?.classList.contains('is-selected')).toBe(true);
     } finally {

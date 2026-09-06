@@ -17,11 +17,11 @@
   font-weight: 600;
 }
 .keyboard-settings .text-button {
-  font-size: 10px;
+  font-size: 11px;
   gap: 5px;
 }
 .keyboard-settings > p {
-  font-size: 10px;
+  font-size: 11px;
   color: #829175;
   line-height: 1.8;
   margin: 9px 0 15px;
@@ -44,7 +44,7 @@
 }
 .binding-row > span {
   color: #6f8063;
-  font-size: 10px;
+  font-size: 11px;
   white-space: nowrap;
 }
 .binding-keys {
@@ -64,7 +64,7 @@
   border-radius: 5px;
   background: #fffef6;
   color: #45603f;
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   white-space: nowrap;
   box-shadow: 0 1px 2px #4861360d;
 }
@@ -105,7 +105,7 @@
 .keyboard-settings .binding-feedback {
   min-height: 33px;
   margin: 12px 0 6px;
-  font-size: 10px;
+  font-size: 11px;
   color: #698258;
 }
 .keyboard-settings .binding-feedback.is-error {
@@ -116,7 +116,7 @@
   justify-content: space-between;
   gap: 10px;
   color: #8b987e;
-  font-size: 8px;
+  font-size: 11px;
   line-height: 1.8;
 }
 .binding-shortcuts > span:first-child {
@@ -136,17 +136,17 @@
   .binding-key {
     min-width: 63px;
     height: 32px;
-    font-size: 10px;
+    font-size: 11px;
   }
   .binding-keys {
     gap: 10px;
   }
   .keyboard-settings .binding-feedback {
-    font-size: 10px;
+    font-size: 11px;
   }
   .binding-shortcuts {
     flex-direction: column;
     gap: 3px;
-    font-size: 9px;
+    font-size: 11px;
   }
 }

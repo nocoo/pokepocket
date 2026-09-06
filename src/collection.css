@@ -78,7 +78,7 @@
   border-radius: inherit;
 }
 .collection-postmark span {
-  font: 7px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1px;
 }
 .collection-postmark i {
@@ -90,7 +90,7 @@
   letter-spacing: 2px;
 }
 .collection-postmark small {
-  font: 5px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1px;
 }
 .collection-body {
@@ -158,13 +158,13 @@
 }
 .case-nameplate strong {
   display: block;
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1.8px;
 }
 .case-nameplate div > span {
   display: block;
   margin-top: 4px;
-  font: 7px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1px;
   color: #87917a;
 }
@@ -177,7 +177,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 9px;
+  font-size: 11px;
   color: #748469;
   white-space: nowrap;
 }
@@ -211,7 +211,7 @@
   box-shadow: 0 2px 2px #64725e20;
 }
 .case-filters .generation-tabs small {
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   opacity: 0.55;
   margin-left: 6px;
 }
@@ -224,7 +224,7 @@
   box-shadow: inset 0 1px 2px #687c5010;
 }
 .case-filters .series-search input {
-  font-size: 10px;
+  font-size: 11px;
 }
 .cartridge-tray {
   display: grid;
@@ -271,7 +271,7 @@
   position: absolute;
   left: 8px;
   top: 7px;
-  font: 7px var(--mono);
+  font: 11px var(--mono);
   color: #778468;
   z-index: 2;
 }
@@ -324,7 +324,7 @@
   padding: 10px 0 0;
 }
 .slot-caption strong {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -335,7 +335,7 @@
   align-items: center;
   gap: 4px;
   color: #859277;
-  font: 6px var(--mono);
+  font: 11px var(--mono);
   white-space: nowrap;
 }
 .slot-caption i {
@@ -391,7 +391,7 @@
   box-shadow: 0 1px #ffffff2c;
 }
 .cart-plastic-top {
-  font-size: 4px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: -0.1px;
   text-align: center;
@@ -440,7 +440,7 @@
     -1px 1px #364b76,
     1px 1px #364b76;
   font:
-    8px 'Press Start 2P',
+    11px 'Press Start 2P',
     monospace;
   letter-spacing: -0.8px;
   transform: rotate(-4deg);
@@ -459,7 +459,7 @@
 .cart-label > strong {
   z-index: 2;
   font:
-    4.7px 'Press Start 2P',
+    11px 'Press Start 2P',
     monospace;
   letter-spacing: -0.1px;
   color: #fffbdb;
@@ -471,7 +471,7 @@
 }
 .cart-label > small {
   z-index: 2;
-  font: 3px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1.5px;
   font-weight: 700;
   color: #f2edcd;
@@ -495,7 +495,7 @@
   position: absolute;
   right: 3px;
   bottom: 5px;
-  font-size: 5px;
+  font-size: 11px;
   border: 1px solid #ffefba96;
   color: #fff1c4b0;
   border-radius: 50%;
@@ -510,7 +510,7 @@
   align-items: center;
   gap: 5px;
   margin-top: 4px;
-  font-size: 5px;
+  font-size: 11px;
   color: #1a322b55;
   text-shadow: 0 1px #ffffff40;
 }
@@ -546,7 +546,7 @@
   transform: rotate(3deg);
 }
 .cartridge-gba .cart-plastic-top {
-  font-size: 4.3px;
+  font-size: 11px;
   margin: -3px -5px 4px;
   padding: 2px 0;
   border-radius: 6px;
@@ -563,13 +563,13 @@
 }
 .cartridge-gba .cart-label-brand {
   margin-top: 4px;
-  font-size: 8px;
+  font-size: 11px;
 }
 .cartridge-gba .cart-label > strong {
-  font-size: 4.9px;
+  font-size: 11px;
 }
 .cartridge-gba .cart-label > small {
-  font-size: 2.5px;
+  font-size: 11px;
   margin-bottom: 3px;
 }
 .cartridge-gba .cart-bottom {
@@ -614,7 +614,7 @@
   padding: 0 2px;
   gap: 10px;
   color: #8a957d;
-  font: 6px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1px;
 }
 .case-latch {
@@ -711,11 +711,11 @@
   gap: 8px;
 }
 .destination-top .eyebrow {
-  font-size: 6px;
+  font-size: 11px;
   letter-spacing: 1px;
 }
 .destination-number {
-  font: 6px var(--mono);
+  font: 11px var(--mono);
   color: #97a188;
   white-space: nowrap;
 }
@@ -768,13 +768,13 @@
   position: absolute;
   bottom: 5px;
   right: 10px;
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   font-style: italic;
   letter-spacing: 4px;
   color: color-mix(in srgb, var(--edition-color) 30%, #e1e2d3);
 }
 .destination-title > span {
-  font-size: 10px;
+  font-size: 11px;
   color: #86907b;
   letter-spacing: 3px;
 }
@@ -786,7 +786,7 @@
   letter-spacing: 2px;
 }
 .destination-title p {
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   color: #8c9583;
 }
 .destination-description {
@@ -796,7 +796,7 @@
   margin: 22px 0 18px;
 }
 .destination-description p {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.8;
   color: #7d8a74;
 }
@@ -831,13 +831,13 @@
   gap: 12px;
 }
 .destination-facts dt {
-  font-size: 8px;
+  font-size: 11px;
   color: #949e89;
   margin-bottom: 6px;
 }
 .destination-facts dd {
   margin: 0;
-  font-size: 10px;
+  font-size: 11px;
   color: #65775b;
 }
 .dock-launch {
@@ -848,7 +848,7 @@
   align-items: center;
   gap: 7px;
   color: #829173;
-  font-size: 9px;
+  font-size: 11px;
   margin-bottom: 11px;
   padding: 0 2px;
 }
@@ -903,7 +903,7 @@
   gap: 6px;
   align-items: center;
   justify-content: center;
-  font-size: 8px;
+  font-size: 11px;
   color: #939d86;
   margin: 18px 0 12px;
 }
@@ -912,7 +912,7 @@
   justify-content: center;
   align-items: center;
   gap: 5px;
-  font-size: 9px;
+  font-size: 11px;
   color: #9ca58e;
 }
 .dock-source:hover {
@@ -928,16 +928,16 @@
   color: #9ca58f;
 }
 .collection-footer > span {
-  font: 7px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1px;
 }
 .collection-footer > span:first-child {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 2px;
 }
 .collection-footer i {
   font-style: normal;
-  font-size: 10px;
+  font-size: 11px;
   margin: 0 6px;
 }
 .back-to-gallery {
@@ -945,11 +945,11 @@
   gap: 6px;
   align-items: center;
   padding: 0;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--edition-color);
 }
 .back-to-gallery > span {
-  font: 6px var(--mono);
+  font: 11px var(--mono);
   margin-left: 8px;
   letter-spacing: 1.2px;
   color: #9aa48a;
@@ -1008,14 +1008,14 @@
     inset-inline: 3px;
   }
   .slot-caption > span {
-    font-size: 6px;
+    font-size: 11px;
   }
   .slot-caption > span i,
   .slot-caption > span {
     gap: 3px;
   }
   .slot-caption strong {
-    font-size: 9px;
+    font-size: 11px;
   }
   .case-filters {
     gap: 10px;
@@ -1036,10 +1036,10 @@
     width: 20px;
   }
   .destination-description p {
-    font-size: 9px;
+    font-size: 11px;
   }
   .dock-note {
-    font-size: 7.5px;
+    font-size: 11px;
   }
 }
 @media (max-width: 960px) {
@@ -1054,14 +1054,14 @@
     padding: 17px 22px;
   }
   .case-capacity {
-    font-size: 8px;
+    font-size: 11px;
   }
   .case-nameplate strong {
-    font-size: 7px;
+    font-size: 11px;
     letter-spacing: 1px;
   }
   .case-nameplate div > span {
-    font-size: 6px;
+    font-size: 11px;
   }
   .case-emblem {
     display: none;
@@ -1077,7 +1077,7 @@
     width: 100%;
   }
   .case-bottom > span {
-    font-size: 5px;
+    font-size: 11px;
     letter-spacing: 0.3px;
   }
   .case-latch {
@@ -1138,7 +1138,7 @@
   }
   .launch-caption {
     flex: 1;
-    font-size: 8px;
+    font-size: 11px;
     margin: 0;
     gap: 8px;
   }
@@ -1173,7 +1173,7 @@
     font-size: 11px;
   }
   .slot-caption > span {
-    font-size: 7px;
+    font-size: 11px;
   }
   .case-filters {
     flex-wrap: nowrap;
@@ -1188,14 +1188,14 @@
     display: grid;
   }
   .case-nameplate strong {
-    font-size: 9px;
+    font-size: 11px;
     letter-spacing: 1.3px;
   }
   .case-nameplate div > span {
-    font-size: 7px;
+    font-size: 11px;
   }
   .case-capacity {
-    font-size: 9px;
+    font-size: 11px;
   }
   .collection-footer > span:last-child {
     display: none;
@@ -1210,7 +1210,7 @@
     margin-bottom: 27px;
   }
   .collection-heading .eyebrow {
-    font-size: 6px;
+    font-size: 11px;
     letter-spacing: 1.1px;
   }
   .collection-heading h1 {
@@ -1220,7 +1220,7 @@
     margin-bottom: 9px;
   }
   .collection-heading p {
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.8;
     letter-spacing: 0;
   }
@@ -1236,11 +1236,11 @@
     gap: 7px;
   }
   .case-nameplate strong {
-    font-size: 7px;
+    font-size: 11px;
     letter-spacing: 1px;
   }
   .case-nameplate div > span {
-    font-size: 5px;
+    font-size: 11px;
   }
   .case-emblem {
     width: 23px;
@@ -1248,7 +1248,7 @@
     font-size: 14px;
   }
   .case-capacity {
-    font-size: 7px;
+    font-size: 11px;
     gap: 5px;
   }
   .case-filters {
@@ -1291,17 +1291,17 @@
     font-size: 11px;
   }
   .slot-caption > span {
-    font-size: 6px;
+    font-size: 11px;
   }
   .slot-serial {
-    font-size: 7px;
+    font-size: 11px;
   }
   .case-bottom {
     height: 40px;
     gap: 6px;
   }
   .case-bottom > span {
-    font-size: 4px;
+    font-size: 11px;
     letter-spacing: 0.3px;
   }
   .case-latch {
@@ -1320,7 +1320,7 @@
     gap: 10px;
   }
   .launch-caption {
-    font-size: 7px;
+    font-size: 11px;
     gap: 5px;
   }
   .launch-caption strong {
@@ -1339,21 +1339,21 @@
     padding: 24px 4px;
   }
   .collection-footer > span {
-    font-size: 5px;
+    font-size: 11px;
     letter-spacing: 0;
   }
   .collection-footer > span:first-child {
-    font-size: 8px;
+    font-size: 11px;
     letter-spacing: 0.5px;
   }
   .collection-footer i {
     margin: 0 3px;
   }
   .back-to-gallery {
-    font-size: 9px;
+    font-size: 11px;
   }
   .back-to-gallery > span {
-    font-size: 5px;
+    font-size: 11px;
     letter-spacing: 0.6px;
   }
 }
@@ -1372,18 +1372,18 @@
     padding-inline: 6px;
   }
   .slot-caption > span {
-    font-size: 5px;
+    font-size: 11px;
   }
   .slot-caption strong {
-    font-size: 10px;
+    font-size: 11px;
   }
   .launch-caption > div > span {
-    font-size: 6px;
+    font-size: 11px;
   }
   .gallery-start {
     width: 113px;
   }
   .case-capacity {
-    font-size: 6px;
+    font-size: 11px;
   }
 }

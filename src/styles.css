@@ -140,7 +140,7 @@ h3 {
 }
 .brand small {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 400;
   letter-spacing: 2px;
   margin-top: 6px;
@@ -180,7 +180,7 @@ h3 {
   display: flex;
   gap: 7px;
   align-items: center;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.2px;
   color: #8a9286;
   white-space: nowrap;
@@ -246,7 +246,7 @@ h3 {
   padding: 0 2px;
 }
 .version-pill {
-  font: 10px var(--mono);
+  font: 11px var(--mono);
   color: #425335;
   background: #e9ede1;
   border: 1px solid #d5ddcb;
@@ -327,7 +327,7 @@ h3 {
 }
 .cartridge-top {
   text-align: center;
-  font-size: 6px;
+  font-size: 11px;
   letter-spacing: 1px;
   font-weight: 800;
   color: #c0d8ad;
@@ -381,7 +381,7 @@ h3 {
   margin-top: -6px;
 }
 .cartridge-sticker small {
-  font-size: 4px;
+  font-size: 11px;
   letter-spacing: 2px;
   line-height: 1.7;
   color: #3e714a;
@@ -424,7 +424,7 @@ h3 {
   position: absolute;
   bottom: 9px;
   right: 10px;
-  font: 6px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1px;
   color: #9ba98e;
 }
@@ -453,7 +453,7 @@ h3 {
   display: flex;
 }
 .cartridge-subtitle {
-  font-size: 10px;
+  font-size: 11px;
   color: #929888;
   margin: 7px 2px 0;
   letter-spacing: 0.1px;
@@ -464,7 +464,7 @@ h3 {
   gap: 8px;
   margin: 18px 2px 3px;
   color: #909785;
-  font: 9px var(--mono);
+  font: 11px var(--mono);
 }
 .gba-tag {
   padding: 2px 5px;
@@ -472,7 +472,7 @@ h3 {
   background: #eef1e4;
   border: 1px solid #e1e7d3;
   border-radius: 3px;
-  font-size: 8px;
+  font-size: 11px;
 }
 .cartridge-ready {
   margin-left: auto;
@@ -480,7 +480,7 @@ h3 {
   align-items: center;
   gap: 5px;
   font-family: inherit;
-  font-size: 9px;
+  font-size: 11px;
 }
 .cartridge-ready i {
   background: #89a273;
@@ -509,7 +509,7 @@ h3 {
   white-space: nowrap;
 }
 .extra-cartridge small {
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   color: #839075;
   display: block;
   margin-top: 5px;
@@ -538,7 +538,7 @@ h3 {
   border-color: #7a986b;
 }
 .upload-section p {
-  font-size: 9px;
+  font-size: 11px;
   text-align: center;
   color: #99a08f;
   line-height: 1.7;
@@ -560,7 +560,7 @@ h3 {
   color: #70805e;
 }
 .adventure-note p {
-  font-size: 10px;
+  font-size: 11px;
   color: #8e9782;
   line-height: 2.1;
   margin: 13px 0 1px;
@@ -589,7 +589,7 @@ h3 {
   align-items: center;
 }
 .privacy-note p {
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.9;
 }
 .privacy-note p span {
@@ -599,7 +599,7 @@ h3 {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 9px;
+  font-size: 11px;
   color: #9da48e;
   padding-left: 4px;
   margin-top: -5px;
@@ -619,7 +619,7 @@ h3 {
   padding-left: 1px;
 }
 .eyebrow {
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1.8px;
   color: #859174;
   display: flex;
@@ -654,13 +654,13 @@ h3 {
   padding: 7px 0 5px 12px;
 }
 .region-stamp > span {
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1.4px;
 }
 .region-stamp small {
   display: block;
   font:
-    9px 'DM Sans',
+    11px 'DM Sans',
     sans-serif;
   color: #a2aa96;
   letter-spacing: 0.4px;
@@ -703,7 +703,7 @@ h3 {
   box-shadow: 0 0 0 3px #65894b1a;
 }
 .stage-edition {
-  font: 7px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1px;
   color: #8d9e79;
   border: 1px solid #cdd8be;
@@ -712,7 +712,7 @@ h3 {
   margin-left: 2px;
 }
 .stage-status {
-  font-size: 9px;
+  font-size: 11px;
   color: #899779;
 }
 .stage-status i {
@@ -721,7 +721,7 @@ h3 {
   margin: 0 2px;
 }
 .fps {
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   white-space: nowrap;
   min-width: 42px;
 }
@@ -782,7 +782,7 @@ h3 {
   position: relative;
   top: 2px;
   color: #799065;
-  font: 8px/1 var(--mono);
+  font: 11px/1 var(--mono);
   padding-bottom: 13px;
 }
 .shoulder:hover:not(:disabled) {
@@ -797,7 +797,7 @@ h3 {
 .shell-brand {
   font-weight: 650;
   letter-spacing: 1px;
-  font-size: 9px;
+  font-size: 11px;
   color: #7e9b67;
   text-shadow: 0 1px #e5efd244;
   position: absolute;
@@ -915,7 +915,7 @@ h3 {
     0 2px 0 #eff8d733;
 }
 .small-buttons > div > span {
-  font: 5px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 0.6px;
   color: #70895a;
 }
@@ -938,7 +938,7 @@ h3 {
   justify-content: center;
   gap: 10px;
   margin: 0 0 10px;
-  font: 5px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1.5px;
   color: #91a689;
   white-space: nowrap;
@@ -1007,7 +1007,7 @@ h3 {
   gap: 5px;
   left: 50%;
   transform: translateX(-50%);
-  font: 5px var(--mono);
+  font: 11px var(--mono);
   color: #7b9365;
   letter-spacing: 0.3px;
 }
@@ -1118,7 +1118,7 @@ h3 {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  font: 6px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 2px;
   color: #a0ad8a;
   padding: 28px 0 19px;
@@ -1148,7 +1148,7 @@ h3 {
   pointer-events: none;
 }
 .boot-eyebrow {
-  font: 5px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 2.2px;
   color: #9ab585;
   margin-top: 6%;
@@ -1167,7 +1167,7 @@ h3 {
   z-index: 1;
 }
 .boot-subtitle {
-  font: 7px var(--mono);
+  font: 11px var(--mono);
   font-weight: 700;
   letter-spacing: 3.5px;
   color: #bdd599;
@@ -1223,7 +1223,7 @@ h3 {
 .boot-footnote {
   position: absolute;
   bottom: 5%;
-  font: 4.5px var(--mono);
+  font: 11px var(--mono);
   color: #a4ba8f;
   letter-spacing: 1.7px;
   white-space: nowrap;
@@ -1265,7 +1265,7 @@ h3 {
 .boot-stars span:nth-child(2) {
   right: 17%;
   top: 43%;
-  font-size: 9px;
+  font-size: 11px;
 }
 .boot-stars span:nth-child(3) {
   left: 34%;
@@ -1274,7 +1274,7 @@ h3 {
 .boot-stars span:nth-child(4) {
   right: 25%;
   top: 25%;
-  font-size: 9px;
+  font-size: 11px;
 }
 .paused-screen {
   position: absolute;
@@ -1314,7 +1314,7 @@ h3 {
   font-weight: 500;
 }
 .paused-screen > span:last-child {
-  font-size: 10px;
+  font-size: 11px;
   color: #c8d7b7;
 }
 .spin {
@@ -1357,7 +1357,7 @@ h3 {
   background: color-mix(in srgb, var(--edition-color) 13%, #f7f7ed);
   color: var(--deep);
   border-radius: 6px;
-  font-size: 10px;
+  font-size: 11px;
   height: 33px;
 }
 .play-toggle:is(:hover, :focus-visible):not(:disabled) {
@@ -1396,7 +1396,7 @@ h3 {
   display: flex;
   align-items: center;
   gap: 7px;
-  font: 8px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 0.3px;
   color: #929e83;
 }
@@ -1408,7 +1408,7 @@ h3 {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  font: 10px var(--mono);
+  font: 11px var(--mono);
   background: #ecf1e3;
   border: 1px solid #e1e8d6;
   min-width: 53px;
@@ -1463,7 +1463,7 @@ h3 {
   align-items: center;
   gap: 3px;
   color: #98a18b;
-  font-size: 8px;
+  font-size: 11px;
   white-space: nowrap;
   padding: 0;
 }
@@ -1482,7 +1482,7 @@ h3 {
   gap: 8px;
 }
 .control-grid > div > span:first-child {
-  font-size: 9px;
+  font-size: 11px;
   color: #89957f;
   white-space: nowrap;
 }
@@ -1493,12 +1493,12 @@ h3 {
 }
 .key-group i {
   font-style: normal;
-  font-size: 9px;
+  font-size: 11px;
   margin: 0 3px;
   color: #b1b8a5;
 }
 kbd {
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   background: #f5f6ed;
   border: 1px solid #dce3d2;
   border-bottom: 2px solid #d5ddc8;
@@ -1514,7 +1514,7 @@ kbd {
 }
 .wide-key {
   min-width: 44px;
-  font-size: 8px;
+  font-size: 11px;
 }
 .controls-footnote {
   border-top: 1px dashed #e4e8dd;
@@ -1523,14 +1523,14 @@ kbd {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 8px;
+  font-size: 11px;
   color: #a2aa96;
 }
 .save-location {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 8px;
+  font-size: 11px;
   color: #a0aa93;
   white-space: nowrap;
 }
@@ -1561,7 +1561,7 @@ kbd {
   overflow: hidden;
 }
 .save-slot-preview > span:not(.slot-number):not(.load-overlay) {
-  font-size: 7px;
+  font-size: 11px;
   color: #adb69f;
 }
 .save-slot-preview > svg {
@@ -1575,14 +1575,14 @@ kbd {
   position: absolute;
   top: 4px;
   left: 5px;
-  font: 6px var(--mono);
+  font: 11px var(--mono);
   color: #acb59f;
 }
 .save-slot-label {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 7px;
+  font-size: 11px;
   color: #a7af9d;
   margin-top: 7px;
   height: 12px;
@@ -1648,7 +1648,7 @@ kbd {
   gap: 4px;
   justify-content: center;
   align-items: center;
-  font-size: 9px;
+  font-size: 11px;
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -1668,7 +1668,7 @@ kbd {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 7px;
+  font-size: 11px;
   color: #a0ac91;
 }
 .main-footer {
@@ -1683,11 +1683,11 @@ kbd {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 8px;
+  font-size: 11px;
   letter-spacing: 0.3px;
 }
 .main-footer > span:last-child {
-  font: 6px var(--mono);
+  font: 11px var(--mono);
   letter-spacing: 1.1px;
 }
 .main-footer i {
@@ -1731,7 +1731,7 @@ kbd {
   margin-top: 10px;
 }
 .modal-heading .eyebrow {
-  font-size: 7px;
+  font-size: 11px;
 }
 .modal-heading .icon-button {
   align-self: flex-start;
@@ -1764,7 +1764,7 @@ kbd {
   font-weight: 550;
 }
 .setting-row p {
-  font-size: 10px;
+  font-size: 11px;
   color: #9aa28e;
   line-height: 1.7;
   margin-top: 7px;
@@ -1782,7 +1782,7 @@ kbd {
   height: 5px;
 }
 .setting-volume span {
-  font: 10px var(--mono);
+  font: 11px var(--mono);
   min-width: 35px;
   color: #7a8d68;
 }
@@ -1867,21 +1867,21 @@ kbd {
   font-weight: 600;
 }
 .settings-about span {
-  font-size: 9px;
+  font-size: 11px;
   color: #9ba48b;
 }
 .modal .save-slot-preview {
   aspect-ratio: 1.5;
 }
 .modal .save-slot-label {
-  font-size: 10px;
+  font-size: 11px;
   margin-top: 10px;
 }
 .modal .save-slot-preview > span:not(.slot-number):not(.load-overlay) {
-  font-size: 10px;
+  font-size: 11px;
 }
 .modal .slot-number {
-  font-size: 8px;
+  font-size: 11px;
   top: 7px;
   left: 8px;
 }
@@ -1915,7 +1915,7 @@ kbd {
   font-weight: 500;
 }
 .autosave-row p {
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.7;
   margin-top: 5px;
   color: #96a088;
@@ -2013,7 +2013,7 @@ kbd {
 }
 .save-transfer p {
   color: #8f9a80;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.8;
   margin: 8px 0 15px;
 }
@@ -2025,7 +2025,7 @@ kbd {
   display: flex;
   gap: 9px;
   color: #8f9e7c;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.8;
   background: #f0f4e7;
   border: 1px solid #e4eada;
@@ -2049,7 +2049,7 @@ kbd {
   gap: 9px;
 }
 .help-steps > div > span {
-  font: 9px var(--mono);
+  font: 11px var(--mono);
   border: 1px solid #cbd9b9;
   color: #799960;
   border-radius: 4px;
@@ -2061,7 +2061,7 @@ kbd {
   font-weight: 550;
 }
 .help-steps p {
-  font-size: 10px;
+  font-size: 11px;
   color: #8d997d;
   line-height: 1.9;
 }
@@ -2079,11 +2079,11 @@ kbd {
   gap: 5px;
 }
 .full-keyboard span {
-  font-size: 9px;
+  font-size: 11px;
   color: #879477;
 }
 .full-keyboard kbd {
-  font-size: 8px;
+  font-size: 11px;
   padding: 2px 7px;
   min-width: 33px;
   height: 24px;
@@ -2097,7 +2097,7 @@ kbd {
   display: flex;
   justify-content: space-between;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   padding: 11px 13px;
   list-style: none;
   color: #889b73;
@@ -2115,7 +2115,7 @@ kbd {
 .cartridge-details dl > div {
   display: flex;
   align-items: flex-start;
-  font-size: 9px;
+  font-size: 11px;
   gap: 15px;
   line-height: 1.8;
   margin-top: 5px;
@@ -2132,12 +2132,12 @@ kbd {
 }
 .hash-value {
   word-break: break-all;
-  font-size: 8px;
+  font-size: 11px;
 }
 .help-note {
   display: flex;
   gap: 7px;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.8;
   color: #97a287;
   margin-top: 18px;
@@ -2395,33 +2395,33 @@ kbd {
     min-width: 17px;
     height: 21px;
     padding: 0 3px;
-    font-size: 8px;
+    font-size: 11px;
   }
   .control-grid > div > span:first-child {
-    font-size: 8px;
+    font-size: 11px;
   }
   .controls-footnote {
-    font-size: 7px;
+    font-size: 11px;
   }
   .boot-start {
-    font-size: 10px;
+    font-size: 11px;
     padding: 7px 14px;
     min-width: 115px;
   }
   .boot-subtitle {
-    font-size: 6px;
+    font-size: 11px;
     letter-spacing: 2.8px;
   }
   .boot-eyebrow {
-    font-size: 4.5px;
+    font-size: 11px;
     letter-spacing: 1.6px;
   }
   .boot-footnote {
-    font-size: 4px;
+    font-size: 11px;
     letter-spacing: 1.1px;
   }
   .screen-frame-top {
-    font-size: 4px;
+    font-size: 11px;
     letter-spacing: 1px;
   }
   .console-wordmark {
@@ -2431,10 +2431,10 @@ kbd {
     font-size: 11px;
   }
   .card-heading .text-button {
-    font-size: 7px;
+    font-size: 11px;
   }
   .save-location {
-    font-size: 7px;
+    font-size: 11px;
   }
 }
 @media (max-width: 1000px) {
@@ -2456,20 +2456,20 @@ kbd {
     font-size: 13px;
   }
   .cartridge-subtitle {
-    font-size: 8px;
+    font-size: 11px;
   }
   .cartridge-card-footer {
-    font-size: 8px;
+    font-size: 11px;
     gap: 6px;
   }
   .cartridge-ready {
-    font-size: 8px;
+    font-size: 11px;
   }
   .adventure-note {
     padding: 0 2px;
   }
   .adventure-note p {
-    font-size: 9px;
+    font-size: 11px;
   }
   .starter-pokemon {
     gap: 3px;
@@ -2482,7 +2482,7 @@ kbd {
     font-size: 27px;
   }
   .page-heading p {
-    font-size: 10px;
+    font-size: 11px;
   }
   .volume-slider {
     display: none;
@@ -2508,7 +2508,7 @@ kbd {
   }
   .screen-frame-top {
     margin-bottom: 7px;
-    font-size: 3.5px;
+    font-size: 11px;
     letter-spacing: 0.8px;
   }
   .console-wordmark {
@@ -2516,10 +2516,10 @@ kbd {
     margin-top: 8px;
   }
   .console-wordmark b {
-    font-size: 10px;
+    font-size: 11px;
   }
   .shell-brand {
-    font-size: 6px;
+    font-size: 11px;
     letter-spacing: 0.7px;
     top: 16px;
   }
@@ -2531,7 +2531,7 @@ kbd {
     gap: 7px;
   }
   .small-buttons > div > span {
-    font-size: 4px;
+    font-size: 11px;
     letter-spacing: 0.1px;
   }
   .small-console-button {
@@ -2546,7 +2546,7 @@ kbd {
   }
   .power-light {
     top: 17px;
-    font-size: 4px;
+    font-size: 11px;
   }
   .power-light i {
     height: 5px;
@@ -2565,14 +2565,14 @@ kbd {
     height: 23px;
   }
   .console-caption {
-    font-size: 5px;
+    font-size: 11px;
     padding: 24px 0 16px;
   }
   .boot-title {
     font-size: 23px;
   }
   .boot-start {
-    font-size: 9px;
+    font-size: 11px;
     padding: 6px 12px;
     min-width: 106px;
     gap: 5px;
@@ -2581,7 +2581,7 @@ kbd {
     width: 10px;
   }
   .boot-subtitle {
-    font-size: 5px;
+    font-size: 11px;
     letter-spacing: 2px;
   }
   .below-grid {
@@ -2604,19 +2604,19 @@ kbd {
     aspect-ratio: 2.1;
   }
   .save-slot-preview > span:not(.slot-number):not(.load-overlay) {
-    font-size: 8px;
+    font-size: 11px;
   }
   .save-slot-label {
-    font-size: 8px;
+    font-size: 11px;
   }
   .save-location {
-    font-size: 8px;
+    font-size: 11px;
   }
   .controls-card .card-heading {
     margin-bottom: 13px;
   }
   .main-footer > span:first-child {
-    font-size: 7px;
+    font-size: 11px;
   }
 }
 @media (max-width: 780px) {
@@ -2635,7 +2635,7 @@ kbd {
     height: 32px;
   }
   .brand small {
-    font-size: 7px;
+    font-size: 11px;
     letter-spacing: 1.8px;
   }
   .nav-item {
@@ -2683,7 +2683,7 @@ kbd {
     padding: 10px 13px 10px;
   }
   .screen-frame-top {
-    font-size: 4.5px;
+    font-size: 11px;
     letter-spacing: 0.8px;
     margin-bottom: 9px;
   }
@@ -2700,10 +2700,10 @@ kbd {
     font-size: 15px;
   }
   .shell-brand {
-    font-size: 8px;
+    font-size: 11px;
   }
   .power-light {
-    font-size: 5px;
+    font-size: 11px;
   }
   .speaker {
     height: 35px;
@@ -2713,13 +2713,13 @@ kbd {
     height: 9px;
   }
   .small-buttons > div > span {
-    font-size: 5px;
+    font-size: 11px;
   }
   .boot-title {
     font-size: 29px;
   }
   .boot-subtitle {
-    font-size: 6px;
+    font-size: 11px;
   }
   .boot-start {
     font-size: 11px;
@@ -2727,10 +2727,10 @@ kbd {
     min-width: 126px;
   }
   .boot-eyebrow {
-    font-size: 5px;
+    font-size: 11px;
   }
   .boot-footnote {
-    font-size: 4.5px;
+    font-size: 11px;
   }
   .stage-toolbar {
     padding: 11px 18px;
@@ -2756,7 +2756,7 @@ kbd {
     aspect-ratio: 1.5;
   }
   .card-heading .text-button {
-    font-size: 8px;
+    font-size: 11px;
   }
   .main-footer {
     padding-bottom: 0;
@@ -2799,7 +2799,7 @@ kbd {
     grid-column: 2;
   }
   .settings-about span {
-    font-size: 8px;
+    font-size: 11px;
   }
 }
 @media (max-width: 540px) {
@@ -2814,7 +2814,7 @@ kbd {
     font-size: 21px;
   }
   .brand small {
-    font-size: 6px;
+    font-size: 11px;
     letter-spacing: 1.3px;
   }
   .brand > img {
@@ -2842,7 +2842,7 @@ kbd {
     margin-bottom: 21px;
   }
   .page-heading .eyebrow {
-    font-size: 6px;
+    font-size: 11px;
     letter-spacing: 1.5px;
   }
   .page-heading h1 {
@@ -2851,7 +2851,7 @@ kbd {
     margin: 7px 0;
   }
   .page-heading p {
-    font-size: 9px;
+    font-size: 11px;
     letter-spacing: 0.3px;
   }
   .region-stamp {
@@ -2862,21 +2862,21 @@ kbd {
     gap: 8px;
   }
   .stage-heading h2 {
-    font-size: 10px;
+    font-size: 11px;
   }
   .stage-heading > div {
     gap: 6px;
   }
   .stage-edition {
-    font-size: 5px;
+    font-size: 11px;
     padding: 2px 4px;
     letter-spacing: 0.6px;
   }
   .stage-status {
-    font-size: 8px;
+    font-size: 11px;
   }
   .fps {
-    font-size: 6px;
+    font-size: 11px;
     min-width: 35px;
   }
   .console-wrap {
@@ -2905,7 +2905,7 @@ kbd {
   }
   .shoulder {
     height: 24px;
-    font-size: 5px;
+    font-size: 11px;
     border-radius: 11px 11px 0 0;
     padding-bottom: 9px;
   }
@@ -2919,7 +2919,7 @@ kbd {
       0 0 0 2px #bdd0a4;
   }
   .screen-frame-top {
-    font-size: 2.9px;
+    font-size: 11px;
     margin-bottom: 5px;
     letter-spacing: 0.5px;
     gap: 5px;
@@ -2928,17 +2928,17 @@ kbd {
     border-width: 1px;
   }
   .console-wordmark {
-    font-size: 8px;
+    font-size: 11px;
     gap: 3px;
     margin-top: 7px;
     letter-spacing: -0.4px;
   }
   .console-wordmark b {
-    font-size: 7px;
+    font-size: 11px;
     letter-spacing: 0.7px;
   }
   .shell-brand {
-    font-size: 4.7px;
+    font-size: 11px;
     top: 11px;
     letter-spacing: 0.3px;
   }
@@ -2967,13 +2967,13 @@ kbd {
     height: 6px;
   }
   .small-buttons > div > span {
-    font-size: 2.8px;
+    font-size: 11px;
     letter-spacing: 0;
   }
   .power-light {
     top: 10px;
     gap: 4px;
-    font-size: 2.8px;
+    font-size: 11px;
   }
   .power-light i {
     height: 4px;
@@ -2983,7 +2983,7 @@ kbd {
   .action-b {
     height: 22px;
     width: 22px;
-    font-size: 10px;
+    font-size: 11px;
     box-shadow:
       inset 1px 1px 1px #b9cd9a77,
       0 2px 0 #3b5c2b,
@@ -3014,7 +3014,7 @@ kbd {
     bottom: 10px;
   }
   .console-caption {
-    font-size: 4px;
+    font-size: 11px;
     letter-spacing: 1.3px;
     padding: 23px 0 15px;
     gap: 7px;
@@ -3029,12 +3029,12 @@ kbd {
     margin-top: 4%;
   }
   .boot-eyebrow {
-    font-size: 3px;
+    font-size: 11px;
     letter-spacing: 1.1px;
     margin-top: 6%;
   }
   .boot-subtitle {
-    font-size: 3.8px;
+    font-size: 11px;
     letter-spacing: 1.7px;
     gap: 5px;
   }
@@ -3042,7 +3042,7 @@ kbd {
     width: 9px;
   }
   .boot-start {
-    font-size: 8px;
+    font-size: 11px;
     padding: 6px 10px;
     min-width: 104px;
     gap: 5px;
@@ -3056,15 +3056,15 @@ kbd {
     height: 9px;
   }
   .boot-footnote {
-    font-size: 2.8px;
+    font-size: 11px;
     letter-spacing: 0.8px;
   }
   .boot-stars {
-    font-size: 9px;
+    font-size: 11px;
   }
   .boot-stars span:nth-child(2),
   .boot-stars span:nth-child(4) {
-    font-size: 7px;
+    font-size: 11px;
   }
   .paused-screen {
     gap: 8px;
@@ -3073,7 +3073,7 @@ kbd {
     font-size: 11px;
   }
   .paused-screen > span:last-child {
-    font-size: 8px;
+    font-size: 11px;
   }
   .pause-symbol {
     height: 35px;
@@ -3092,7 +3092,7 @@ kbd {
   }
   .play-toggle {
     height: 29px;
-    font-size: 9px;
+    font-size: 11px;
     padding: 7px 9px;
     gap: 5px;
   }
@@ -3115,7 +3115,7 @@ kbd {
     display: none;
   }
   .session-clock {
-    font-size: 7px;
+    font-size: 11px;
     gap: 4px;
   }
   .session-clock svg {
@@ -3124,7 +3124,7 @@ kbd {
   .speed-button {
     min-width: 43px;
     height: 25px;
-    font-size: 9px;
+    font-size: 11px;
     gap: 3px;
   }
   .speed-button svg {
@@ -3185,12 +3185,12 @@ kbd {
     border: 1px solid #b3c49b;
     background: #d1ddbf;
     border-radius: 6px;
-    font: 10px var(--mono);
+    font: 11px var(--mono);
     padding: 7px 0;
     box-shadow: 0 2px #9aac85;
   }
   .mobile-start {
-    font: 5px var(--mono);
+    font: 11px var(--mono);
     background: #526d42;
     color: #eff3e4;
     border-radius: 7px;
@@ -3222,35 +3222,35 @@ kbd {
     gap: 9px;
   }
   .control-grid > div > span:first-child {
-    font-size: 8px;
+    font-size: 11px;
   }
   .controls-footnote {
-    font-size: 8px;
+    font-size: 11px;
     margin-top: 14px;
   }
   .save-slot-preview {
     aspect-ratio: 1.8;
   }
   .save-slot-label {
-    font-size: 8px;
+    font-size: 11px;
   }
   .save-slot-preview > span:not(.slot-number):not(.load-overlay) {
-    font-size: 8px;
+    font-size: 11px;
   }
   .saves-footnote > span {
-    font-size: 8px;
+    font-size: 11px;
   }
   .slot-number {
-    font-size: 7px;
+    font-size: 11px;
   }
   .main-footer {
     padding: 18px 3px 0;
   }
   .main-footer > span:first-child {
-    font-size: 7px;
+    font-size: 11px;
   }
   .main-footer > span:last-child {
-    font-size: 5px;
+    font-size: 11px;
     letter-spacing: 0.5px;
   }
   .main-footer i {
@@ -3277,7 +3277,7 @@ kbd {
     font-size: 11px;
   }
   .cartridge-subtitle {
-    font-size: 7px;
+    font-size: 11px;
     letter-spacing: 0;
   }
   .selected-check {
@@ -3285,19 +3285,19 @@ kbd {
     height: 14px;
   }
   .cartridge-card-footer {
-    font-size: 7px;
+    font-size: 11px;
     gap: 5px;
     margin-top: 13px;
   }
   .cartridge-ready {
-    font-size: 6px;
+    font-size: 11px;
     gap: 3px;
   }
   .gba-tag {
-    font-size: 6px;
+    font-size: 11px;
   }
   .upload-cartridge {
-    font-size: 10px;
+    font-size: 11px;
     min-height: 42px;
     gap: 5px;
   }
@@ -3305,11 +3305,11 @@ kbd {
     width: 14px;
   }
   .upload-section p {
-    font-size: 8px;
+    font-size: 11px;
     line-height: 1.9;
   }
   .source-link {
-    font-size: 8px;
+    font-size: 11px;
     line-height: 1.7;
   }
   .source-link svg {
@@ -3322,7 +3322,7 @@ kbd {
     font-size: 21px;
   }
   .modal-heading .eyebrow {
-    font-size: 6px;
+    font-size: 11px;
     letter-spacing: 1.4px;
   }
   .modal-intro {
@@ -3335,16 +3335,16 @@ kbd {
     aspect-ratio: 1.4;
   }
   .modal .save-slot-preview > span:not(.slot-number):not(.load-overlay) {
-    font-size: 8px;
+    font-size: 11px;
   }
   .modal .save-slot-label {
-    font-size: 8px;
+    font-size: 11px;
   }
   .modal .load-overlay {
-    font-size: 8px;
+    font-size: 11px;
   }
   .modal .slot-number {
-    font-size: 7px;
+    font-size: 11px;
     left: 5px;
     top: 5px;
   }
@@ -3353,10 +3353,10 @@ kbd {
     flex-wrap: wrap;
   }
   .autosave-row p {
-    font-size: 8px;
+    font-size: 11px;
   }
   .autosave-row .secondary-button {
-    font-size: 9px;
+    font-size: 11px;
     padding: 8px 10px;
   }
   .autosave-row strong {
@@ -3366,23 +3366,23 @@ kbd {
     gap: 17px;
   }
   .help-steps p {
-    font-size: 9px;
+    font-size: 11px;
   }
   .full-keyboard {
     grid-template-columns: 1fr;
     gap: 10px;
   }
   .full-keyboard span {
-    font-size: 10px;
+    font-size: 11px;
   }
   .full-keyboard kbd {
-    font-size: 9px;
+    font-size: 11px;
   }
   .modal-tip {
-    font-size: 9px;
+    font-size: 11px;
   }
   .toast {
-    font-size: 10px;
+    font-size: 11px;
     padding: 11px 13px;
     gap: 8px;
   }
@@ -3430,16 +3430,16 @@ kbd {
     gap: 14px 6px;
   }
   .session-clock {
-    font-size: 6px;
+    font-size: 11px;
   }
   .session-clock svg {
     display: none;
   }
   .stage-heading h2 {
-    font-size: 9px;
+    font-size: 11px;
   }
   .stage-status {
-    font-size: 7px;
+    font-size: 11px;
   }
 }
 @media (max-height: 540px) and (orientation: landscape) {
@@ -3472,7 +3472,7 @@ kbd {
   }
 }
 
-/* Reading text stays distinct from the tiny labels printed on the plastic shell. */
+/* Keep reading text clear against the paper and plastic surfaces. */
 .page-heading p {
   color: #7f8d76;
 }
@@ -3517,53 +3517,53 @@ kbd {
     font-size: 13px;
   }
   .card-heading .text-button {
-    font-size: 10px;
+    font-size: 11px;
   }
   .control-grid > div > span:first-child {
-    font-size: 10px;
+    font-size: 11px;
   }
   .control-grid kbd {
-    font-size: 10px;
+    font-size: 11px;
     min-width: 21px;
     height: 24px;
   }
   .control-grid .wide-key {
     min-width: 49px;
-    font-size: 9px;
+    font-size: 11px;
   }
   .controls-footnote {
-    font-size: 9px;
+    font-size: 11px;
   }
   .save-location {
-    font-size: 9px;
+    font-size: 11px;
   }
   .save-slot-label,
   .saves-footnote > span {
-    font-size: 9px;
+    font-size: 11px;
   }
   .save-slot-preview > span:not(.slot-number):not(.load-overlay) {
-    font-size: 9px;
+    font-size: 11px;
   }
   .stage-heading h2 {
     font-size: 13px;
   }
   .stage-status {
-    font-size: 10px;
+    font-size: 11px;
   }
   .fps {
-    font-size: 9px;
+    font-size: 11px;
   }
   .adventure-note p {
     font-size: 11px;
   }
   .privacy-note p {
-    font-size: 10px;
+    font-size: 11px;
   }
   .upload-section p {
-    font-size: 10px;
+    font-size: 11px;
   }
   .source-link {
-    font-size: 10px;
+    font-size: 11px;
   }
   .cartridge-subtitle {
     font-size: 11px;
@@ -3612,7 +3612,7 @@ kbd {
 }
 .generation-tabs button {
   padding: 7px 1px;
-  font-size: 10px;
+  font-size: 11px;
   color: #616d55;
   border-radius: 5px;
 }
@@ -3640,7 +3640,7 @@ kbd {
 .series-search input {
   min-width: 0;
   width: 100%;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--ink);
   background: none;
   border: 0;
@@ -3708,7 +3708,7 @@ kbd {
   font-weight: 600;
 }
 .edition-name small {
-  font-size: 8px;
+  font-size: 11px;
   color: #929c88;
 }
 .edition-presence {
@@ -3733,7 +3733,7 @@ kbd {
   display: flex;
   justify-content: space-between;
   padding: 12px 2px 0;
-  font-size: 8px;
+  font-size: 11px;
   color: #8f9a83;
 }
 .empty-series {
@@ -3747,12 +3747,12 @@ kbd {
 }
 .local-cartridges summary {
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   color: #839076;
 }
 .local-cartridges summary span {
   float: right;
-  font: 9px var(--mono);
+  font: 11px var(--mono);
 }
 .local-cartridges > div {
   margin-top: 7px;
@@ -3780,14 +3780,14 @@ kbd {
   overflow: hidden;
 }
 .local-cartridges strong {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 500;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
 }
 .local-cartridges small {
-  font: 7px var(--mono);
+  font: 11px var(--mono);
   color: #8c9880;
 }
 .series-sidebar .privacy-note {
@@ -3795,7 +3795,7 @@ kbd {
   padding-top: 12px;
 }
 .series-sidebar .source-link {
-  font-size: 9px;
+  font-size: 11px;
   margin-top: -5px;
 }
 .console-wrap .boot-screen {
@@ -3906,6 +3906,6 @@ kbd {
     margin: 0;
   }
   .series-sidebar .series-summary {
-    font-size: 9px;
+    font-size: 11px;
   }
 }

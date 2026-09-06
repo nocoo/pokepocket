@@ -231,7 +231,7 @@
 }
 .console-wrap:is(.system-gb, .system-gbc) .screen-frame-top {
   margin-bottom: 10px;
-  font-size: 4px;
+  font-size: 11px;
   letter-spacing: 1px;
 }
 .console-wrap.system-gb .screen-frame-top:before,
@@ -279,7 +279,7 @@
   top: 15px;
   left: 3px;
   transform: none;
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.8px;
 }
 .console-wrap:is(.system-gb, .system-gbc) .console-left > .dpad {
@@ -324,7 +324,7 @@
   gap: 8px;
 }
 .console-wrap:is(.system-gb, .system-gbc) .small-buttons > div > span {
-  font-size: 6px;
+  font-size: 11px;
   letter-spacing: 0.6px;
 }
 .console-wrap:is(.system-gb, .system-gbc) .power-light {
@@ -334,7 +334,7 @@
   transform: none;
   flex-direction: row;
   gap: 5px;
-  font-size: 5px;
+  font-size: 11px;
 }
 .console-wrap:is(.system-gb, .system-gbc) .power-light i {
   width: 6px;
@@ -360,7 +360,7 @@
   height: 4px;
 }
 .console-wrap:is(.system-gb, .system-gbc) .console-caption {
-  font-size: 5px;
+  font-size: 11px;
   letter-spacing: 1.3px;
   padding: 23px 0 20px;
 }
@@ -368,14 +368,14 @@
   font-size: 26px;
 }
 .console-wrap:is(.system-gb, .system-gbc) .boot-subtitle {
-  font-size: 5px;
+  font-size: 11px;
 }
 .console-wrap:is(.system-gb, .system-gbc) .boot-rayquaza {
   width: 88px;
   height: 88px;
 }
 .console-wrap:is(.system-gb, .system-gbc) .boot-footnote {
-  font-size: 4px;
+  font-size: 11px;
 }
 
 @media (max-width: 540px) {
@@ -397,7 +397,7 @@
     padding: 10px 14px 13px;
   }
   .console-wrap:is(.system-gb, .system-gbc) .screen-frame-top {
-    font-size: 3.5px;
+    font-size: 11px;
     letter-spacing: 0.5px;
   }
   .console-wrap:is(.system-gb, .system-gbc) .console-wordmark {
@@ -421,7 +421,7 @@
     left: 13px;
   }
   .console-wrap:is(.system-gb, .system-gbc) .console-caption {
-    font-size: 4.5px;
+    font-size: 11px;
     letter-spacing: 0.8px;
   }
 }
@@ -440,6 +440,6 @@
     max-width: 87px;
   }
   .console-wrap:is(.system-gb, .system-gbc) .screen-frame-top {
-    font-size: 3px;
+    font-size: 11px;
   }
 }

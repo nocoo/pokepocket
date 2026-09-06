@@ -36,7 +36,9 @@ test('navigation items satisfy WCAG contrast in default, hover, focus and across
 
     // Verify actual selected state on the tray slot button
     await expect(editionButton).toHaveClass(/is-selected/);
-    await expect(page.locator('.series-sidebar .featured-edition')).toHaveClass(/is-selected/);
+    await expect(
+      page.locator('.cartridge-carousel .carousel-cartridge.is-selected'),
+    ).toHaveAttribute('aria-label', editionLabel);
 
     await page.locator('.pocket-app').evaluate(async (el) => {
       getComputedStyle(el).backgroundColor;

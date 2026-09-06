@@ -1,4 +1,4 @@
-import { Bookmark, CornerDownLeft, Plus, Save } from 'lucide-react';
+import { CornerDownLeft, Plus } from 'lucide-react';
 import type { Snapshot } from '../lib/storage';
 
 export function SaveSlots({
@@ -46,15 +46,22 @@ export function SaveSlots({
               <span className="slot-number">0{slot}</span>
             </button>
             <div className="save-slot-label">
+              <strong>即时存档 0{slot}</strong>
               <span>
-                {snapshot
-                  ? new Date(snapshot.updatedAt).toLocaleTimeString('zh-CN', {
+                {snapshot ? (
+                  <time dateTime={new Date(snapshot.updatedAt).toISOString()}>
+                    {new Date(snapshot.updatedAt).toLocaleString('zh-CN', {
+                      month: '2-digit',
+                      day: '2-digit',
                       hour: '2-digit',
                       minute: '2-digit',
-                    })
-                  : '空白存档'}
+                      hour12: false,
+                    })}
+                  </time>
+                ) : (
+                  '空白存档'
+                )}
               </span>
-              {snapshot ? <Save size={12} /> : <Bookmark size={12} />}
             </div>
             {snapshot && (
               <div className="save-slot-actions">

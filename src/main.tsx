@@ -11,6 +11,8 @@ import './styles.css';
 import './collection.css';
 import './console-themes.css';
 import './key-bindings.css';
+import './layout.css';
+import './cartridge-carousel.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Root element not found');

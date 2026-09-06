@@ -1,0 +1,627 @@
+/* Shared page rhythm and a spacious, two-column play area. */
+:root {
+  --content-width: 1680px;
+  --page-gutter: clamp(16px, 3vw, 48px);
+}
+
+.pocket-app {
+  display: flex;
+  flex-direction: column;
+}
+
+.site-header {
+  flex-shrink: 0;
+}
+
+.header-inner,
+.app-layout,
+.cartridge-gallery {
+  width: 100%;
+  max-width: var(--content-width);
+  padding-inline: var(--page-gutter);
+}
+
+.brand small {
+  letter-spacing: 1px;
+}
+
+.app-layout,
+.cartridge-gallery {
+  flex: 1;
+  margin: 0 auto;
+  padding-top: 32px;
+}
+
+.app-layout {
+  display: flex;
+}
+
+.main-column,
+.cartridge-gallery {
+  display: flex;
+  flex-direction: column;
+}
+
+.main-column {
+  flex: 1;
+}
+
+.page-heading {
+  margin: 0 0 22px;
+}
+
+.app-layout {
+  padding-top: 24px;
+}
+
+.page-heading h1 {
+  font-size: 28px;
+  line-height: 1.3;
+  margin-block: 4px 6px;
+}
+
+.page-heading p,
+.collection-heading p {
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.back-to-gallery {
+  min-height: 24px;
+}
+
+.back-to-gallery > span,
+.eyebrow {
+  letter-spacing: 1px;
+}
+
+.play-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: stretch;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.play-layout > .game-stage:not(:fullscreen):not(.focus-mode) {
+  display: flex;
+  flex-direction: column;
+  min-height: 660px;
+  margin: 0;
+}
+
+.game-stage:not(:fullscreen):not(.focus-mode) .console-viewport {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 32px 24px;
+}
+
+.game-stage:not(:fullscreen):not(.focus-mode) .console-wrap {
+  margin: 0;
+}
+
+.console-wrap.system-gba {
+  width: 100%;
+  max-width: 880px;
+}
+
+.console-wrap:is(.system-gb, .system-gbc) {
+  width: min(396px, 100%);
+  max-width: 396px;
+}
+
+.console-wrap:is(.system-gb, .system-gbc) .power-light {
+  top: 0;
+}
+
+.console-wrap .screen-frame-top {
+  gap: 6px;
+  letter-spacing: 0.5px;
+}
+
+.console-wrap .console-caption {
+  padding: 18px 8px 20px;
+  flex-wrap: wrap;
+  gap: 8px;
+  line-height: 1.7;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.console-wrap .small-buttons {
+  gap: 8px;
+}
+
+.console-wrap .small-buttons > div > span {
+  letter-spacing: 0;
+}
+
+.stage-heading {
+  padding: 22px 24px 0;
+  flex-wrap: wrap;
+}
+
+.stage-heading > div:first-child {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.stage-heading h2 {
+  font-size: 14px;
+}
+
+.stage-toolbar {
+  padding: 14px 18px;
+}
+
+.play-toggle {
+  font-size: 12px;
+  height: 36px;
+}
+
+.toolbar-button {
+  width: 34px;
+  height: 36px;
+}
+
+.play-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 16px;
+}
+
+.play-sidebar .info-card {
+  padding: 20px;
+  border-radius: 13px;
+}
+
+.play-sidebar .controls-card {
+  flex-shrink: 0;
+}
+
+.play-sidebar .saves-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.play-sidebar .card-heading {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.play-sidebar .card-heading h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.play-sidebar .text-button {
+  min-height: 24px;
+}
+
+.play-sidebar .control-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.play-sidebar .control-grid > div {
+  flex-direction: row;
+  align-items: center;
+  min-height: 28px;
+}
+
+.play-sidebar .control-grid > div > span:first-child {
+  font-size: 12px;
+}
+
+.play-sidebar .control-grid kbd {
+  min-width: 27px;
+  height: 28px;
+  padding-inline: 6px;
+}
+
+.play-sidebar .control-grid .wide-key {
+  min-width: 64px;
+}
+
+.play-sidebar .key-group {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.play-sidebar .controls-footnote {
+  align-items: flex-start;
+  line-height: 1.8;
+  margin-top: 18px;
+  padding-top: 14px;
+}
+
+.controls-footnote svg {
+  margin-top: 2px;
+}
+
+.play-sidebar .save-slots {
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.play-sidebar .save-slot {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 6px 12px;
+  padding: 10px;
+  border: 1px solid #e2e7da;
+  border-radius: 9px;
+  background: #f7f9f1;
+}
+
+.play-sidebar .save-slot-preview {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+  aspect-ratio: 4 / 3;
+  min-height: 72px;
+  gap: 5px;
+  border-radius: 6px;
+}
+
+.play-sidebar .has-save .save-slot-preview {
+  border-style: solid;
+}
+
+.play-sidebar .save-slot-label {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  height: auto;
+  line-height: 1.5;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+}
+
+.play-sidebar .save-slot-label strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b6345;
+}
+
+.play-sidebar .save-slot-label > span {
+  font-size: 11px;
+  color: #6c7d60;
+}
+
+.play-sidebar .save-slot:not(.has-save) .save-slot-label {
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.play-sidebar .save-slot-actions {
+  grid-column: 2;
+  grid-row: 2;
+  margin: 0;
+  gap: 6px;
+}
+
+.play-sidebar .load-overlay {
+  flex-direction: column;
+}
+
+.play-sidebar .saves-footnote {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.main-footer,
+.collection-footer {
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-top: auto;
+  padding: 24px 0;
+  border-top: 1px solid var(--border);
+  line-height: 1.7;
+  color: #7e8a74;
+}
+
+.main-footer {
+  padding-block: 20px;
+}
+
+.main-footer > span,
+.collection-footer > span {
+  letter-spacing: 0.6px;
+}
+
+.collection-body {
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 28px;
+  margin-bottom: 36px;
+}
+
+.slot-caption {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.slot-caption strong {
+  font-size: 13px;
+}
+
+.slot-caption > span {
+  letter-spacing: 0;
+  flex-wrap: wrap;
+}
+
+.slot-recess {
+  height: 132px;
+}
+
+.slot-recess .physical-cartridge {
+  scale: 1;
+  max-width: 100%;
+}
+
+/* Small cartridge artwork uses short, readable labels instead of microprint. */
+.physical-cartridge {
+  height: 118px;
+}
+
+.cartridge-gba {
+  height: 94px;
+}
+
+.cart-plastic-top {
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.cart-label {
+  height: 75px;
+}
+
+.cartridge-gba .cart-label {
+  height: 56px;
+}
+
+.cart-label-brand,
+.cart-label > strong {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.cart-label > strong {
+  margin-bottom: 4px;
+}
+
+.cart-label-seal {
+  width: 13px;
+  height: 13px;
+}
+
+.cart-bottom {
+  display: none;
+}
+
+.case-nameplate strong,
+.case-nameplate div > span,
+.case-bottom > span {
+  letter-spacing: 0.5px;
+}
+
+.case-bottom {
+  gap: 12px;
+  min-height: 48px;
+  height: auto;
+  padding-block: 12px;
+}
+
+.case-bottom > span {
+  line-height: 1.6;
+}
+
+.case-latch {
+  flex-shrink: 0;
+}
+
+.dock-note {
+  align-items: flex-start;
+  line-height: 1.8;
+}
+
+.destination-top {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.destination-facts {
+  column-gap: 12px;
+}
+
+@media (min-width: 1440px) {
+  .play-layout,
+  .collection-body {
+    grid-template-columns: minmax(0, 1fr) 336px;
+    gap: 28px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .console-wrap.system-gba {
+    max-width: 1080px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .play-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .play-sidebar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .collection-body {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 22px;
+  }
+
+  .collection-postmark {
+    padding-inline: 22px;
+  }
+
+  .case-toolbar {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 740px) {
+  .app-layout,
+  .cartridge-gallery {
+    padding-top: 24px;
+  }
+
+  .region-stamp,
+  .back-to-gallery > span {
+    display: none;
+  }
+
+  .collection-body {
+    display: block;
+  }
+
+  .collection-heading .eyebrow {
+    flex-wrap: wrap;
+    letter-spacing: 0.5px;
+  }
+
+  .case-bottom > span:last-child {
+    display: none;
+  }
+
+  .dock-launch {
+    gap: 12px;
+  }
+
+  .launch-caption > div > span {
+    line-height: 1.6;
+  }
+
+  .main-footer,
+  .collection-footer {
+    padding-block: 22px;
+  }
+}
+
+@media (max-width: 600px) {
+  .play-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .play-layout > .game-stage:not(:fullscreen):not(.focus-mode) {
+    min-height: 0;
+  }
+
+  .game-stage:not(:fullscreen):not(.focus-mode) .console-viewport {
+    padding: 28px 14px;
+  }
+
+  .stage-heading {
+    padding: 18px 16px 0;
+    gap: 10px;
+  }
+
+  .stage-heading h2 {
+    font-size: 13px;
+  }
+
+  .stage-toolbar {
+    flex-wrap: wrap;
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .session-clock {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .console-wrap.system-gba .shell-brand,
+  .console-wrap.system-gba .small-buttons > div > span,
+  .console-wrap.system-gba .power-light span {
+    display: none;
+  }
+
+  .console-wrap .screen-frame-top {
+    letter-spacing: 0;
+    gap: 0;
+  }
+
+  .console-wrap .screen-frame-top::before,
+  .console-wrap .screen-frame-top::after {
+    display: none;
+  }
+
+  .console-wrap .console-caption {
+    letter-spacing: 0;
+    padding: 22px 4px 18px;
+  }
+
+  .console-wrap:is(.system-gb, .system-gbc) {
+    width: min(340px, 100%);
+  }
+
+  .mobile-controls {
+    flex-wrap: wrap;
+    gap: 16px;
+    padding-inline: 20px;
+  }
+
+  .mobile-center-buttons {
+    order: 3;
+    width: 100%;
+    gap: 12px;
+  }
+
+  .mobile-start {
+    padding: 10px 8px;
+  }
+
+  .boot-eyebrow,
+  .boot-footnote {
+    display: none;
+  }
+
+  .boot-subtitle {
+    letter-spacing: 0.5px;
+    gap: 4px;
+  }
+
+  .boot-start {
+    padding: 8px 12px;
+  }
+
+  .main-footer,
+  .collection-footer {
+    justify-content: center;
+    text-align: center;
+  }
+}

@@ -243,7 +243,7 @@ test.describe('Core Cartridge Journeys', () => {
     const allBatteries = await readIndexedDBBatteries(page);
     expect(allBatteries.length).toBe(3);
 
-    // Switch back to GB and GBC while game remains active via visible details.local-cartridges
+    // Return to the stored GB and GBC games through the full-width cartridge switcher.
     for (const sys of ['GB', 'GBC'] as const) {
       const romId = expectedRomIds.get(sys);
       if (!romId) throw new Error(`Missing expected romId for ${sys}`);

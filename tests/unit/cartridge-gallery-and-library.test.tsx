@@ -42,17 +42,17 @@ describe('CartridgeGallery and SeriesLibrary components', () => {
   });
 
   describe('CartridgeArt', () => {
-    it('renders GBA plastic top for GBA and Nintendo GAME BOY for GB/GBC', () => {
+    it('renders the handheld and edition labels on each cartridge', () => {
       const emerald = getEdition('emerald');
       const red = getEdition('red');
       if (!emerald || !red) throw new Error('Missing test editions');
 
       const { rerender } = render(<CartridgeArt edition={emerald} />);
-      expect(screen.getByText('GAME BOY ADVANCE')).toBeDefined();
+      expect(screen.getByText('ADVANCE')).toBeDefined();
       expect(screen.getByText('EMERALD')).toBeDefined();
 
       rerender(<CartridgeArt edition={red} />);
-      expect(screen.getByText('Nintendo GAME BOY')).toBeDefined();
+      expect(screen.getByText('GAME BOY')).toBeDefined();
       expect(screen.getByText('RED')).toBeDefined();
     });
   });
@@ -302,7 +302,7 @@ describe('CartridgeGallery and SeriesLibrary components', () => {
   });
 
   describe('SeriesLibrary', () => {
-    it('handles edition row clicks, aria-pressed, owned/bundled/unavailable states and count summary', async () => {
+    it('handles carousel selection, owned/bundled/unavailable states and count summary', async () => {
       const handleEdition = vi.fn();
       const emerald = getEdition('emerald');
       const ruby = getEdition('ruby');
@@ -315,7 +315,7 @@ describe('CartridgeGallery and SeriesLibrary components', () => {
       const { rerender } = render(
         <SeriesLibrary
           edition={emerald}
-          cartridge={null} // cartridge null initially
+          cartridge={null}
           library={[emeraldCart]}
           available={[
             { id: 'ruby', available: true, url: '/roms/ruby.gba' },
@@ -329,9 +329,6 @@ describe('CartridgeGallery and SeriesLibrary components', () => {
 
       // Ready count in series summary: emerald (owned) + ruby (bundled) = 2 / 12
       expect(screen.getByText('2 / 12 就绪')).toBeDefined();
-
-      // Featured card with cartridge=null and bundled=false (no ruby cartridge, emerald not bundled) -> '待导入'
-      expect(screen.getByText('待导入')).toBeDefined();
 
       // Check aria-pressed on rows
       const emeraldRow = screen.getByRole('button', { name: '选择宝可梦 绿宝石' });
@@ -359,7 +356,7 @@ describe('CartridgeGallery and SeriesLibrary components', () => {
         '导入你的卡带',
       );
 
-      // Now set cartridge=null but edition is available in catalog -> featured card shows '卡带就绪'
+      // A catalog selection updates the carousel without requiring an imported file.
       rerender(
         <SeriesLibrary
           edition={ruby}
@@ -374,12 +371,12 @@ describe('CartridgeGallery and SeriesLibrary components', () => {
           onCartridge={vi.fn()}
         />,
       );
-      // Catalog-only featured edition with cartridge=null displays '卡带就绪'
-      expect(screen.getByText('卡带就绪')).toBeDefined();
+      expect(rubyRow.getAttribute('aria-pressed')).toBe('true');
+      expect(emeraldRow.getAttribute('aria-pressed')).toBe('false');
       // Overlapping emerald (owned & bundled) + ruby (bundled) = 2 distinct ready editions
       expect(screen.getByText('2 / 12 就绪')).toBeDefined();
 
-      // Now set cartridge to emeraldCart -> featured card shows '卡带就绪'
+      // Selecting an imported file keeps its edition selected in the carousel.
       rerender(
         <SeriesLibrary
           edition={emerald}
@@ -391,10 +388,11 @@ describe('CartridgeGallery and SeriesLibrary components', () => {
           onCartridge={vi.fn()}
         />,
       );
-      expect(screen.getByText('卡带就绪')).toBeDefined();
+      expect(emeraldRow.getAttribute('aria-pressed')).toBe('true');
+      expect(rubyRow.getAttribute('aria-pressed')).toBe('false');
     });
 
-    it('renders featured edition card, handles unknown cartridge fallback, and filters editions', async () => {
+    it('renders physical cartridges, handles unknown cartridge fallback, and filters editions', async () => {
       const handleEdition = vi.fn();
       const handleCartridge = vi.fn();
       const emerald = getEdition('emerald');
@@ -412,9 +410,13 @@ describe('CartridgeGallery and SeriesLibrary components', () => {
         />,
       );
 
-      // Featured card title and ready indicator
+      // Current title and physical cartridge artwork.
       expect(screen.getAllByText('宝可梦 绿宝石').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('卡带就绪')).toBeDefined();
+      expect(
+        screen
+          .getByRole('button', { name: '选择宝可梦 绿宝石' })
+          .querySelector('.physical-cartridge'),
+      ).not.toBeNull();
 
       // Unknown edition fallback: edition undefined, custom cartridge
       const unknownCart = createMockCartridge({
