@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   IDBCursor,
@@ -522,5 +522,118 @@ describe('App cartridge lifecycle and gallery orchestration', () => {
     expect(savedBattery).not.toBeNull();
     if (!savedBattery) throw new Error('Missing expected saved battery');
     expect(new Uint8Array(savedBattery.data)).toEqual(new Uint8Array([1, 2, 3, 4]));
+  });
+  it('refreshes gamepad connection and name across modal changes and handles first-poll disconnect', async () => {
+    let mockPads: (Gamepad | null)[] = [
+      {
+        id: 'review pad',
+        index: 0,
+        connected: true,
+        timestamp: 1000,
+        mapping: 'standard',
+        axes: [0, 0, 0, 0],
+        buttons: Array.from({ length: 16 }, () => ({ pressed: false, touched: false, value: 0 })),
+      } as unknown as Gamepad,
+    ];
+
+    const descriptorBefore = Object.getOwnPropertyDescriptor(navigator, 'getGamepads');
+    const hadProperty = Object.hasOwn(navigator, 'getGamepads');
+
+    Object.defineProperty(navigator, 'getGamepads', {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: () => mockPads as Gamepad[],
+    });
+
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ editions: [] }),
+        }),
+      );
+
+      const { unmount } = render(<App />);
+      await screen.findByText('本地存储已就绪');
+      // Exactly one pending window RAF callback for gamepad polling before flush
+      expect(harness.windowRafMap.size).toBe(1);
+
+      // Flush window RAF so the connected gamepad poll executes
+      act(() => {
+        harness.flushWindowRafs();
+      });
+
+      // After poll executes, next poll is scheduled -> exactly one pending callback
+      expect(harness.windowRafMap.size).toBe(1);
+
+      // Gallery view shows connected gamepad in footer info
+      expect(screen.getByText('手柄已连接，准备出发')).toBeDefined();
+      expect(screen.getByTitle('review pad')).toBeDefined();
+
+      // Disconnect gamepad BEFORE opening modal's first new RAF poll executes
+      mockPads = [];
+
+      // Open help modal: effect is recreated due to modal change
+      const helpBtn = screen.getByRole('button', { name: '游玩指南' });
+      await userEvent.click(helpBtn);
+
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toBeDefined();
+
+      // Exactly one pending callback scheduled for modal's poll effect
+      expect(harness.windowRafMap.size).toBe(1);
+
+      // Flush the new RAF poll
+      act(() => {
+        harness.flushWindowRafs();
+      });
+
+      // Modal field guide footer should NOT display old '已连接：review pad'
+      expect(screen.queryByText(/已连接：review pad/)).toBeNull();
+      expect(harness.windowRafMap.size).toBe(1);
+
+      // Reconnect gamepad with a new name while modal is open
+      mockPads = [
+        {
+          id: 'wireless controller',
+          index: 0,
+          connected: true,
+          timestamp: 2000,
+          mapping: 'standard',
+          axes: [0, 0, 0, 0],
+          buttons: Array.from({ length: 16 }, () => ({ pressed: false, touched: false, value: 0 })),
+        } as unknown as Gamepad,
+      ];
+
+      act(() => {
+        harness.flushWindowRafs();
+      });
+
+      // Now modal reflects the reconnected gamepad with updated name
+      expect(within(dialog).getByText('已连接：wireless controller')).toBeDefined();
+      expect(harness.windowRafMap.size).toBe(1);
+
+      // Close modal -> view returns to gallery
+      const closeBtn = within(dialog).getByRole('button', { name: '关闭窗口' });
+      await userEvent.click(closeBtn);
+      expect(screen.queryByRole('dialog')).toBeNull();
+
+      // Footer info reflects the current controller
+      expect(screen.getByText('手柄已连接，准备出发')).toBeDefined();
+      expect(screen.getByTitle('wireless controller')).toBeDefined();
+      expect(harness.windowRafMap.size).toBe(1);
+
+      // Explicit unmount cancels the pending RAF callback
+      unmount();
+      expect(harness.windowRafMap.size).toBe(0);
+    } finally {
+      if (hadProperty && descriptorBefore) {
+        Object.defineProperty(navigator, 'getGamepads', descriptorBefore);
+      } else {
+        delete (navigator as Partial<Navigator>).getGamepads;
+      }
+    }
   });
 });

@@ -470,16 +470,12 @@ export default function App() {
   useEffect(() => {
     let frame = 0;
     let previousPads = new Set<number>();
-    let lastName = '';
     const poll = () => {
       const pads = Array.from(navigator.getGamepads?.() ?? []).filter((pad): pad is Gamepad =>
         Boolean(pad?.connected),
       );
       const name = pads[0]?.id ?? '';
-      if (name !== lastName) {
-        setGamepad(name);
-        lastName = name;
-      }
+      setGamepad(name);
       const enabled = view === 'play' && !modal && emulator.getSnapshot().status === 'running';
       const currentPads = new Set(pads.map((pad) => pad.index));
       for (const pad of pads) {
