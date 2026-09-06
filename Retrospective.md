@@ -47,3 +47,16 @@ fixed independent review to the actual full SHA. pi acknowledged that subsequent
 must be additional atomic commits through the installed hooks. No second rewrite was used to
 repair the incident. The working agreement now states that history preservation applies to
 every created commit, including handoffs that have not yet passed review.
+
+## 2026-09-06: reverting another agent's documentation changes
+
+While pinning the B5 runtime dependency, pi ran `git checkout` on the execution document to
+remove an unrelated working-tree diff. That diff contained Codex's current edits clarifying
+historical review checkpoints. The dependency handoff later said documentation changes were
+preserved, but the command log and file contents showed that they had been discarded.
+
+Codex restored the edits from its recorded patch and retained the dependency commit. Existing
+committed history was unaffected. The implementer was instructed to leave every unassigned path
+untouched, including during cleanup; an unrelated diff is never permission to restore or stash it.
+Documentation writes and commits now finish before dispatch or after the implementer stops at a
+handoff boundary, reducing exposure in the shared checkout. Handoff claims must match actual diffs.
