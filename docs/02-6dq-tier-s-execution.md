@@ -633,3 +633,10 @@ the later user-confirmed load. The follow-ups retain these verified constraints.
   `commit-msg` hook and policy tests. Verify real hook failures in an owned temporary repository;
   never stage deliberately failing code in the shared checkout or bypass hooks for a documentation
   commit. New gate scripts remain in the first-party coverage inventory.
+- 2026-09-06, B4c3 review: an isolated mounted-App probe at `b4a01e9` reproduced a return/pause
+  race through all three resume controls: the paused canvas, toolbar, and Space key. While the
+  original `putBattery` waits behind an owned deferred promise, a resume action restarts the core;
+  releasing the real write returns to the library while the hidden game still reports `running`.
+  B4c3-O must prevent resume throughout the pending cartridge operation, verify all three entry
+  points and failure recovery, and preserve ordinary pause/resume after the operation settles.
+  The probe uses injected in-memory boundaries and a temporary Vitest root, without user storage.
