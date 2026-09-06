@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress, Tier B verified. B1 through B5 are accepted, including the complete production HTTP API contract matrix. All four aggregate coverage metrics exceed 90%, and installed pre-commit and commit-message hooks pass independent positive and negative checks. B6 through B8 remain pending; Tier A still requires the security and pre-push gates.
+Status: in progress, Tier B verified. B1 through B5 and B6 security scanning are accepted. All four aggregate coverage metrics exceed 90%; installed commit hooks and pinned security scanners pass independent positive and negative checks. B6 pre-push enforcement and B7 through B8 remain pending; Tier A still requires the installed pre-push gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -243,22 +243,22 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State    | Implementation commits                                                                                                                                                                                                                           | Review and evidence                                                                                                       |
-| ----- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                                                                                                                                                                                             | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below                 |
-| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                                                                                                                                                                                            | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                                 |
-| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742`                                                                                                                                                                      | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass                             |
-| B4a   | Accepted | `fff1da2`, `8f9f008`                                                                                                                                                                                                                             | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed                      |
-| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                                                                                                                                                                                            | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass                         |
-| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                                                                                                                                                                                                  | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed                           |
-| B4c2  | Accepted | `b1933ca`, `d08a034`                                                                                                                                                                                                                             | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                     |
-| B4c3  | Accepted | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`, `6f93cc3`, `5fbd930`, `fc8bb52`, `f43069d`, `7d5383f`, `c3a1a36`, `bf8cc79`, `6d629ad`, `79d725c`, `76aea87`, `7ed6ad8`, `850c683`, `e984a6f`, `624322f`, `757a0ed`, `133afc8` | 286 unit tests; independent G1/coverage and modal checkpoint payload/recovery review pass; all B4c3 follow-ups accepted   |
-| B4c4  | Accepted | `23f9198`, `7a534ed`, `d9295ec`, `38f5e03`, `6ef2389`, `dd4aca0`                                                                                                                                                                                 | 292 units; independent G1/coverage, input/lifecycle probes, negative guards, and descriptor cleanup pass                  |
-| B4d   | Accepted | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`, `fbd52cc`, `8c24c5c`, `9a3545c`, `49a79ab`                                                                                                                                                           | 363 units; G1/build; all four metrics >=90%; actual hooks and failure/process probes pass; Tier B verified                |
-| B5    | Accepted | `8604276`, `0bfecb5`, `91685a6`, `cf2514d`, `759c65a`, `38cb1f5`, `d5ff4f9`                                                                                                                                                                      | 388 units; G1/L1, production build, 40 real HTTP contracts, independent bytes/authentication and inventory rejection pass |
-| B6    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                         |
-| B7    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                         |
-| B8    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                         |
+| Batch | State       | Implementation commits                                                                                                                                                                                                                           | Review and evidence                                                                                                       |
+| ----- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| B1    | Accepted    | `59bbfa2`, `d89ff9d`                                                                                                                                                                                                                             | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below                 |
+| B2    | Accepted    | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                                                                                                                                                                                            | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                                 |
+| B3    | Accepted    | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742`                                                                                                                                                                      | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass                             |
+| B4a   | Accepted    | `fff1da2`, `8f9f008`                                                                                                                                                                                                                             | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed                      |
+| B4b   | Accepted    | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                                                                                                                                                                                            | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass                         |
+| B4c1  | Accepted    | `8e1b53d`, `264675d`, `10d1e6e`                                                                                                                                                                                                                  | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed                           |
+| B4c2  | Accepted    | `b1933ca`, `d08a034`                                                                                                                                                                                                                             | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                     |
+| B4c3  | Accepted    | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`, `6f93cc3`, `5fbd930`, `fc8bb52`, `f43069d`, `7d5383f`, `c3a1a36`, `bf8cc79`, `6d629ad`, `79d725c`, `76aea87`, `7ed6ad8`, `850c683`, `e984a6f`, `624322f`, `757a0ed`, `133afc8` | 286 unit tests; independent G1/coverage and modal checkpoint payload/recovery review pass; all B4c3 follow-ups accepted   |
+| B4c4  | Accepted    | `23f9198`, `7a534ed`, `d9295ec`, `38f5e03`, `6ef2389`, `dd4aca0`                                                                                                                                                                                 | 292 units; independent G1/coverage, input/lifecycle probes, negative guards, and descriptor cleanup pass                  |
+| B4d   | Accepted    | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`, `fbd52cc`, `8c24c5c`, `9a3545c`, `49a79ab`                                                                                                                                                           | 363 units; G1/build; all four metrics >=90%; actual hooks and failure/process probes pass; Tier B verified                |
+| B5    | Accepted    | `8604276`, `0bfecb5`, `91685a6`, `cf2514d`, `759c65a`, `38cb1f5`, `d5ff4f9`                                                                                                                                                                      | 388 units; G1/L1, production build, 40 real HTTP contracts, independent bytes/authentication and inventory rejection pass |
+| B6    | In progress | `48894ea`, `ca704a2`                                                                                                                                                                                                                             | Security accepted: 440 units, G1/L1/G2 and 40 HTTP cases; 17 scanner/history and six process probes; pre-push pending     |
+| B7    | Pending     | —                                                                                                                                                                                                                                                | —                                                                                                                         |
+| B8    | Pending     | —                                                                                                                                                                                                                                                | —                                                                                                                         |
 
 ### B1 review evidence
 
@@ -1145,6 +1145,50 @@ implementation above. Daily dev/preview services remain outside test ownership. 
 pinned committed-history security scanning, then the installed L2/G2 pre-push gate. Neither Tier A
 nor Tier S is claimed at this checkpoint.
 
+### B6 security scanner acceptance
+
+Reviewed implementation: `48894ea4a1712c755d1bb60a9766a5f67bf15221`, followed by the
+additive test-isolation correction `ca704a2e643730be084f910b9c84676118a19910`.
+[quality-tools.json](../scripts/quality-tools.json) is the authoritative pin source for OSV Scanner
+2.5.1 and Gitleaks 8.30.1. [run-g2.mjs](../scripts/run-g2.mjs) rejects absent tools, nonexact
+versions, scanner failures, signals, malformed input, and unreadable stdin. OSV scans the actual
+`bun.lock`; Gitleaks redacts findings and applies only the reviewed exact historical prose
+fingerprint in [.gitleaksignore](../.gitleaksignore).
+
+`npm run quality:g2` scans full committed ancestry with `-m HEAD` without reading stdin.
+`node scripts/run-g2.mjs --pre-push` reads Git's four-field update rows once; `--input <rows>`
+provides explicit rows. Existing remote objects use `-m <remote-sha>..<local-sha>`; new branches
+and missing remote objects use full local ancestry. Deletions omit only their history scan;
+empty/deletion-only input still runs the lockfile scan. Every history range includes merge diffs.
+
+Independent checks on 2026-09-06:
+
+- At the final correction SHA, `quality:commit` passes in 6.66 seconds: G1 checks 97 Biome files
+  with zero errors/warnings, strict TypeScript, and formatting; L1 passes 440 tests across 41 files.
+  Coverage is 94.47% statements (2309/2444), 90.09% branches (1656/1838), 94.72% functions
+  (485/512), and 95.71% lines (2098/2192). All four 90% thresholds remain enforced.
+- Actual pinned `quality:g2` passes in 3.21 seconds at that same SHA. At the initial security
+  SHA, `quality:l2` passes its production build/distribution checks and 40 real HTTP cases
+  (1.97 seconds total; 500 ms for Vitest). The correction changes one unit-test file only.
+- Seventeen independent entry/history cases use real scanner binaries and an identical project
+  lockfile. They reject added-then-deleted credentials, new-branch and second-ref findings,
+  missing-remote histories, and merge-only credentials. Clean direct mode terminates with open
+  stdin; deletion/empty modes still scan dependencies; invalid lockfile, malformed/read-failed
+  input, missing tools, wrong/suffixed versions, and signal-only tool exits fail. Logs expose
+  none of the runtime-generated test values.
+- Six real process cases cover timeout with a normally terminating or TERM-ignoring parent,
+  external abort, nonzero parent exit with a surviving descendant, and G2 CLI SIGTERM/SIGINT.
+  Every captured subtree reaches zero survivors; the CLI preserves exit 143/130. Probe-owned
+  process state is removed, and history fixtures remain isolated for the pre-push review.
+- Review found one unit sending real signals for a fake PID. An independent outer OS-boundary
+  guard fails at `48894ea` and passes at `ca704a2`, requiring every mock to restore its boundary
+  and no unowned signals. The correction retains the original child error and exact TERM/KILL
+  assertions. Temporary test edits restore in `finally`; the review checkout is clean.
+
+The security handoff is accepted. B6 remains in progress until the installed pre-push hook runs
+L2 and G2 together and passes nested build cancellation, stdin propagation, and failure probes.
+Tier A and Tier S are not yet claimed. Daily development and preview services remain preserved.
+
 ## 5. Final acceptance record
 
 | Check                   | State   | Evidence to record                                                            |
@@ -1238,3 +1282,12 @@ nor Tier S is claimed at this checkpoint.
   B4c4 first fixes state synchronization and adds focused reconnect/disconnect coverage in one
   atomic commit, preserving input-source semantics. Broad input and lifecycle coverage follow in
   separate reviewed commits; the probe owns and restores navigator, RAF, and storage boundaries.
+
+- 2026-09-06, B6 review: direct security scans use full committed HEAD ancestry even when the
+  checkout is already at its upstream. Every outgoing/full-history range includes `-m`: an owned
+  merge-only credential followed by deletion escapes ordinary Git log diffs but is detected with
+  merge diffs. Preserve this policy in the pre-push and CI entry points.
+- 2026-09-06, G1 scope follow-up: `tsconfig.node.json` still explicitly lists older root configs
+  and omits `vitest.l2.config.ts`. B7 isolation must include every maintained root TypeScript
+  configuration, including new browser configs, in the existing strict typecheck. Verify an owned
+  wrong-typed config is rejected before final acceptance; do not add a parallel unchecked list.
