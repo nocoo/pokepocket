@@ -646,3 +646,8 @@ the later user-confirmed load. The follow-ups retain these verified constraints.
   must keep an acknowledged restart nondismissible until it settles, retain an actionable error and
   retry path, and preserve cancellation before confirmation. Review the equivalent pending battery
   import boundary with a concrete regression before applying the same treatment.
+- 2026-09-06, B4c3 review: the equivalent battery-import probe at `1883663` also fails for both
+  Cancel and Escape while the real `replaceBattery` is deferred. After dismissal, releasing the
+  write replaces all 131072 supplied bytes and boots the core. B4c3-M includes this confirmed
+  mutation boundary alongside restart: block dismissal only after acknowledgement, expose failure
+  and retry, and keep normal pre-confirmation cancellation. Both probes settle their owned work.
