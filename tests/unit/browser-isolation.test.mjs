@@ -268,10 +268,10 @@ describe('Playwright JSON report validator policy', () => {
   it('passes a fully compliant report with exact expected test count and passing stats', () => {
     const validReport = {
       errors: [],
-      stats: { expected: 23, unexpected: 0, flaky: 0, skipped: 0, duration: 5000 },
+      stats: { expected: REQUIRED_TEST_COUNT, unexpected: 0, flaky: 0, skipped: 0, duration: 5000 },
       suites: [
         {
-          specs: Array.from({ length: 23 }, (_, i) => ({
+          specs: Array.from({ length: REQUIRED_TEST_COUNT }, (_, i) => ({
             title: `spec ${i}`,
             ok: true,
             tests: [
