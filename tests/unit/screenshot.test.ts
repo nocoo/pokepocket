@@ -143,13 +143,15 @@ describe('screenshot upscale and download behavior', () => {
     } as unknown as Document;
 
     const upscalePromise = upscaleScreenshot('deferred-source');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Decode not yet resolved: canvas should not have been created yet
-    expect(createElementSpy).not.toHaveBeenCalled();
-
-    resolveDecode();
-    await upscalePromise;
+      // Decode not yet resolved: canvas should not have been created yet
+      expect(createElementSpy).not.toHaveBeenCalled();
+    } finally {
+      resolveDecode();
+      await upscalePromise;
+    }
     expect(createElementSpy).toHaveBeenCalledWith('canvas');
   });
 
@@ -233,9 +235,11 @@ describe('screenshot upscale and download behavior', () => {
     } as unknown as Document;
 
     let timerCallback: (() => void) | undefined;
+    let timerDelay: number | undefined;
     globalThis.window = {
-      setTimeout: vi.fn().mockImplementation((cb: () => void) => {
+      setTimeout: vi.fn().mockImplementation((cb: () => void, delay?: number) => {
         timerCallback = cb;
+        timerDelay = delay;
         return 999;
       }),
     } as unknown as Window & typeof globalThis;
@@ -243,24 +247,29 @@ describe('screenshot upscale and download behavior', () => {
     const payload = new Uint8Array([1, 2, 3, 4]);
     download(payload, 'save.sav', 'application/octet-stream');
 
-    expect(createObjectURLSpy).toHaveBeenCalled();
+    expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
     expect(mockAnchor.download).toBe('save.sav');
     expect(mockAnchor.href).toBe('blob:http://localhost/test-uuid');
     expect(appendChildSpy).toHaveBeenCalledWith(mockAnchor);
-    expect(mockAnchor.click).toHaveBeenCalled();
-    expect(mockAnchor.remove).toHaveBeenCalled();
+    expect(mockAnchor.click).toHaveBeenCalledTimes(1);
+    expect(mockAnchor.remove).toHaveBeenCalledTimes(1);
 
-    // Verify blob bytes and type
-    expect(capturedBlob).toBeDefined();
-    if (capturedBlob) {
-      expect((capturedBlob as Blob).type).toBe('application/octet-stream');
-      const buffer = await (capturedBlob as Blob).arrayBuffer();
-      expect(new Uint8Array(buffer)).toEqual(payload);
-    }
+    // Unconditional Blob assertion: must be an actual Blob with exact MIME type and payload
+    expect(capturedBlob).toBeInstanceOf(Blob);
+    const resolvedBlob = capturedBlob as unknown as Blob;
+    expect(resolvedBlob.type).toBe('application/octet-stream');
+    const buffer = await resolvedBlob.arrayBuffer();
+    expect(new Uint8Array(buffer)).toEqual(payload);
 
-    // Verify cleanup revocation
+    // Exact 1000ms timer scheduling and no premature URL revocation
+    expect(timerDelay).toBe(1000);
     expect(revokeObjectURLSpy).not.toHaveBeenCalled();
-    timerCallback?.();
+
+    // Trigger scheduled timer callback: exact URL revoked
+    expect(timerCallback).toBeDefined();
+    if (!timerCallback) throw new Error('Missing timerCallback');
+    timerCallback();
+    expect(revokeObjectURLSpy).toHaveBeenCalledTimes(1);
     expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:http://localhost/test-uuid');
   });
 });
