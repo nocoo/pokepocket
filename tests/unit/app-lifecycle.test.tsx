@@ -277,6 +277,8 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
       const unpressCallsBeforeHidden2 = vi.mocked(harness.testCore.buttonUnpress).mock.calls.length;
       const putSnapshotCallsBeforeHidden2 = vi.mocked(harness.fakeStorage.putSnapshot).mock.calls
         .length;
+      const putBatteryCallsBeforeHidden2 = vi.mocked(harness.fakeStorage.putBattery).mock.calls
+        .length;
 
       let resolveCheckpoint2: () => void = () => {};
       const checkpoint2Promise = new Promise<void>((resolve) => {
@@ -309,6 +311,9 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
       expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(
         putSnapshotCallsBeforeHidden2 + 1,
       );
+      expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(
+        putBatteryCallsBeforeHidden2 + 1,
+      );
       const snaps2 = await harness.fakeStorage.listSnapshots('stored-emerald');
       const snap2 = snaps2.find((s) => s.slot === 0);
       expect(snap2).toBeDefined();
@@ -316,6 +321,13 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
       expect(snap2?.key).toBe('stored-emerald:0');
       expect(snap2?.romId).toBe('stored-emerald');
       expect(new Uint8Array(snap2?.data ?? new ArrayBuffer(0))).toEqual(
+        new Uint8Array([1, 2, 3, 4]),
+      );
+
+      const battery2 = await harness.fakeStorage.getBattery('stored-emerald');
+      expect(battery2).not.toBeNull();
+      expect(battery2?.romId).toBe('stored-emerald');
+      expect(new Uint8Array(battery2?.data ?? new ArrayBuffer(0))).toEqual(
         new Uint8Array([1, 2, 3, 4]),
       );
 
@@ -460,15 +472,27 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    // Actual snapshot/battery data remain preserved
+    // Actual snapshot and battery data remain preserved after failure
     const snapsAfterFail = await harness.fakeStorage.listSnapshots('stored-emerald');
     const snapAfterFail = snapsAfterFail.find((s) => s.slot === 0);
     expect(snapAfterFail).toBeDefined();
+    expect(snapAfterFail?.slot).toBe(0);
+    expect(snapAfterFail?.romId).toBe('stored-emerald');
+    expect(snapAfterFail?.key).toBe('stored-emerald:0');
     expect(new Uint8Array(snapAfterFail?.data ?? new ArrayBuffer(0))).toEqual(
       new Uint8Array([1, 2, 3, 4]),
     );
 
-    // Prove next pagehide checkpoint succeeds
+    const batteryAfterFail = await harness.fakeStorage.getBattery('stored-emerald');
+    expect(batteryAfterFail).not.toBeNull();
+    expect(batteryAfterFail?.romId).toBe('stored-emerald');
+    expect(new Uint8Array(batteryAfterFail?.data ?? new ArrayBuffer(0))).toEqual(
+      new Uint8Array([1, 2, 3, 4]),
+    );
+
+    // Prove next pagehide checkpoint succeeds: assert write delta and read both stored payloads
+    const putBatteryCallsBeforeSuccess2 = vi.mocked(harness.fakeStorage.putBattery).mock.calls
+      .length;
     let resolvePagehideSuccess2: () => void = () => {};
     const pagehideSuccess2Promise = new Promise<void>((resolve) => {
       resolvePagehideSuccess2 = resolve;
@@ -486,6 +510,26 @@ describe('App browser lifecycle, visibility, pagehide, and fullscreen wiring', (
     });
     expect(vi.mocked(harness.fakeStorage.putSnapshot).mock.calls.length).toBe(
       putSnapshotCallsBaseline + 3,
+    );
+    expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(
+      putBatteryCallsBeforeSuccess2 + 1,
+    );
+
+    const snapsAfterSuccess2 = await harness.fakeStorage.listSnapshots('stored-emerald');
+    const snapAfterSuccess2 = snapsAfterSuccess2.find((s) => s.slot === 0);
+    expect(snapAfterSuccess2).toBeDefined();
+    expect(snapAfterSuccess2?.slot).toBe(0);
+    expect(snapAfterSuccess2?.romId).toBe('stored-emerald');
+    expect(snapAfterSuccess2?.key).toBe('stored-emerald:0');
+    expect(new Uint8Array(snapAfterSuccess2?.data ?? new ArrayBuffer(0))).toEqual(
+      new Uint8Array([1, 2, 3, 4]),
+    );
+
+    const batteryAfterSuccess2 = await harness.fakeStorage.getBattery('stored-emerald');
+    expect(batteryAfterSuccess2).not.toBeNull();
+    expect(batteryAfterSuccess2?.romId).toBe('stored-emerald');
+    expect(new Uint8Array(batteryAfterSuccess2?.data ?? new ArrayBuffer(0))).toEqual(
+      new Uint8Array([1, 2, 3, 4]),
     );
 
     // 3. Unmount and verify matching removeEventListener
