@@ -150,9 +150,10 @@ describe('App settings and modal management', () => {
     const screenElement = container.querySelector('.game-screen');
     expect(screenElement?.classList.contains('lcd-filter')).toBe(true);
 
-    // Toggle volume slider
+    // Toggle volume slider -> core.setVolume(0.9)
     const volumeSlider = within(dialog).getByRole('slider', { name: '设置游戏音量' });
     fireEvent.change(volumeSlider, { target: { value: '0.9' } });
+    expect(harness.testCore.setVolume).toHaveBeenCalledWith(0.9);
     const persistedSettingsVolume = JSON.parse(localStorage.getItem('pocket-settings') ?? '{}');
     expect(persistedSettingsVolume.volume).toBe(0.9);
     expect(persistedSettingsVolume.muted).toBe(false);

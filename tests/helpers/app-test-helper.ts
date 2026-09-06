@@ -13,7 +13,7 @@ export interface TestAppHarness {
   testCore: mGBAEmulator;
   fakeStorage: EmulatorStorageAdapter;
   currentClock: EmulatorClock;
-  activeIntervals: Array<ReturnType<typeof setInterval>>;
+  activeIntervals: Set<ReturnType<typeof setInterval>>;
   emulatorRafQueue: Array<() => void>;
   windowRafMap: Map<number, FrameRequestCallback>;
   flushEmulatorRafs: () => void;
@@ -137,7 +137,7 @@ export function createTestAppHarness(): TestAppHarness {
     recordPlayTime: vi.fn().mockResolvedValue(undefined),
   };
 
-  let activeIntervals: Array<ReturnType<typeof setInterval>> = [];
+  const activeIntervals = new Set<ReturnType<typeof setInterval>>();
   const emulatorRafQueue: Array<() => void> = [];
   const windowRafMap = new Map<number, FrameRequestCallback>();
   let nextRafId = 1;
@@ -155,12 +155,12 @@ export function createTestAppHarness(): TestAppHarness {
     now: () => Date.now(),
     setInterval: (cb, ms) => {
       const id = setInterval(cb, ms);
-      activeIntervals.push(id);
+      activeIntervals.add(id);
       return id;
     },
     clearInterval: (id) => {
       clearInterval(id);
-      activeIntervals = activeIntervals.filter((item) => item !== id);
+      activeIntervals.delete(id);
     },
     requestAnimationFrame: (cb) => {
       emulatorRafQueue.push(cb);
@@ -181,7 +181,7 @@ export function createTestAppHarness(): TestAppHarness {
 
   const cleanup = () => {
     for (const id of activeIntervals) clearInterval(id);
-    activeIntervals = [];
+    activeIntervals.clear();
     emulatorRafQueue.length = 0;
     windowRafMap.clear();
   };

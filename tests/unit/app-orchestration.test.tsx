@@ -207,7 +207,9 @@ describe('App cartridge lifecycle and gallery orchestration', () => {
     fireEvent.dragEnter(appContainer, {
       dataTransfer: { types: ['Files'] },
     });
-    expect(container.querySelector('.drop-overlay')).toBeDefined();
+    const overlay = container.querySelector('.drop-overlay');
+    expect(overlay).not.toBeNull();
+    expect(overlay).toBeInstanceOf(HTMLDivElement);
 
     fireEvent.drop(appContainer, {
       dataTransfer: { files: [gbaFile] },
@@ -219,7 +221,18 @@ describe('App cartridge lifecycle and gallery orchestration', () => {
     harness.flushEmulatorRafs();
 
     await screen.findByText('正在冒险');
-    expect(harness.testCore.loadGame).toHaveBeenCalled();
+    expect(harness.testCore.loadGame).toHaveBeenCalledWith(
+      expect.stringMatching(/\/roms\/[a-f0-9]+\.gba$/),
+      expect.stringMatching(/\/saves\/[a-f0-9]+\.sav$/),
+    );
+
+    // Verify stored cartridge bytes
+    const storedList = await storage.listCartridges();
+    const droppedCart = storedList.find((c) => c.fileName === 'custom-emerald.gba');
+    expect(droppedCart).toBeDefined();
+    if (droppedCart) {
+      expect(new Uint8Array(droppedCart.data)).toEqual(gbaFixture());
+    }
   });
 
   it('opens cartridge picker when starting an unavailable edition without cartridge and handles picker cancellation', async () => {
@@ -241,11 +254,10 @@ describe('App cartridge lifecycle and gallery orchestration', () => {
     expect(clickSpy).toHaveBeenCalled();
 
     // Trigger cancel on romInput file input element
-    const romInput = container.querySelector(
-      'input[type="file"][accept*=".gba"]',
-    ) as HTMLInputElement;
-    expect(romInput).toBeDefined();
-    fireEvent(romInput, new Event('cancel'));
+    const romInput = container.querySelector('input[type="file"][accept*=".gba"]');
+    expect(romInput).not.toBeNull();
+    expect(romInput).toBeInstanceOf(HTMLInputElement);
+    fireEvent(romInput as HTMLInputElement, new Event('cancel'));
   });
 
   it('selects local custom cartridge from sidebar details and runs in console', async () => {
@@ -281,9 +293,10 @@ describe('App cartridge lifecycle and gallery orchestration', () => {
     await screen.findByText('正在冒险');
 
     // In play view sidebar, details element lists local revisions
-    const details = container.querySelector('details.local-cartridges') as HTMLDetailsElement;
-    expect(details).toBeDefined();
-    if (details) details.open = true;
+    const details = container.querySelector('details.local-cartridges');
+    expect(details).not.toBeNull();
+    expect(details).toBeInstanceOf(HTMLDetailsElement);
+    (details as HTMLDetailsElement).open = true;
 
     const localBtn = screen.getByRole('button', { name: '载入本地卡带 custom-game.gba' });
     expect(localBtn).toBeDefined();
@@ -297,8 +310,8 @@ describe('App cartridge lifecycle and gallery orchestration', () => {
 
     expect(await screen.findByRole('heading', { level: 2, name: 'CUSTOM ROM' })).toBeDefined();
     expect(harness.testCore.loadGame).toHaveBeenCalledWith(
-      expect.stringMatching(/\/roms\/local-custom-rev1\.gba$/),
-      expect.stringMatching(/\/saves\/local-custom-rev1\.sav$/),
+      '/roms/local-custom-rev1.gba',
+      '/saves/local-custom-rev1.sav',
     );
     expect(localStorage.getItem('pocket-last-cartridge')).toBe('local-custom-rev1');
   });
