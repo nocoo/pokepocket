@@ -41,18 +41,23 @@ The compiled bytecode in `tests/fixtures/executable.ts` exactly reproduces the v
 - GBC: 32,768 bytes, SHA256 `da4ebf2bc83dcc193c2a0ce117c697a9a0c74c1939b189bf6cf8d948bc28c36a`
 - GBA: 32,768 bytes, SHA256 `369d40a2b77d3c55f1b966dc8dbfbd2100195a3fcf31625891e7ea6bc8055ab8`
 
-Optional local assembly reproduction commands (requires `rgbds` for GB/GBC and `arm-none-eabi-binutils` for GBA):
+Optional local program assembly commands (requires `rgbds` for GB/GBC and `arm-none-eabi-binutils` for GBA):
 
 ```bash
-# GB / GBC
-rgbasm -o /tmp/gb.o tests/fixtures/source/original-gb.asm
-rgblink -o /tmp/gb.gb /tmp/gb.o
-rgbfix -v -p 0x00 -m 0x13 -r 0x03 -t "POCKET PROBE" /tmp/gb.gb
+# Run from the repository root. All outputs belong to this invocation.
+fixture_build_dir=$(mktemp -d "${TMPDIR:-/tmp}/pokepocket-fixture-build.XXXXXX")
+trap 'rm -rf -- "$fixture_build_dir"' EXIT
+
+# GB / GBC: entry vector and program at their declared ROM addresses.
+rgbasm -o "$fixture_build_dir/gb.o" tests/fixtures/source/original-gb.asm
+rgblink -o "$fixture_build_dir/gb.bin" "$fixture_build_dir/gb.o"
 
 # GBA
-arm-none-eabi-as -mcpu=arm7tdmi -o /tmp/gba.o tests/fixtures/source/original-gba.s
-arm-none-eabi-objcopy -O binary /tmp/gba.o /tmp/gba.bin
+arm-none-eabi-as -mcpu=arm7tdmi -o "$fixture_build_dir/gba.o" tests/fixtures/source/original-gba.s
+arm-none-eabi-objcopy -O binary "$fixture_build_dir/gba.o" "$fixture_build_dir/gba.bin"
 ```
+
+These outputs reproduce the assembly sections. The TypeScript generators add the platform-specific headers, checksums, and 32768-byte padding to produce the complete ROM hashes listed above.
 
 Continuous integration and automated tests verify these contracts deterministically in TypeScript without external toolchain dependencies.
 

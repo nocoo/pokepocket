@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress, Tier A verified. B1 through B6 are accepted. All four aggregate coverage metrics exceed 90%; installed commit and pre-push hooks pass independent positive, negative, and process-cleanup checks. Required browser coverage and CI/release alignment in B7 through B8 remain pending; Tier S is not yet verified.
+Status: in progress, Tier A verified. B1 through B6 and B7's executable fixtures are accepted. All four aggregate coverage metrics exceed 90%; installed commit and pre-push hooks pass independent positive, negative, and process-cleanup checks. B7 is in progress, including a confirmed snapshot restoration correction. Required browser coverage and CI/release alignment remain pending; Tier S is not yet verified.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -218,6 +218,13 @@ negative gate probes, isolation guards, and combined runtime under 3 minutes. **
     - Keep reviewable source/instructions in the repository and construct ROM bytes in tests.
       Do not commit ROM binaries or require a cross-compiler in CI. Use original cartridge
       identifiers so mGBA's commercial-game save overrides cannot change the fixture hardware.
+    - Follow with one corrective handoff, `fix: restore active snapshot save memory`, before the
+      broad journeys. The confirmed GB/GBC failure restores the displayed frame and saved file,
+      but leaves active SRAM at the newer value. Use the pinned SDK's masked restore under an
+      explicitly paused core for both manual and automatic snapshots; preserve pause ownership,
+      failure/retry behavior, and queued persistence. Test the next emulated input as well as
+      the restored frame. Battery files retain the last flushed game save until the next in-game
+      write, matching the existing GBA boundary; do not invent synchronous file restoration.
 17. `test: require core cartridge and save journeys`
     - Make import/start/pause/resume/reload and cross-platform switching mandatory for GB/GBC/GBA.
     - Assert snapshot CRUD/confirmation/cancellation/retry and meaningful `.sav` import/export results.
@@ -253,22 +260,22 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State    | Implementation commits                                                                                                                                                                                                                           | Review and evidence                                                                                                       |
-| ----- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                                                                                                                                                                                             | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below                 |
-| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                                                                                                                                                                                            | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                                 |
-| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742`                                                                                                                                                                      | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass                             |
-| B4a   | Accepted | `fff1da2`, `8f9f008`                                                                                                                                                                                                                             | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed                      |
-| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                                                                                                                                                                                            | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass                         |
-| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                                                                                                                                                                                                  | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed                           |
-| B4c2  | Accepted | `b1933ca`, `d08a034`                                                                                                                                                                                                                             | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                     |
-| B4c3  | Accepted | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`, `6f93cc3`, `5fbd930`, `fc8bb52`, `f43069d`, `7d5383f`, `c3a1a36`, `bf8cc79`, `6d629ad`, `79d725c`, `76aea87`, `7ed6ad8`, `850c683`, `e984a6f`, `624322f`, `757a0ed`, `133afc8` | 286 unit tests; independent G1/coverage and modal checkpoint payload/recovery review pass; all B4c3 follow-ups accepted   |
-| B4c4  | Accepted | `23f9198`, `7a534ed`, `d9295ec`, `38f5e03`, `6ef2389`, `dd4aca0`                                                                                                                                                                                 | 292 units; independent G1/coverage, input/lifecycle probes, negative guards, and descriptor cleanup pass                  |
-| B4d   | Accepted | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`, `fbd52cc`, `8c24c5c`, `9a3545c`, `49a79ab`                                                                                                                                                           | 363 units; G1/build; all four metrics >=90%; actual hooks and failure/process probes pass; Tier B verified                |
-| B5    | Accepted | `8604276`, `0bfecb5`, `91685a6`, `cf2514d`, `759c65a`, `38cb1f5`, `d5ff4f9`                                                                                                                                                                      | 388 units; G1/L1, production build, 40 real HTTP contracts, independent bytes/authentication and inventory rejection pass |
-| B6    | Accepted | `48894ea`, `ca704a2`, `24ee4a1`, `cc58d97`, `4195859`, `72b0dab`, `0d3a3be`                                                                                                                                                                      | 467 units; all coverage metrics >=90%; installed push hook, real npm cancellation, L2/G2 pass; Tier A verified            |
-| B7    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                         |
-| B8    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                         |
+| Batch | State       | Implementation commits                                                                                                                                                                                                                           | Review and evidence                                                                                                                               |
+| ----- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1    | Accepted    | `59bbfa2`, `d89ff9d`                                                                                                                                                                                                                             | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below                                         |
+| B2    | Accepted    | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                                                                                                                                                                                            | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                                                         |
+| B3    | Accepted    | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742`                                                                                                                                                                      | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass                                                     |
+| B4a   | Accepted    | `fff1da2`, `8f9f008`                                                                                                                                                                                                                             | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed                                              |
+| B4b   | Accepted    | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                                                                                                                                                                                            | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass                                                 |
+| B4c1  | Accepted    | `8e1b53d`, `264675d`, `10d1e6e`                                                                                                                                                                                                                  | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed                                                   |
+| B4c2  | Accepted    | `b1933ca`, `d08a034`                                                                                                                                                                                                                             | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                                             |
+| B4c3  | Accepted    | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`, `6f93cc3`, `5fbd930`, `fc8bb52`, `f43069d`, `7d5383f`, `c3a1a36`, `bf8cc79`, `6d629ad`, `79d725c`, `76aea87`, `7ed6ad8`, `850c683`, `e984a6f`, `624322f`, `757a0ed`, `133afc8` | 286 unit tests; independent G1/coverage and modal checkpoint payload/recovery review pass; all B4c3 follow-ups accepted                           |
+| B4c4  | Accepted    | `23f9198`, `7a534ed`, `d9295ec`, `38f5e03`, `6ef2389`, `dd4aca0`                                                                                                                                                                                 | 292 units; independent G1/coverage, input/lifecycle probes, negative guards, and descriptor cleanup pass                                          |
+| B4d   | Accepted    | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`, `fbd52cc`, `8c24c5c`, `9a3545c`, `49a79ab`                                                                                                                                                           | 363 units; G1/build; all four metrics >=90%; actual hooks and failure/process probes pass; Tier B verified                                        |
+| B5    | Accepted    | `8604276`, `0bfecb5`, `91685a6`, `cf2514d`, `759c65a`, `38cb1f5`, `d5ff4f9`                                                                                                                                                                      | 388 units; G1/L1, production build, 40 real HTTP contracts, independent bytes/authentication and inventory rejection pass                         |
+| B6    | Accepted    | `48894ea`, `ca704a2`, `24ee4a1`, `cc58d97`, `4195859`, `72b0dab`, `0d3a3be`                                                                                                                                                                      | 467 units; all coverage metrics >=90%; installed push hook, real npm cancellation, L2/G2 pass; Tier A verified                                    |
+| B7    | In progress | `a29eff5`, `0d60e83`                                                                                                                                                                                                                             | Executable fixtures accepted; 472 units, source-byte agreement and real WASM battery roundtrips pass; snapshot correction and required L3 pending |
+| B8    | Pending     | —                                                                                                                                                                                                                                                | —                                                                                                                                                 |
 
 ### B1 review evidence
 
@@ -1288,6 +1295,57 @@ block Tier S. During service verification, preview port 17047 was found without 
 restored successfully; its stopping cause was not established. The daily Caddy development endpoint
 and the restored preview respond with version 1.1.0. Both services remain outside test ownership.
 
+### B7 executable fixture acceptance and recovery finding
+
+Reviewed implementation: `a29eff553d20115daa85d9077b982c8ba65ed84c` and additive correction
+`0d60e83d7f2aac61e39dfe34451e3be1fb39837a`. [executable.ts](../tests/fixtures/executable.ts)
+generates original 32768-byte GB/GBC/GBA cartridges from reviewable SM83 and ARM source in
+[the fixture source directory](../tests/fixtures/source/README.md). The GB/GBC program is 144
+bytes and the GBA program is 128 bytes. GBA uses original code `ZPPE` and `SRAM_V110`; GB/GBC use
+MBC3+RAM+BATTERY. No ROM binary or cross-compiler dependency is added to the repository.
+
+The correction removes all optional `/tmp` comparisons and empty catches from
+[the fixture contracts](../tests/unit/executable-fixtures.test.ts). Full-ROM hashes and header
+assertions always execute. Its assembly comments and input-line descriptions are corrected while
+every generated byte and all three expected hashes remain unchanged. `createInitialBattery()`
+is a deterministic import payload with byte 0 equal to 1 and all remaining bytes zero; it is not
+the core's first generated battery, whose remaining bytes are `0xff`.
+
+Independent evidence on 2026-09-06:
+
+- At `0d60e83`, `quality:commit` passes in 7.63 seconds: 472 unit tests across 43 files,
+  101 Biome files with zero warnings/errors, strict TypeScript and formatting. Coverage remains
+  94.40% statements, 90.17% branches, 94.60% functions and 95.58% lines. The production build
+  and distribution checks also pass.
+- Independent RGBDS and ARM assembly/linking agrees with the generated program bytes for all
+  three platforms. The complete ROM hashes remain those required by the committed unit tests.
+- Fresh Chrome contexts execute the real pinned mGBA 2.5.1 WASM. Each platform renders a
+  nonempty frame, changes its live frame and battery byte from 1 to 2 after A, and reboots into
+  state 2. The entire 32768-byte battery before and after reboot is equal.
+- A further production-App probe at `0d60e83`, using owned loopback 27047 and real RS256
+  verification, exposes an existing restoration defect: save at 1, advance to 2, confirm restore,
+  then press A. GB/GBC display the old frame and expose saved file byte 1, but execute from active
+  SRAM 2 and write 3. GBA correctly executes from 1 and writes 2. This is a production failure,
+  not a fixture failure or a successful snapshot acceptance.
+- A local, uncommitted design trial in the review checkout pauses the core around
+  `loadStateSlot(slot, 61)`, the pinned SDK's default mask, and restores the caller's running
+  state in `finally`. The actual App then restores live state 1 and processes the next A as 2
+  on all three platforms. Files retain byte 2 until an in-game save, as previously observed on
+  GBA. The numeric mask excludes forced savedata writeback; this deprecated raw API requires
+  an explicit pause wrapper and a version-specific explanation. The production implementation
+  and automatic/manual failure regressions remain the next atomic handoff.
+
+The fixed-version source explains the observed GB defect: `_GBCoreSavedataRestore` with
+writeback enabled writes the VFile without refreshing mapped SRAM. Its masked branch refreshes
+active SRAM and defers file writeback to a game save. Calling both restoration variants does not
+provide a synchronous-file guarantee and is not the selected design. Required L3 must check the
+live restored frame and the next input, then test independent full-byte battery import/export and
+reload. Snapshot thumbnails, toasts, or an immediate `.sav` byte alone are insufficient.
+
+Fixture handoff is accepted. Snapshot correction, mandatory browser journeys, isolation/layout
+coverage, and B8 remain outstanding. All review browser contexts and owned runtimes have closed;
+the daily dev7047 and preview17047 remain outside their ownership.
+
 ## 5. Final acceptance record
 
 | Check                   | State   | Evidence to record                                                            |
@@ -1346,14 +1404,13 @@ and the restored preview respond with version 1.1.0. Both services remain outsid
   does not reflect a new SRAM write immediately. The original GBA code is `ZPPE`; reusing `BPEE`
   incorrectly selects Emerald's FLASH1M override. These isolated prototypes are design evidence;
   committed fixtures and mandatory browser regressions remain B7 deliverables.
-- 2026-09-06, B7 snapshot preparation: real mGBA 2.5.1 restores all three prototype programs'
-  live frame and execution state from state 2 to state 1. For GBA, `getSave()` still exposes the
-  filesystem battery byte 2 immediately after snapshot restoration, while the live frame is red
-  (state 1); the next A press changes it to green (state 2), proving resumed execution. GB/GBC
-  also expose byte 1 through `getSave()`. Required snapshot assertions must observe actual live
-  rendering and input effects rather than assume immediate filesystem persistence on every
-  platform. Independent battery roundtrips must still compare all 32768 bytes and prove reload
-  from imported data. This design probe does not authorize changing production savestate flags.
+- 2026-09-06, B7 snapshot preparation, corrected during fixture review: the original probe
+  demonstrated restored frames on all platforms and correct post-restore input on GBA. It did
+  not establish the latter on GB/GBC. The production-App reproduction above disproves that
+  earlier execution-state claim for GB/GBC. The next corrective handoff is authorized to use
+  the pinned masked restore with pause ownership, while preserving the documented deferred
+  battery-file boundary. All three platforms must prove both restored rendering and subsequent
+  input execution; battery roundtrips separately compare every byte and reload imported data.
 - The same preparation loaded the production Worker over an owned ephemeral HTTP listener with
   a locally signed RS256 token. Fresh browser contexts observed native fullscreen and fallback mode
   centered for all three platforms at 1440x1000; text and buttons shared the device scale. This
