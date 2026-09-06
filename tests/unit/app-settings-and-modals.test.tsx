@@ -280,4 +280,181 @@ describe('App settings and modal management', () => {
     expect(harness.testCore.quickReload).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+
+  it('restores persisted settings on fresh mount and keeps memory state usable when localStorage.setItem rejects', async () => {
+    const emeraldCart = createCartridge('stored-emerald');
+    await storage.putCartridge(emeraldCart);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('/api/catalog')) {
+          return {
+            ok: true,
+            json: async () => ({
+              editions: [{ id: 'emerald', available: true, url: '/roms/pokeemerald.gba' }],
+            }),
+          };
+        }
+        return { ok: false };
+      }),
+    );
+
+    // 1. Initial mount: configure custom nondefault preferences through real UI
+    const firstRender = render(<App />);
+    await screen.findByText('本地存储已就绪');
+
+    const settingsBtn = screen.getByRole('button', { name: '打开设置' });
+    await userEvent.click(settingsBtn);
+    const settingsDialog = await screen.findByRole('dialog');
+
+    // Set nondefault volume to 0.40
+    const volumeSlider = within(settingsDialog).getByRole('slider', { name: '设置游戏音量' });
+    fireEvent.change(volumeSlider, { target: { value: '0.4' } });
+
+    // Set muted to true
+    const muteToggle = within(settingsDialog).getByRole('button', { name: '静音游戏' });
+    await userEvent.click(muteToggle);
+
+    // Set filter to 'lcd'
+    const lcdBtn = within(settingsDialog).getByRole('button', { name: '复古液晶' });
+    await userEvent.click(lcdBtn);
+
+    // Set autoPause to false
+    const autoPauseSwitch = within(settingsDialog).getByRole('switch', { name: '离开时自动暂停' });
+    await userEvent.click(autoPauseSwitch);
+
+    // Rebind A key to 'KeyJ'
+    const aBindingBtn = within(settingsDialog).getByRole('button', { name: '修改 A 主要键位' });
+    fireEvent.click(aBindingBtn);
+    fireEvent.keyDown(window, { code: 'KeyJ' });
+
+    // Close settings modal
+    const closeBtn = within(settingsDialog).getByRole('button', { name: '关闭窗口' });
+    await userEvent.click(closeBtn);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    // Verify localStorage has persisted the exact nondefault settings
+    const storedBeforeUnmount = JSON.parse(localStorage.getItem('pocket-settings') ?? '{}');
+    expect(storedBeforeUnmount.volume).toBe(0.4);
+    expect(storedBeforeUnmount.muted).toBe(true);
+    expect(storedBeforeUnmount.filter).toBe('lcd');
+    expect(storedBeforeUnmount.autoPause).toBe(false);
+    expect(storedBeforeUnmount.bindings.A).toEqual(['KeyJ']);
+
+    // Unmount first app instance and clean up harness while retaining localStorage
+    firstRender.unmount();
+    cleanup();
+    harness.cleanup();
+
+    // 2. Fresh mount with a fresh harness: verify restoration of persisted settings
+    harness = createTestAppHarness();
+    const secondRender = render(<App />);
+    await screen.findByText('本地存储已就绪');
+
+    // Launch emerald game
+    const startBtn = screen.getByRole('button', { name: '开始冒险' });
+    const startPromise = userEvent.click(startBtn);
+    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
+    harness.flushEmulatorRafs();
+    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
+    harness.flushEmulatorRafs();
+    await startPromise;
+
+    await screen.findByText('正在冒险');
+
+    // (a) Core volume initialized to 0 because muted=true (even though volume is 0.4)
+    expect(harness.testCore.setVolume).toHaveBeenCalledWith(0);
+
+    // (b) Screen element has restored 'lcd-filter' class
+    const screenElement = secondRender.container.querySelector('.game-screen');
+    expect(screenElement?.classList.contains('lcd-filter')).toBe(true);
+
+    // (c) Help / Operation guide renders restored key label 'J' for A button
+    const controlsCard = secondRender.container.querySelector('.controls-card');
+    expect(controlsCard).not.toBeNull();
+    if (!controlsCard) throw new Error('Missing controls card');
+    expect(within(controlsCard as HTMLElement).getByText('J')).toBeDefined();
+
+    // (d) Keyboard behavior responds to restored 'KeyJ' binding and reaches core buttonPress
+    vi.mocked(harness.testCore.buttonPress).mockClear();
+    fireEvent.keyDown(window, { code: 'KeyJ' });
+    expect(harness.testCore.buttonPress).toHaveBeenCalledWith('A');
+    fireEvent.keyUp(window, { code: 'KeyJ' });
+    expect(harness.testCore.buttonUnpress).toHaveBeenCalledWith('A');
+
+    // (e) Open settings dialog on fresh mount and verify rendered values
+    const secondSettingsBtn = screen.getByRole('button', { name: '打开设置' });
+    await userEvent.click(secondSettingsBtn);
+    const restoredDialog = await screen.findByRole('dialog');
+
+    const restoredSlider = within(restoredDialog).getByRole('slider', {
+      name: '设置游戏音量',
+    }) as HTMLInputElement;
+    expect(restoredSlider.value).toBe('0.4');
+
+    expect(within(restoredDialog).getByRole('button', { name: '取消静音' })).toBeDefined();
+
+    const restoredAutoPause = within(restoredDialog).getByRole('switch', {
+      name: '离开时自动暂停',
+    });
+    expect(restoredAutoPause.getAttribute('aria-checked')).toBe('false');
+
+    const restoredLcdBtn = within(restoredDialog).getByRole('button', { name: '复古液晶' });
+    expect(restoredLcdBtn.classList.contains('selected')).toBe(true);
+
+    // Close settings dialog before testing persistence failure
+    const closeSecondSettings = within(restoredDialog).getByRole('button', { name: '关闭窗口' });
+    await userEvent.click(closeSecondSettings);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    // 3. Test persistence failure: when localStorage.setItem rejects, memory state and UI/core remain usable
+    const originalSettingsInStorage = localStorage.getItem('pocket-settings');
+    let setItemAttempts = 0;
+    const originalSetItem = localStorage.setItem.bind(localStorage);
+
+    const setItemSpy = vi
+      .spyOn(localStorage, 'setItem')
+      .mockImplementation((key: string, value: string) => {
+        if (key === 'pocket-settings') {
+          setItemAttempts++;
+          throw new Error('QuotaExceededError: storage is full');
+        }
+        originalSetItem(key, value);
+      });
+
+    try {
+      // Open settings and modify volume and unmute via toolbar button
+      const volumeMuteBtn = screen.getByRole('button', { name: '开启声音' });
+      await userEvent.click(volumeMuteBtn);
+
+      // Verify setItem was called and rejected
+      expect(setItemAttempts).toBeGreaterThanOrEqual(1);
+
+      // Core volume updated to unmuted volume (0.4) despite rejected storage write
+      expect(harness.testCore.setVolume).toHaveBeenCalledWith(0.4);
+
+      // Storage has NOT been updated with unmuted state; remains original rejected value
+      expect(localStorage.getItem('pocket-settings')).toBe(originalSettingsInStorage);
+
+      // Re-open settings modal and verify memory state is still unmuted and usable
+      await userEvent.click(secondSettingsBtn);
+      const thirdDialog = await screen.findByRole('dialog');
+      expect(within(thirdDialog).getByRole('button', { name: '静音游戏' })).toBeDefined();
+
+      // Switch filter to 'crisp' in memory
+      const crispBtn = within(thirdDialog).getByRole('button', { name: '清晰像素' });
+      await userEvent.click(crispBtn);
+      expect(screenElement?.classList.contains('lcd-filter')).toBe(false);
+
+      // Storage still remains unchanged
+      expect(localStorage.getItem('pocket-settings')).toBe(originalSettingsInStorage);
+
+      const closeThird = within(thirdDialog).getByRole('button', { name: '关闭窗口' });
+      await userEvent.click(closeThird);
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    } finally {
+      setItemSpy.mockRestore();
+    }
+  });
 });
