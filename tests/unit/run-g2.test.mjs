@@ -875,23 +875,58 @@ describe('parseCliPrePushInput policy', () => {
 
 describe('runProcessCapture child error and empty pid edge branches', () => {
   it('handles child error event and preserves initiatingError', async () => {
+    const killCalls = [];
+    const listeners = {};
+    const pendingTimers = [];
+
     const fakeChild = {
       pid: 55555,
       stdout: { on: () => {} },
       stderr: { on: () => {} },
       on: (event, cb) => {
+        listeners[event] = cb;
         if (event === 'error') {
-          setTimeout(() => cb(new Error('child emitted error')), 5);
+          const timer = setTimeout(() => cb(new Error('child emitted error')), 5);
+          pendingTimers.push(timer);
         }
         if (event === 'close') {
-          setTimeout(() => cb(1, null), 10);
+          const timer = setTimeout(() => cb(1, null), 10);
+          pendingTimers.push(timer);
         }
       },
     };
 
-    await expect(
-      runProcessCapture('stub', [], { spawnFn: () => fakeChild, escalationGraceMs: 10 }),
-    ).rejects.toThrow(/child emitted error/);
+    const origKill = process.kill;
+    let escalationFinishedResolve;
+    const escalationFinished = new Promise((resolve) => {
+      escalationFinishedResolve = resolve;
+    });
+
+    process.kill = (targetPid, signal) => {
+      killCalls.push({ targetPid, signal });
+      if (signal === 'SIGKILL') {
+        escalationFinishedResolve();
+      }
+    };
+
+    try {
+      const mockSpawn = () => fakeChild;
+      const promise = runProcessCapture('stub', [], {
+        spawnFn: mockSpawn,
+        escalationGraceMs: 15,
+      });
+
+      await expect(promise).rejects.toThrow(/child emitted error/);
+      await escalationFinished;
+
+      expect(killCalls.map((c) => ({ targetPid: c.targetPid, signal: c.signal }))).toEqual([
+        { targetPid: -55555, signal: 'SIGTERM' },
+        { targetPid: -55555, signal: 'SIGKILL' },
+      ]);
+    } finally {
+      for (const timer of pendingTimers) clearTimeout(timer);
+      process.kill = origKill;
+    }
   });
 
   it('handles child without pid safely during cleanup', async () => {
