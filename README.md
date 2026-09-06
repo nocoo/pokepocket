@@ -71,7 +71,7 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-默认仅监听 **127.0.0.1:7047**；本地 Caddy 转发 `pokepocket.dev.hexly.ai`。构建预览为 **17047**，独立浏览器测试服务为 **27047**，遵循 dev / dev+10000 / dev+20000 的本机端口规则。
+默认仅监听 **127.0.0.1:7047**；本地 Caddy 转发 `pokepocket.dev.hexly.ai`。构建预览为 **17047**，独立浏览器测试服务为 **27047**，遵循 dev / dev+10000 / dev+20000 的本机端口规则。 生产 HTTP 门禁单独使用 **17048**，避免占用预览端口。
 
 ```caddyfile
 http://pokepocket.dev.hexly.ai {
@@ -128,7 +128,7 @@ bun run verify:release
 
 CI/CD 沿用 [nocoo/base-ci](https://github.com/nocoo/base-ci) 与其他 Games 的约定：
 
-- **CI**：push / PR 到 `main`，运行构建、TypeScript、格式检查、单元测试、密钥与依赖扫描、浏览器测试。浏览器测试使用原创测试程序；真实卡带测试仅在本机存在相应 ROM 时运行。
+- **CI**：push / PR 到 `main`，运行构建、TypeScript、格式检查、单元测试、密钥与依赖扫描、浏览器测试。必需浏览器测试使用原创测试程序；真实卡带兼容性测试由独立的 `test:e2e:optional` 命令运行，不计入 CI 的必需套件。
 - **Release**：`main` 的 CI 成功后部署其已验证的提交；也支持 `v*.*.*` 标签和手动选择标签，标签版本须等于 `package.json`。生产部署串行执行。
 - GitHub repository / `production` environment secrets：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。Token 需要目标账户 Workers Scripts 编辑、账户读取，以及 `hexly.ai` 的 Workers Routes 编辑和 Zone 读取权限；不存入源码。
 - Deployment checks require pages, protected APIs, images, WASM, and ROM paths to redirect to the `nocoo` Access login before and after deployment. The final check also requires `/api/live` to report the exact package version. Failures include HTTP status and Cloudflare request identifiers; a 403 response never counts as a successful login check.
@@ -138,11 +138,18 @@ CF 仅负责访问验证和静态资源交付，CPU、画面、音频和存档�
 ## 验证
 
 ```bash
-bun run test
-bun run test:e2e
-bun run format:check
-bun run check:distribution
+bun run quality:commit
+bun run test:http
+bun run quality:push
+bun run quality:l3
+bun run test:e2e:optional
 ```
+
+安装依赖时会启用仓库 hooks。`quality:commit` 并行检查严格 lint、TypeScript、格式和完整单测覆盖率，语句、分支、函数、行四项均要求 ≥90%。`quality:push` 运行真实生产 Worker HTTP 契约和安全扫描；扫描器版本由 [quality-tools.json](scripts/quality-tools.json) 统一固定。
+
+`quality:l3` 与 `test:e2e` 是同一个必需入口：在 **127.0.0.1:27047** 启动独立的生产运行时与浏览器，使用原创 GB/GBC/GBA 程序和临时签名令牌，不依赖本地商业 ROM。它拒绝部分用例选择、任意目标/输出覆盖和并发运行，且任何失败、跳过或未执行用例都会阻止通过。报告、失败截图、trace 和下载保存在带所有权标记的 `test-results/required/`；退出时清理运行时、浏览器 profile 和锁；无法确认终止时保留状态与锁并报错。
+
+`test:e2e:optional` 需要本机自备的完整 12 版本卡带，使用同一个独占端口和独立的 `test-results/optional/`。这些验证覆盖应用自身的授权边界，不代表已完成真实 Cloudflare SSO 登录。
 
 测试覆盖 ROM 文件头与版本识别、本机目录检测、Access JWT 与拒绝路径、输入映射、浏览器导入后离线于 ROM 服务的恢复，以及本地 12 版本启动、画面与独立存档。已实测绿宝石角色创建、进入未白镇、游戏内 SAVE 和 `.sav` 导出导入。当前支持单机游玩，暂不支持联机交换与对战；启动与存档验证不代表所有版本均已完整通关。
 

@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress, Tier A verified. B1 through B6 and B7's executable fixtures, snapshot correction, required journey suite, and early artifact guard are accepted. All four aggregate coverage metrics exceed 90%; installed commit and pre-push hooks pass independent positive, negative, and process-cleanup checks. Full browser ownership gates, contrast/layout coverage, and CI/release alignment remain pending; Tier S is not yet verified.
+Status: in progress, Tier A verified. B1 through B6 and B7's executable fixtures, snapshot correction, required journeys, authorization and browser ownership gates are accepted. All four aggregate coverage metrics exceed 90%; installed commit and pre-push hooks and browser lifecycle checks pass independent verification. Navigation contrast, layout/export coverage, and CI/release alignment remain pending; Tier S is not yet verified.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -8,7 +8,8 @@ This document is the current implementation contract, review ledger, and accepta
 
 The shared checkout was accidentally deleted during an unaccepted B7 isolation probe. The accepted
 main history and working files are restored to `5e50221`; the [recovery record](03-workspace-recovery.md)
-documents the evidence and required containment. The isolation draft remains quarantined.
+documents the evidence and required containment. The former recovery-era isolation draft remains
+quarantined; the fresh independent continuation passes the ownership review recorded below.
 
 ## 1. Ownership and working agreement
 
@@ -269,12 +270,26 @@ isolated. Record the precise authentication/login boundary. No required core tes
 ### B8 — CI, release gating, and final sign-off
 
 21. `chore: align ci with local quality commands`
-    - Use the same project-owned L1/G1/L2/G2/L3 entry points in CI; publish coverage and failure artifacts.
-    - Ensure required browser failures or skips block acceptance.
+    - Use project-owned L1/G1/L2/G2/L3 entry points and the retained `test:http` regression in a
+      reusable quality workflow; publish coverage and browser failure artifacts.
+    - Read scanner pins from `scripts/quality-tools.json`, verify the actual installed versions,
+      and scan complete Git history. Keep quality read-only without deployment secrets.
+    - Each required job checks out the immutable input and obtains its actual tested SHA from
+      `git rev-parse HEAD`. Strict aggregation requires every job success and every SHA equal;
+      missing, skipped, cancelled, failed or mismatched results block acceptance.
+    - Parse the actual YAML in maintained policy tests and validate it with actionlint.
 22. `chore: require tested commits for every release`
-    - Resolve an immutable target SHA for main-CI, tag, and manual release paths.
-    - Require all quality results for that SHA before deployment, running missing checks when needed.
-    - Preserve Access checks, version/tag checks, serialized deployment, and post-deploy version checks.
+    - Resolve one immutable full target SHA for main-CI, original tag-push objects, and validated
+      manual tags. Read package version at that commit; every quality/deploy checkout uses it.
+    - Require successful push CI from the expected workflow identity/path, same repository and
+      main branch for automatic releases. Reuse the strict quality workflow for every target.
+    - Reject stale automatic targets against the current main tip immediately before serialized
+      deployment, so slow older CI cannot overwrite a newer deployment. Do not substitute a newer
+      target silently; explicit manual/tag semantics remain unchanged.
+    - Test real temporary Git histories: annotated/lightweight tags, moved/deleted refs, original
+      event objects, invalid versions/provenance, stale CI ordering, and missing or wrong-SHA gates.
+    - Preserve the production environment, deployment-only secrets, Access checks, version/tag
+      checks, serialized deployment, and exact post-deploy version checks.
 
 Review: actual reusable workflow inputs, checkout refs, job dependencies/conditions, token permissions,
 and negative cases for failed, missing, skipped, or unrelated-SHA results. Validate delivery logic
@@ -300,7 +315,7 @@ findings through additional atomic fixes, and commits the final implementation/e
 | B4d   | Accepted    | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`, `fbd52cc`, `8c24c5c`, `9a3545c`, `49a79ab`                                                                                                                                                           | 363 units; G1/build; all four metrics >=90%; actual hooks and failure/process probes pass; Tier B verified                |
 | B5    | Accepted    | `8604276`, `0bfecb5`, `91685a6`, `cf2514d`, `759c65a`, `38cb1f5`, `d5ff4f9`                                                                                                                                                                      | 388 units; G1/L1, production build, 40 real HTTP contracts, independent bytes/authentication and inventory rejection pass |
 | B6    | Accepted    | `48894ea`, `ca704a2`, `24ee4a1`, `cc58d97`, `4195859`, `72b0dab`, `0d3a3be`                                                                                                                                                                      | 467 units; all coverage metrics >=90%; installed push hook, real npm cancellation, L2/G2 pass; Tier A verified            |
-| B7    | In progress | `a29eff5`, `0d60e83`, `19f0b0f`, `94cbe07`, `d563a35`, `cc48e66`                                                                                                                                                                                 | Fixtures, snapshot correction, 21 required journeys and artifact guard accepted; full ownership, contrast/layout pending  |
+| B7    | In progress | `a29eff5`, `0d60e83`, `19f0b0f`, `94cbe07`, `d563a35`, `cc48e66`, `f7e37bd`                                                                                                                                                                      | Fixtures, snapshots, 23 required journeys and authorization/ownership gates accepted; contrast/layout pending             |
 | B8    | Pending     | —                                                                                                                                                                                                                                                | —                                                                                                                         |
 
 ### B1 review evidence
@@ -1494,6 +1509,67 @@ server reuse, concurrent execution, report validation, or process/signal ownersh
 must finish those boundaries while retaining this guard. An existing unmarked `test-results`
 directory is intentionally rejected; the guard does not adopt or erase it automatically.
 
+### B7 authorization and browser ownership acceptance
+
+Reviewed implementation: `f7e37bd408bdb9bd76951deb5d19a370a42dd203`, imported unchanged from a complete independent clone.
+`quality:l3` and `test:e2e` use the same required entry. The runner builds production assets and owns
+the browser server, captured browser PID/profile, resource root and fixed machine lock for loopback 27047. Both configurations validate the live lock and browser metadata before resolving artifacts;
+the optional entry uses a local-ROM Vite configuration without the Cloudflare plugin.
+
+Required runs reject selectors, mode/output/reporter overrides, unexpected targets and concurrent
+owners. The JSON policy requires the exact inventory, every expected/result status to pass on the
+first attempt, and zero failed, skipped, flaky or interrupted tests. Download files use each test's
+owned output paths. Failure screenshots, traces and reports remain after resource cleanup.
+
+Cleanup retains the first timeout/signal result and owned listeners through settlement. Browser
+close has a bounded kill fallback. Optional runtime ownership begins before listen; disposal waits
+for underlying startup before closing, so a late listen cannot recreate a service after cleanup.
+Unconfirmed disposal retains the resource root, metadata and lock. Deferred startup tests exercise
+the production runtime factory with a fake Vite server, and await the actual close continuation.
+
+Independent checks:
+
+- G1/L1 pass in 6.47 seconds: 612 unit tests across 46 files, 116 Biome files with zero warnings,
+  strict TypeScript and formatting clean. Coverage is statements 94.72% (2964/3129), branches
+  90.22% (2224/2465), functions 94.95% (527/555), lines 95.68% (2730/2853), with unchanged scope
+  and four enforced 90% thresholds. Evidence: `b7-isolation-final-unit-40j0jy9x/result.json`.
+- The required suite passes 23/23 in 116.551 seconds with both local ROM directories absent.
+  The final refinement changes only two pure unit tests; production/browser bytes remain identical.
+  The later intentional-failure run also passes all 23 unchanged required cases.
+- Optional compatibility passes 16/16 in 101.951 seconds using 12 hash-verified copied cartridges
+  under the disposable checkout. It covers 13 series cases and three commercial cases.
+- All 29 real CLI rejection/concurrency cases pass: guarded aliases, selectors and output/reporter
+  options, external/development/preview targets, raw Playwright entry, occupied port, and a lock
+  held by a live owner from a second independent checkout with a different temporary directory.
+  Owned file sentinels survive; natural process cleanup is checked before any fallback termination.
+  The lock-holder helper reports a clean exit and no surviving PID/group.
+- A uniquely marked intentional browser failure returns 1, while its own JSON result retains a
+  valid trace ZIP and a decoded 1280x720 screenshot. These are copied with hashes before later runs
+  clear suite output. Both worker runtime roots, the browser profile and lock are removed.
+- A real 15000 ms gate timeout returns 1 with the exact abort reason. Real npm-chain SIGINT and
+  SIGTERM return 130 and 143. Each receives another same-kind signal and a mixed signal inside a
+  recorded 650 ms resource-cleanup window; the first result survives. Every completed run has
+  zero captured child/group survivors and no remaining browser profiles, runtime roots or lock.
+- All seven maintained root configs reject an injected wrong-typed value with TS2322 in an
+  additional independent committed clone, including `vite.optional.config.ts` and
+  `vitest.l2.config.ts`. Evidence: `pokepocket-app-review-b7-config-24g82djw/config-scope.log`.
+
+Browser evidence is under `~/.local/share/pokepocket-review/`: required success in
+`b7-isolation-preflight-pb2i35fc/run-positive-1788694563873139000`, and the frozen final review in
+`b7-isolation-preflight-v273lbcx`. The latter contains
+`negative-1788695204451513000/results.json`, each `run-*/result.json`, timeout/signal proofs, and the
+failed test's report, screenshot, trace and hashes. Probe npm and compiler caches are confined to
+the owned review case. Preliminary driver-only cache/pipe/TIME_WAIT issues are corrected before
+the final rejection matrix; they are not accepted as gate failures or passing cleanup evidence.
+
+Two required authorization cases use a fresh anonymous browser to prove private HTML, emitted client
+JavaScript and WASM denial, and a locally signed token to load and execute the original GB fixture.
+The authorized run verifies its alternating pixels and next input while Worker egress remains
+JWKS-only. These are application authorization checks; hosted Cloudflare SSO is not exercised.
+
+B7 ownership is accepted. Navigation contrast, layout/export coverage, B8 CI/release alignment and
+final acceptance remain separate handoffs.
+
 ### B7 navigation contrast finding
 
 An independent production-browser probe at `d563a35` measures all 108 navigation combinations:
@@ -1618,7 +1694,7 @@ behavior exposed during B7 review, not a regression introduced by the journey te
   checkout is already at its upstream. Every outgoing/full-history range includes `-m`: an owned
   merge-only credential followed by deletion escapes ordinary Git log diffs but is detected with
   merge diffs. Preserve this policy in the pre-push and CI entry points.
-- 2026-09-06, G1 scope follow-up: `tsconfig.node.json` still explicitly lists older root configs
-  and omits `vitest.l2.config.ts`. B7 isolation must include every maintained root TypeScript
-  configuration, including new browser configs, in the existing strict typecheck. Verify an owned
-  wrong-typed config is rejected before final acceptance; do not add a parallel unchecked list.
+- 2026-09-06, G1 scope follow-up, resolved: the initial audit found an explicit older config
+  list that omitted `vitest.l2.config.ts`. The accepted artifact foundation uses `*.config.ts`
+  in `tsconfig.node.json`; the isolation review at `f7e37bd` independently verifies TS2322
+  rejection for all seven maintained configs, including the new optional Vite configuration.
