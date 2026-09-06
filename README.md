@@ -101,7 +101,9 @@ pokepocket.dev.hexly.ai {
 
 设置面板可修改主要与备用键位，检查按键冲突，并持久保存。支持标准 Gamepad API 手柄、移动触屏、三种画面滤镜、快进、音量调节、截图与全屏。
 
-每枚 ROM 有独立的游戏内电池存档、自动恢复点和三个手动即时存档。返回卡带盘会暂停并保存，切换卡带会保留原进度。导入 `.sav` 会丢弃可能覆盖它的旧自动恢复点，保留手动即时存档。
+每枚 ROM 有独立的游戏内电池存档、自动恢复点和三个手动即时存档。返回卡带盘会暂停并保存，切换卡带会保留原进度。导入 `.sav` 会丢弃可能覆盖它的旧自动恢复点，保留手动即时存档。加载、替换和清除即时存档均需弹窗确认；取消操作不会改写存档。
+
+全屏模式让掌机居中，字体和按钮随整机同步缩放。截图按原始画面比例导出为 1080 像素高的 PNG：GB / GBC 为 **1200 × 1080**，GBA 为 **1620 × 1080**。
 
 ## Cloudflare Access 与部署
 
@@ -126,12 +128,13 @@ bun run verify:access
 bun run verify:release
 ```
 
-CI/CD 沿用 [nocoo/base-ci](https://github.com/nocoo/base-ci) 与其他 Games 的约定：
+CI 与 Release 共用本仓的 [quality.yml](.github/workflows/quality.yml)，执行与本地相同的质量命令：
 
-- **CI**：push / PR 到 `main`，运行构建、TypeScript、格式检查、单元测试、密钥与依赖扫描、浏览器测试。必需浏览器测试使用原创测试程序；真实卡带兼容性测试由独立的 `test:e2e:optional` 命令运行，不计入 CI 的必需套件。
-- **Release**：`main` 的 CI 成功后部署其已验证的提交；也支持 `v*.*.*` 标签和手动选择标签，标签版本须等于 `package.json`。生产部署串行执行。
-- GitHub repository / `production` environment secrets：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`。Token 需要目标账户 Workers Scripts 编辑、账户读取，以及 `hexly.ai` 的 Workers Routes 编辑和 Zone 读取权限；不存入源码。
-- Deployment checks require pages, protected APIs, images, WASM, and ROM paths to redirect to the `nocoo` Access login before and after deployment. The final check also requires `/api/live` to report the exact package version. Failures include HTTP status and Cloudflare request identifiers; a 403 response never counts as a successful login check.
+- **CI**：push / PR 到 `main` 或手动触发，运行 L1 覆盖率、G1 严格检查、L2 生产 HTTP 契约、G2 安全扫描和 L3 必需浏览器测试，同时保留 `test:http` 与 Worker 类型一致性检查。各 job 核对实际检出的 SHA；只有全部成功且 SHA 一致，汇总才会输出 `tested-sha`。覆盖率报告和浏览器失败产物保留 14 天。
+- **Release**：自动发布只接受同仓 `main` 上预期 CI 工作流的成功 push 运行，固定其 `head_sha`。标签推送使用事件中的原始对象，手动发布一次性解析 `refs/tags/vMAJOR.MINOR.PATCH`；标签版本须匹配该提交的 `package.json`。每次发布都为固定目标重新运行完整质量工作流，部署检出其 `tested-sha`；失败、跳过、缺失或 SHA 不一致均不能进入部署。
+- 生产部署串行执行。构建和 Access 预检完成后，自动发布重新获取完整的远端 main 引用，紧邻部署再次核验目标。过期目标被拒绝；显式标签和手动发布保留选定提交。
+- GitHub repository / `production` environment secrets：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`，仅部署 job 使用。Token 需要目标账户 Workers Scripts 编辑、账户读取，以及 `hexly.ai` 的 Workers Routes 编辑和 Zone 读取权限；不存入源码，质量检查不继承部署 secrets。
+- 部署前后检查页面、受保护 API、图片、WASM 和 ROM 路径是否重定向到 `nocoo` Access 登录入口；部署后还要求 `/api/live` 返回准确的 package 版本。403 不算登录检查成功；失败会报告 HTTP 状态和 Cloudflare 请求标识。
 
 CF 仅负责访问验证和静态资源交付，CPU、画面、音频和存档都在浏览器中，无需服务端模拟、数据库或 ROM 存储。
 
@@ -145,7 +148,7 @@ bun run quality:l3
 bun run test:e2e:optional
 ```
 
-安装依赖时会启用仓库 hooks。`quality:commit` 并行检查严格 lint、TypeScript、格式和完整单测覆盖率，语句、分支、函数、行四项均要求 ≥90%。`quality:push` 运行真实生产 Worker HTTP 契约和安全扫描；扫描器版本由 [quality-tools.json](scripts/quality-tools.json) 统一固定。
+安装依赖时会启用仓库 hooks。`quality:commit` 并行检查严格 lint、TypeScript、格式和完整单测覆盖率，语句、分支、函数、行四项均要求 ≥90%，提交门禁限时 28 秒。`quality:push` 并行运行真实生产 Worker HTTP 契约和安全扫描，门禁须在 3 分钟内完成。扫描器版本由 [quality-tools.json](scripts/quality-tools.json) 统一固定；本机需先安装对应版本，缺失、版本不符或扫描失败都会阻止通过。CI 按同一清单安装并核验扫描器，依赖扫描读取实际 `bun.lock`，密钥扫描包含完整提交历史；本地 pre-push 按待推送引用扫描，新分支包含全部本地祖先。
 
 `quality:l3` 与 `test:e2e` 是同一个必需入口：在 **127.0.0.1:27047** 启动独立的生产运行时与浏览器，使用原创 GB/GBC/GBA 程序和临时签名令牌，不依赖本地商业 ROM。它拒绝部分用例选择、任意目标/输出覆盖和并发运行，且任何失败、跳过或未执行用例都会阻止通过。报告、失败截图、trace 和下载保存在带所有权标记的 `test-results/required/`；退出时清理运行时、浏览器 profile 和锁；无法确认终止时保留状态与锁并报错。
 
