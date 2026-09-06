@@ -154,28 +154,44 @@ describe('check-no-roms distribution policy', () => {
       });
 
       expect(cleanResult.success).toBe(true);
-      expect(cleanResult.violations).toHaveLength(0);
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Distribution check passed'));
+      expect(cleanResult.violations).toEqual([]);
+      expect(logSpy).toHaveBeenCalledWith(
+        'Distribution check passed: no cartridge ROMs or saves in assets or tracked paths.',
+      );
       expect(errorSpy).not.toHaveBeenCalled();
 
       logSpy.mockClear();
       errorSpy.mockClear();
 
-      // 2. Failure path: add violation in dist and tracked file, verify console.error output
-      await writeFile(path.join(distDir, 'leaked.sav'), new Uint8Array([1, 2, 3]));
-      execFileSync('git', ['add', 'dist/leaked.sav'], { cwd: root });
+      // 2. Failure path: distinct untracked violations in public and dist, plus tracked forbidden file outside either
+      await writeFile(path.join(publicDir, 'leak-public.gba'), new Uint8Array([1, 2, 3]));
+      await writeFile(path.join(distDir, 'leak-dist.sav'), new Uint8Array([1, 2, 3]));
+      await writeFile(path.join(root, 'tracked-outside.gbc'), new Uint8Array([1, 2, 3]));
+      execFileSync('git', ['add', 'tracked-outside.gbc'], { cwd: root });
 
       const failResult = await checkNoRoms({
         root,
         silent: false, // tests console.error output
       });
 
+      const expectedViolations = [
+        'public/leak-public.gba',
+        'dist/leak-dist.sav',
+        'tracked: tracked-outside.gbc',
+      ];
+
       expect(failResult.success).toBe(false);
-      expect(failResult.violations.length).toBeGreaterThan(0);
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('ROMs, saves and asset symlinks must stay outside Git'),
+      expect(failResult.violations).toEqual(expectedViolations);
+      expect(new Set(failResult.violations)).toEqual(new Set(expectedViolations));
+
+      expect(errorSpy).toHaveBeenCalledTimes(4);
+      expect(errorSpy).toHaveBeenNthCalledWith(
+        1,
+        'ROMs, saves and asset symlinks must stay outside Git and deployment assets:',
       );
-      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('dist/leaked.sav'));
+      expect(errorSpy).toHaveBeenNthCalledWith(2, '  public/leak-public.gba');
+      expect(errorSpy).toHaveBeenNthCalledWith(3, '  dist/leak-dist.sav');
+      expect(errorSpy).toHaveBeenNthCalledWith(4, '  tracked: tracked-outside.gbc');
       expect(logSpy).not.toHaveBeenCalled();
     } finally {
       logSpy.mockRestore();
@@ -189,10 +205,11 @@ describe('check-no-roms distribution policy', () => {
     const deepDir = path.join(publicDir, 'assets', 'nested', 'deep');
     await mkdir(deepDir, { recursive: true });
 
-    // 1. Deep directory recursion and case-insensitive extensions (.GBA, .GbC, .SAV)
+    // 1. Deep directory recursion and case-insensitive extensions (.GBA, .GbC, .SAV, .GB)
     await writeFile(path.join(deepDir, 'UPPERCASE.GBA'), new Uint8Array(50));
     await writeFile(path.join(deepDir, 'MixedCase.GbC'), new Uint8Array(50));
     await writeFile(path.join(deepDir, 'savefile.SAV'), new Uint8Array(50));
+    await writeFile(path.join(deepDir, 'ROMFILE.GB'), new Uint8Array(50));
 
     // 2. Benign binary/header near-misses:
     // (a) File smaller than 192 bytes
@@ -226,23 +243,17 @@ describe('check-no-roms distribution policy', () => {
 
     const violations = new Set();
     await scanDirectoryForRoms(publicDir, root, violations);
-    const list = [...violations];
 
-    // Case-insensitive files in deep hierarchy are flagged
-    expect(list.some((v) => v.includes('UPPERCASE.GBA'))).toBe(true);
-    expect(list.some((v) => v.includes('MixedCase.GbC'))).toBe(true);
-    expect(list.some((v) => v.includes('savefile.SAV'))).toBe(true);
+    const expectedViolations = new Set([
+      path.join('public', 'assets', 'nested', 'deep', 'UPPERCASE.GBA'),
+      path.join('public', 'assets', 'nested', 'deep', 'MixedCase.GbC'),
+      path.join('public', 'assets', 'nested', 'deep', 'savefile.SAV'),
+      path.join('public', 'assets', 'nested', 'deep', 'ROMFILE.GB'),
+      path.join('public', 'symlink-file.txt'),
+      path.join('public', 'symlink-dir'),
+    ]);
 
-    // Symlinks are flagged as violations directly and not traversed into
-    expect(list.some((v) => v.includes('symlink-file.txt'))).toBe(true);
-    expect(list.some((v) => v.includes('symlink-dir'))).toBe(true);
-    // Did NOT traverse into externalDir target through symlink-dir
-    expect(list.some((v) => v.includes('hidden-rom.gba'))).toBe(false);
-
-    // Benign binary near-misses are NOT flagged as violations
-    expect(list.some((v) => v.includes('small.bin'))).toBe(false);
-    expect(list.some((v) => v.includes('near-gba.bin'))).toBe(false);
-    expect(list.some((v) => v.includes('near-gb.bin'))).toBe(false);
+    expect(violations).toEqual(expectedViolations);
 
     // 4. Rejection of a symlink root directory
     const symlinkedPublic = path.join(root, 'symlinked-public-root');
