@@ -9,6 +9,8 @@ export async function runL2Gate(options = {}) {
   const silent = options.silent ?? false;
   const timeoutMs = options.timeoutMs ?? 180_000;
   const commandRunner = options.commandRunner ?? runParallelCommands;
+  const mkdtempFn = options.mkdtempFn ?? mkdtemp;
+  const rmFn = options.rmFn ?? rm;
 
   const controller = new AbortController();
   const timer = setTimeout(() => {
@@ -22,25 +24,41 @@ export async function runL2Gate(options = {}) {
   process.once('SIGINT', handleSigint);
   process.once('SIGTERM', handleSigterm);
 
-  // Parent gate allocates and owns a unique temporary resource root for the run
-  const ownedResourceRoot = await mkdtemp(path.join(tmpdir(), 'pokepocket-l2-gate-'));
+  let ownedResourceRoot = null;
+  let executionError = null;
+  let cleanupError = null;
 
   try {
+    ownedResourceRoot = await mkdtempFn(path.join(tmpdir(), 'pokepocket-l2-gate-'));
     const runOptions = {
       commandRunner,
       signal: controller.signal,
       resourceRoot: ownedResourceRoot,
     };
-    if (options.runner) {
-      await options.runner(runOptions);
-    } else {
-      await runL2Default(runOptions);
-    }
-    return true;
+    await runL2Default(runOptions);
   } catch (err) {
+    executionError = err;
     if (!silent) {
-      console.error('L2 Gate failed:', err);
+      console.error('L2 Gate execution failed:', err);
     }
+  } finally {
+    clearTimeout(timer);
+    process.removeListener('SIGINT', handleSigint);
+    process.removeListener('SIGTERM', handleSigterm);
+
+    if (ownedResourceRoot) {
+      try {
+        await rmFn(ownedResourceRoot, { recursive: true, force: true });
+      } catch (rmErr) {
+        cleanupError = rmErr;
+        if (!silent) {
+          console.error('L2 Gate cleanup failed:', rmErr);
+        }
+      }
+    }
+  }
+
+  if (executionError) {
     if (controller.signal.aborted) {
       const reason = controller.signal.reason?.message || '';
       if (reason.includes('SIGINT')) {
@@ -54,13 +72,14 @@ export async function runL2Gate(options = {}) {
       process.exitCode = 1;
     }
     return false;
-  } finally {
-    clearTimeout(timer);
-    process.removeListener('SIGINT', handleSigint);
-    process.removeListener('SIGTERM', handleSigterm);
-    // Guarantees removal of the parent-owned resource root after child settlement
-    await rm(ownedResourceRoot, { recursive: true, force: true }).catch(() => {});
   }
+
+  if (cleanupError) {
+    process.exitCode = 1;
+    return false;
+  }
+
+  return true;
 }
 
 export async function runL2Default(options = {}) {
@@ -72,8 +91,8 @@ export async function runL2Default(options = {}) {
 
   // Step 2: Run L2 test suite against built bundle with owned resource root passed to child env
   const childEnv = options.resourceRoot
-    ? { ...process.env, [RUNTIME_RESOURCE_ROOT_ENV]: options.resourceRoot }
-    : process.env;
+    ? { [RUNTIME_RESOURCE_ROOT_ENV]: options.resourceRoot }
+    : undefined;
 
   await commandRunner(
     [

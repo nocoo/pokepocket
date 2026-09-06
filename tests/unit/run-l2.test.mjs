@@ -1,17 +1,28 @@
-import { describe, it, expect } from 'vitest';
-import { stat, writeFile, mkdir } from 'node:fs/promises';
+import { describe, it, expect, afterEach } from 'vitest';
+import { stat, writeFile, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { runL2Gate, runL2Default } from '../../scripts/run-l2.mjs';
 import { RUNTIME_RESOURCE_ROOT_ENV } from '../../scripts/production-runtime.mjs';
 
 describe('run-l2 gate runner policies', () => {
-  it('runL2Gate handles passing runner and returns true', async () => {
+  const cleanups = [];
+
+  afterEach(async () => {
+    while (cleanups.length > 0) {
+      const fn = cleanups.pop();
+      try {
+        await fn();
+      } catch {}
+    }
+  });
+
+  it('runL2Gate handles passing commandRunner and returns true', async () => {
     const fakeRunner = async () => {};
-    const res = await runL2Gate({ runner: fakeRunner, silent: true });
+    const res = await runL2Gate({ commandRunner: fakeRunner, silent: true });
     expect(res).toBe(true);
   });
 
-  it('runL2Gate handles failing runner, logs error when not silent, sets exitCode, and returns false', async () => {
+  it('runL2Gate handles failing commandRunner, logs error when not silent, sets exitCode, and returns false', async () => {
     const savedExitCode = process.exitCode;
     const origError = console.error;
     let logged = false;
@@ -22,7 +33,7 @@ describe('run-l2 gate runner policies', () => {
       const fakeRunner = async () => {
         throw new Error('L2 test failure');
       };
-      const res = await runL2Gate({ runner: fakeRunner, silent: false });
+      const res = await runL2Gate({ commandRunner: fakeRunner, silent: false });
       expect(res).toBe(false);
       expect(logged).toBe(true);
       expect(process.exitCode).toBe(1);
@@ -36,12 +47,14 @@ describe('run-l2 gate runner policies', () => {
     const savedExitCode = process.exitCode;
     let capturedRoot = null;
     try {
-      const fakeRunner = async ({ resourceRoot }) => {
-        capturedRoot = resourceRoot;
+      const fakeRunner = async (commands) => {
+        const cmd = commands[0];
+        if (cmd.command === 'npm') return;
+        capturedRoot = cmd.env?.[RUNTIME_RESOURCE_ROOT_ENV];
         process.emit('SIGINT');
         throw new Error('Interrupted by SIGINT');
       };
-      const res = await runL2Gate({ runner: fakeRunner, silent: true });
+      const res = await runL2Gate({ commandRunner: fakeRunner, silent: true });
       expect(res).toBe(false);
       expect(process.exitCode).toBe(130);
       expect(capturedRoot).toBeDefined();
@@ -56,12 +69,14 @@ describe('run-l2 gate runner policies', () => {
     const savedExitCode = process.exitCode;
     let capturedRoot = null;
     try {
-      const fakeRunner = async ({ resourceRoot }) => {
-        capturedRoot = resourceRoot;
+      const fakeRunner = async (commands) => {
+        const cmd = commands[0];
+        if (cmd.command === 'npm') return;
+        capturedRoot = cmd.env?.[RUNTIME_RESOURCE_ROOT_ENV];
         process.emit('SIGTERM');
         throw new Error('Interrupted by SIGTERM');
       };
-      const res = await runL2Gate({ runner: fakeRunner, silent: true });
+      const res = await runL2Gate({ commandRunner: fakeRunner, silent: true });
       expect(res).toBe(false);
       expect(process.exitCode).toBe(143);
       expect(capturedRoot).toBeDefined();
@@ -75,17 +90,116 @@ describe('run-l2 gate runner policies', () => {
   it('runL2Gate handles timeout abort', async () => {
     const savedExitCode = process.exitCode;
     try {
-      const fakeRunner = async ({ signal }) => {
+      const fakeRunner = async (_commands, { signal }) => {
         return new Promise((_, reject) => {
           signal.addEventListener('abort', () => {
             reject(new Error('timed out'));
           });
         });
       };
-      const res = await runL2Gate({ runner: fakeRunner, timeoutMs: 50, silent: true });
+      const res = await runL2Gate({ commandRunner: fakeRunner, timeoutMs: 50, silent: true });
       expect(res).toBe(false);
       expect(process.exitCode).toBe(1);
     } finally {
+      process.exitCode = savedExitCode;
+    }
+  });
+
+  it('handles mkdtemp allocation failure by cleaning timers/listeners, skipping commands, and preserving unrelated listeners', async () => {
+    const savedExitCode = process.exitCode;
+    const initialSigint = process.listeners('SIGINT');
+    const initialSigterm = process.listeners('SIGTERM');
+    let commandRunnerCalled = false;
+
+    try {
+      const failingMkdtemp = async () => {
+        throw new Error('Injected allocation failure');
+      };
+      const fakeRunner = async () => {
+        commandRunnerCalled = true;
+      };
+
+      const res = await runL2Gate({
+        mkdtempFn: failingMkdtemp,
+        commandRunner: fakeRunner,
+        silent: true,
+      });
+
+      expect(res).toBe(false);
+      expect(process.exitCode).toBe(1);
+      expect(commandRunnerCalled).toBe(false);
+
+      // Verify owned listeners were removed while unrelated listeners survived
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
+    } finally {
+      process.exitCode = savedExitCode;
+    }
+  });
+
+  it('fails closed on sole cleanup failure with exitCode 1 and reports cleanup error', async () => {
+    const savedExitCode = process.exitCode;
+    const origError = console.error;
+    let loggedError = null;
+    console.error = (...args) => {
+      loggedError = args.join(' ');
+    };
+
+    try {
+      const failingRm = async (dir) => {
+        cleanups.push(() => rm(dir, { recursive: true, force: true }));
+        throw new Error('Injected cleanup failure');
+      };
+
+      const fakeRunner = async () => {};
+
+      const res = await runL2Gate({
+        commandRunner: fakeRunner,
+        rmFn: failingRm,
+        silent: false,
+      });
+
+      expect(res).toBe(false);
+      expect(process.exitCode).toBe(1);
+      expect(loggedError).toContain('L2 Gate cleanup failed: Error: Injected cleanup failure');
+    } finally {
+      console.error = origError;
+      process.exitCode = savedExitCode;
+    }
+  });
+
+  it('retains initiating execution failure and exit status when both execution and cleanup fail', async () => {
+    const savedExitCode = process.exitCode;
+    const origError = console.error;
+    const loggedErrors = [];
+    console.error = (...args) => {
+      loggedErrors.push(args.join(' '));
+    };
+
+    try {
+      const failingRm = async (dir) => {
+        cleanups.push(() => rm(dir, { recursive: true, force: true }));
+        throw new Error('Injected cleanup secondary failure');
+      };
+
+      const fakeRunner = async () => {
+        process.emit('SIGTERM');
+        throw new Error('Primary execution failure');
+      };
+
+      const res = await runL2Gate({
+        commandRunner: fakeRunner,
+        rmFn: failingRm,
+        silent: false,
+      });
+
+      expect(res).toBe(false);
+      // Initiating SIGTERM maps to 143, not overwritten by cleanup failure
+      expect(process.exitCode).toBe(143);
+      expect(loggedErrors.some((e) => e.includes('L2 Gate execution failed:'))).toBe(true);
+      expect(loggedErrors.some((e) => e.includes('L2 Gate cleanup failed:'))).toBe(true);
+    } finally {
+      console.error = origError;
       process.exitCode = savedExitCode;
     }
   });
