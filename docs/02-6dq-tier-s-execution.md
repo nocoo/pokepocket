@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress, Tier A verified. B1 through B6 and B7's executable fixtures, snapshot correction, required journeys, authorization and browser ownership gates are accepted. All four aggregate coverage metrics exceed 90%; installed commit and pre-push hooks and browser lifecycle checks pass independent verification. Navigation contrast, layout/export coverage, and CI/release alignment remain pending; Tier S is not yet verified.
+Status: in progress, Tier A verified. B1 through B6 and B7's executable fixtures, snapshot correction, required journeys, authorization, browser ownership gates and navigation contrast are accepted. All four aggregate coverage metrics exceed 90%; installed commit and pre-push hooks and browser lifecycle checks pass independent verification. Layout/export coverage and CI/release alignment remain pending; Tier S is not yet verified.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -315,7 +315,7 @@ findings through additional atomic fixes, and commits the final implementation/e
 | B4d   | Accepted    | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`, `fbd52cc`, `8c24c5c`, `9a3545c`, `49a79ab`                                                                                                                                                           | 363 units; G1/build; all four metrics >=90%; actual hooks and failure/process probes pass; Tier B verified                |
 | B5    | Accepted    | `8604276`, `0bfecb5`, `91685a6`, `cf2514d`, `759c65a`, `38cb1f5`, `d5ff4f9`                                                                                                                                                                      | 388 units; G1/L1, production build, 40 real HTTP contracts, independent bytes/authentication and inventory rejection pass |
 | B6    | Accepted    | `48894ea`, `ca704a2`, `24ee4a1`, `cc58d97`, `4195859`, `72b0dab`, `0d3a3be`                                                                                                                                                                      | 467 units; all coverage metrics >=90%; installed push hook, real npm cancellation, L2/G2 pass; Tier A verified            |
-| B7    | In progress | `a29eff5`, `0d60e83`, `19f0b0f`, `94cbe07`, `d563a35`, `cc48e66`, `f7e37bd`                                                                                                                                                                      | Fixtures, snapshots, 23 required journeys and authorization/ownership gates accepted; contrast/layout pending             |
+| B7    | In progress | `a29eff5`, `0d60e83`, `19f0b0f`, `94cbe07`, `d563a35`, `cc48e66`, `f7e37bd`, `ac8f37f`                                                                                                                                                           | Fixtures, snapshots, 24 required cases, authorization/ownership and navigation contrast accepted; layout pending          |
 | B8    | Pending     | —                                                                                                                                                                                                                                                | —                                                                                                                         |
 
 ### B1 review evidence
@@ -1585,9 +1585,43 @@ The gallery launch button separately passes all 36 theme/default/hover/focus com
 That probe decodes a screenshot of the actual gradient beneath the text, with only text and icons
 temporarily masked, and applies the same 4.5:1 threshold. No launch-button correction is indicated.
 
-After the isolation handoff is accepted, a separate navigation fix and required regression must
-resolve this confirmed defect before broad layout/export acceptance. This is existing product
-behavior exposed during B7 review, not a regression introduced by the journey tests.
+This existing product defect, exposed during B7 review, is resolved by the separately accepted
+navigation fix below. Broad layout/export acceptance remains the next handoff.
+
+### B7 navigation contrast acceptance
+
+Reviewed implementation: `ac8f37f0a86ce5e2a6589c68e502c861e7f6465c`, imported unchanged from the
+independent implementation clone after browser acceptance. The default `.nav-item` text changes
+from `#7e8b80` to `#556457`; existing hover, keyboard-focus, selected-theme colors and font sizes
+are retained. The required inventory increases from 23 to 24, and the unit validator's complete
+positive fixture uses that inventory constant while its negative cases remain unchanged.
+
+[The required regression](../tests/e2e/navigation-contrast.spec.ts) selects all 12 unique editions
+and confirms their rendered selection. For each edition it measures three visible, enabled labels
+in default, hover and actual `:focus-visible` states. The helper measures the supplied label itself,
+decodes modern CSS colors, and composites its real ancestor backgrounds. Unsupported image/gradient
+or opacity layers fail explicitly. All 108 complete measurements, including foreground, background
+and composition layers, are attached as JSON.
+
+Independent verification:
+
+- G1/L1 pass in 6.47 seconds: 612 tests in 46 files, 118 Biome files, strict TypeScript and formatting
+  clean with zero warnings. Coverage remains 94.72% statements, 90.22% branches, 94.95% functions
+  and 95.68% lines. Evidence: `b7-navigation-final-unit-iq1uv2fp/result.json`.
+- The complete required browser entry passes 24/24 in 128.202 seconds, with no local ROM directories,
+  failed or skipped cases. The two corrected default labels measure 6.019-6.027:1; the minimum of
+  all 108 combinations is 5.095:1. Every measured label is still 13px and requires 4.5:1.
+- An independent calculation from the recorded RGB values reproduces every reported ratio. Using
+  the old foreground with those same recorded backgrounds yields 24 failing default combinations
+  at 3.419-3.423:1, consistent with the original production-browser finding.
+- All 15 captured processes, their owned groups, browser profile, runtime roots and machine lock
+  are gone after settlement. The installed hooks also pass on the exact five-file commit.
+
+Browser/report/color evidence is under
+`b7-navigation-preflight-s9as6ilf/run-positive-1788696761026063000` in the review directory;
+`navigation-review.json` and `navigation-measurements.json` retain the independent checks.
+Fullscreen geometry, proportional scaling, mobile/modal usability and complete PNG export coverage
+remain pending in the next atomic handoff.
 
 ## 5. Final acceptance record
 
