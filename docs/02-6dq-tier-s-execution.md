@@ -200,6 +200,9 @@ plugin HTTP regressions separately.
       until cleanup settles, including repeated signals forwarded by the real npm command chain.
       Add a regression for repeated signals during deferred cleanup and preserve the initial exit
       status. Verify the default push-to-npm-to-L2-to-build chain, not only a direct child wrapper.
+    - Then `fix: retain push cancellation listeners`: apply the same lifecycle guarantee to the
+      outer `npm run quality:push` entry, retaining the first signal status across repeat or mixed
+      signals. Verify the real foreground npm group and all captured detached descendants.
 
 Review: scanner versions and scope, outgoing Git ranges, argument quoting, installation guidance,
 negative gate probes, isolation guards, and combined runtime under 3 minutes. **Milestone: Tier A.**
@@ -1215,6 +1218,20 @@ and 4.41 seconds respectively. These are design experiments on an isolated check
 `finally`; they are not acceptance evidence for the committed implementation. The next atomic
 handoff fixes this lifecycle boundary and adds discriminating repeated-signal assertions. B6 remains
 open until the final committed code passes the real chain and installed-hook probes.
+
+The additive L2 correction `4195859929582bd7c677fd6cc594fbc2265ca369` is accepted. Its 14 focused
+units pass independently, including repeated and mixed signals during deferred real directory
+removal and runner settlement. At that fixed committed SHA, the default real-chain probes pass:
+SIGTERM exits 143, SIGINT exits 130, and scanner peer failure exits 1; each captures nine descendants,
+leaves zero running survivors, and removes its L2 root. Cleanup takes 3.02, 3.07, and 4.39 seconds.
+
+Review also reproduced the equivalent outer-wrapper failure when starting `npm run quality:push`
+and signalling its owned foreground group. With only L2 corrected, repeated npm forwarding can
+terminate `run-push` before its detached children settle. A temporary experiment retaining both
+wrappers' listeners passes SIGTERM and SIGINT, with ten captured descendants, zero survivors, and
+the L2 root removed in about three seconds. This additional design experiment is restored afterward.
+The next separate atomic correction retains the outer listeners and the initial signal status;
+B6 acceptance still requires the final committed outer-entry and installed-hook checks.
 
 ## 5. Final acceptance record
 
