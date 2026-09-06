@@ -494,170 +494,298 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     }
   });
 
-  it('validates and confirms battery import from file input, or rejects invalid files', async () => {
-    const emeraldCart = createCartridge('stored-emerald');
-    const { container } = await startLoadedApp(emeraldCart);
+  it.each(['running', 'paused'] as const)(
+    'validates and confirms battery import from file input when initially %s: handles pre-confirmation cancellation, rejects dismissals during pending mutation, and recovers on failure',
+    async (initialStatus) => {
+      const emeraldCart = createCartridge('stored-emerald');
+      const { container } = await startLoadedApp(emeraldCart);
 
-    const saveInput = container.querySelector(
-      'input[type="file"][accept=".sav"]',
-    ) as HTMLInputElement;
-    expect(saveInput).toBeDefined();
+      if (initialStatus === 'paused') {
+        const pauseToggle = screen.getByRole('button', { name: '暂停游戏' });
+        await userEvent.click(pauseToggle);
+        await screen.findByText('已暂停');
+      }
 
-    // 1. Non-sav file rejected with toast
-    const invalidFile = new File([new Uint8Array(100)], 'invalid.txt');
-    fireEvent.change(saveInput, { target: { files: [invalidFile] } });
-    expect(await screen.findByText('请选择 .sav 格式的游戏存档。')).toBeDefined();
+      const saveInput = container.querySelector(
+        'input[type="file"][accept=".sav"]',
+      ) as HTMLInputElement;
+      expect(saveInput).toBeDefined();
 
-    // 2. Valid 128KB sav file for GBA FLASH1M
-    const validSavData = new Uint8Array(131072);
-    validSavData.fill(9);
-    const validFile = new File([validSavData], 'backup.sav');
-    fireEvent.change(saveInput, { target: { files: [validFile] } });
+      const resumeCallsBefore = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
 
-    // Confirmation modal appears
-    const dialog = await screen.findByRole('dialog');
-    expect(
-      within(dialog).getByRole('heading', { level: 2, name: '从这份存档继续？' }),
-    ).toBeDefined();
-    expect(within(dialog).getByText('backup.sav')).toBeDefined();
+      // 1. Non-sav file rejected with toast
+      const invalidFile = new File([new Uint8Array(100)], 'invalid.txt');
+      fireEvent.change(saveInput, { target: { files: [invalidFile] } });
+      expect(await screen.findByText('请选择 .sav 格式的游戏存档。')).toBeDefined();
 
-    // Verify no import mutation occurs before confirmation
-    expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
+      // Helper to open import dialog with a valid file and wait for opening checkpoint
+      const validSavDataInitial = new Uint8Array(131072);
+      validSavDataInitial.fill(7);
+      const validFileInitial = new File([validSavDataInitial], 'backup-initial.sav');
 
-    // Cancel import -> no mutation occurs
-    const cancelImportBtn = within(dialog).getByRole('button', { name: '取消' });
-    await userEvent.click(cancelImportBtn);
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
+      const openImportModalAwaitingCheckpoint = async (fileToSelect: File = validFileInitial) => {
+        const originalPutSnapshot = vi
+          .mocked(harness.fakeStorage.putSnapshot)
+          .getMockImplementation();
+        if (!originalPutSnapshot) throw new Error('Missing original putSnapshot implementation');
 
-    // 3. Escape and backdrop click dismiss import modal before confirmation
-    fireEvent.change(saveInput, { target: { files: [validFile] } });
-    const dialogEscape = await screen.findByRole('dialog');
-    fireEvent.keyDown(dialogEscape, { key: 'Escape' });
-    expect(screen.queryByRole('dialog')).toBeNull();
+        let checkpointDone = false;
+        let resolveCheckpoint: () => void = () => {};
+        const checkpointPromise = new Promise<void>((resolve) => {
+          resolveCheckpoint = resolve;
+        });
 
-    fireEvent.change(saveInput, { target: { files: [validFile] } });
-    const dialogBackdrop = await screen.findByRole('dialog');
-    fireEvent.click(dialogBackdrop);
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
+        if (initialStatus === 'running') {
+          vi.mocked(harness.fakeStorage.putSnapshot).mockImplementationOnce(async (snap) => {
+            const res = await originalPutSnapshot(snap);
+            checkpointDone = true;
+            resolveCheckpoint();
+            return res;
+          });
+        }
 
-    // 4. Deferred import mutation: protect against Cancel, Escape, backdrop, and same-event dismissal while pending
-    fireEvent.change(saveInput, { target: { files: [validFile] } });
-    const dialogPending = await screen.findByRole('dialog');
-    const confirmBtnPending = within(dialogPending).getByRole('button', { name: '导入并启动' });
-    const cancelBtnPending = within(dialogPending).getByRole('button', { name: '取消' });
-    const loadGameCallsBaseline = vi.mocked(harness.testCore.loadGame).mock.calls.length;
+        fireEvent.change(saveInput, { target: { files: [fileToSelect] } });
+        const dialog = await screen.findByRole('dialog');
 
-    // Wait for any opening checkpoint to settle
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+        if (initialStatus === 'running' && !checkpointDone) {
+          await checkpointPromise;
+        }
 
-    const originalReplaceBattery = vi
-      .mocked(harness.fakeStorage.replaceBattery)
-      .getMockImplementation();
-    if (!originalReplaceBattery) throw new Error('Missing original replaceBattery implementation');
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
 
-    let releaseImport: () => void = () => {};
-    let importWorkPromise: ReturnType<typeof originalReplaceBattery> | null = null;
-    const importDeferred = new Promise<void>((resolve) => {
-      releaseImport = resolve;
-    });
+        return dialog;
+      };
 
-    vi.mocked(harness.fakeStorage.replaceBattery).mockImplementation((save) => {
-      importWorkPromise = (async () => {
-        await importDeferred;
-        return originalReplaceBattery(save);
-      })();
-      return importWorkPromise;
-    });
+      // 2. Pre-confirmation cancellation: button click
+      let dialog = await openImportModalAwaitingCheckpoint();
+      expect(dialog).toBeDefined();
+      expect(
+        within(dialog).getByRole('heading', { level: 2, name: '从这份存档继续？' }),
+      ).toBeDefined();
+      expect(within(dialog).getByText('backup-initial.sav')).toBeDefined();
+      expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
 
-    try {
-      // Same-event synchronous dismissal attempt: confirm and immediately cancel before turn
-      act(() => {
-        (confirmBtnPending as HTMLButtonElement).click();
-        (cancelBtnPending as HTMLButtonElement).click();
+      const cancelImportBtn = within(dialog).getByRole('button', { name: '取消' });
+      await userEvent.click(cancelImportBtn);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
+      if (initialStatus === 'paused') {
+        expect(screen.getByText('已暂停')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+      } else {
+        expect(screen.getByText('正在冒险')).toBeDefined();
+      }
+
+      // Pre-confirmation cancellation: Escape key
+      dialog = await openImportModalAwaitingCheckpoint();
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
+      if (initialStatus === 'paused') {
+        expect(screen.getByText('已暂停')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+      }
+
+      // Pre-confirmation cancellation: backdrop click
+      dialog = await openImportModalAwaitingCheckpoint();
+      fireEvent.click(dialog);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
+      if (initialStatus === 'paused') {
+        expect(screen.getByText('已暂停')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+      }
+
+      // Pre-confirmation cancellation: X close button
+      dialog = await openImportModalAwaitingCheckpoint();
+      const closeXBtn = within(dialog).getByRole('button', { name: '关闭窗口' });
+      await userEvent.click(closeXBtn);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
+      if (initialStatus === 'paused') {
+        expect(screen.getByText('已暂停')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+      }
+
+      // Pre-confirmation cancellation: native cancel event
+      dialog = await openImportModalAwaitingCheckpoint();
+      fireEvent(dialog, new Event('cancel'));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
+      if (initialStatus === 'paused') {
+        expect(screen.getByText('已暂停')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+      }
+
+      // 3. Deferred import mutation: protect against Cancel, Escape, backdrop, X button, native cancel event, and same-event dismissal
+      const pendingSavData = new Uint8Array(131072);
+      pendingSavData.fill(9);
+      const pendingFile = new File([pendingSavData], 'backup-pending.sav');
+
+      const dialogPending = await openImportModalAwaitingCheckpoint(pendingFile);
+      const confirmBtnPending = within(dialogPending).getByRole('button', { name: '导入并启动' });
+      const cancelBtnPending = within(dialogPending).getByRole('button', { name: '取消' });
+      const closeXPending = within(dialogPending).getByRole('button', { name: '关闭窗口' });
+      const loadGameCallsBaseline = vi.mocked(harness.testCore.loadGame).mock.calls.length;
+
+      const originalReplaceBattery = vi
+        .mocked(harness.fakeStorage.replaceBattery)
+        .getMockImplementation();
+      if (!originalReplaceBattery)
+        throw new Error('Missing original replaceBattery implementation');
+
+      let releaseImport: () => void = () => {};
+      let importWorkPromise: ReturnType<typeof originalReplaceBattery> | null = null;
+      const importDeferred = new Promise<void>((resolve) => {
+        releaseImport = resolve;
       });
 
-      // Wait until replaceBattery has been called and is deferred
-      await waitFor(() => expect(harness.fakeStorage.replaceBattery).toHaveBeenCalledTimes(1));
-
-      // Advance event loop turn
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+      vi.mocked(harness.fakeStorage.replaceBattery).mockImplementation((save) => {
+        importWorkPromise = (async () => {
+          await importDeferred;
+          return originalReplaceBattery(save);
+        })();
+        return importWorkPromise;
       });
 
-      // Dialog stays open and non-dismissible
-      expect(screen.getByRole('dialog')).toBeDefined();
-      expect(within(dialogPending).getByRole('button', { name: '正在导入…' })).toBeDefined();
-      expect(cancelBtnPending.hasAttribute('disabled')).toBe(true);
+      try {
+        // Repeated confirmation in same act + synchronous cancel
+        act(() => {
+          (confirmBtnPending as HTMLButtonElement).click();
+          (confirmBtnPending as HTMLButtonElement).click();
+          (cancelBtnPending as HTMLButtonElement).click();
+        });
 
-      // Attempt cancel, Escape, and backdrop click while busy -> all rejected
-      await userEvent.click(cancelBtnPending);
-      fireEvent.keyDown(dialogPending, { key: 'Escape' });
-      fireEvent.click(dialogPending);
+        // Wait until replaceBattery has been called and is deferred
+        await waitFor(() => expect(harness.fakeStorage.replaceBattery).toHaveBeenCalledTimes(1));
 
+        // Advance turn
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+
+        // Dialog stays open and non-dismissible
+        expect(screen.getByRole('dialog')).toBeDefined();
+        const processingBtn = within(dialogPending).getByRole('button', { name: '正在导入…' });
+        expect(processingBtn).toBeDefined();
+        expect(processingBtn.hasAttribute('disabled')).toBe(true);
+        expect(cancelBtnPending.hasAttribute('disabled')).toBe(true);
+        expect(closeXPending.hasAttribute('disabled')).toBe(true);
+
+        // All dismissal and repeat attempts while busy are rejected
+        await userEvent.click(cancelBtnPending);
+        await userEvent.click(closeXPending);
+        await userEvent.click(processingBtn);
+        fireEvent.keyDown(dialogPending, { key: 'Escape' });
+        fireEvent.click(dialogPending);
+        fireEvent(dialogPending, new Event('cancel'));
+
+        expect(screen.getByRole('dialog')).toBeDefined();
+        expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(loadGameCallsBaseline);
+        expect(vi.mocked(harness.fakeStorage.replaceBattery).mock.calls.length).toBe(1);
+      } finally {
+        releaseImport();
+        if (importWorkPromise) await importWorkPromise;
+        await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
+        harness.flushEmulatorRafs();
+        await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
+        harness.flushEmulatorRafs();
+        await screen.findByText('正在冒险');
+      }
+
+      // After release, replaceBattery executed with exact bytes, game booted, and battery verified in storage
+      expect(harness.fakeStorage.replaceBattery).toHaveBeenCalledTimes(1);
+      const replaceCalls = (harness.fakeStorage.replaceBattery as ReturnType<typeof vi.fn>).mock
+        .calls;
+      expect(replaceCalls.length).toBe(1);
+      const callArgs = replaceCalls[0]?.[0];
+      expect(callArgs.romId).toBe('stored-emerald');
+      expect(new Uint8Array(callArgs.data)).toEqual(pendingSavData);
+
+      const batteryInStorage = await harness.fakeStorage.getBattery('stored-emerald');
+      expect(batteryInStorage).not.toBeNull();
+      if (!batteryInStorage) throw new Error('Missing battery in storage');
+      expect(new Uint8Array(batteryInStorage.data)).toEqual(pendingSavData);
+
+      expect(harness.testCore.loadGame).toHaveBeenCalledWith(
+        '/roms/stored-emerald.gba',
+        '/saves/stored-emerald.sav',
+      );
+      expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(
+        loadGameCallsBaseline + 1,
+      );
+
+      // 4. Test import mutation failure with DIFFERENT bytes and successful retry with another DIFFERENT bytes
+      const failSavData = new Uint8Array(131072);
+      failSavData.fill(3);
+      const failFile = new File([failSavData], 'backup-fail.sav');
+
+      const dialogRetry = await openImportModalAwaitingCheckpoint(failFile);
+      const confirmRetryBtn = within(dialogRetry).getByRole('button', { name: '导入并启动' });
+
+      const replaceCallsBeforeFail = vi.mocked(harness.fakeStorage.replaceBattery).mock.calls
+        .length;
+      const loadGameCallsBeforeFail = vi.mocked(harness.testCore.loadGame).mock.calls.length;
+
+      vi.mocked(harness.fakeStorage.replaceBattery).mockRejectedValueOnce(
+        new Error('Failed to replace battery in IndexedDB'),
+      );
+
+      await userEvent.click(confirmRetryBtn);
+
+      // Toast error shown
+      expect(await screen.findByRole('alert')).toBeDefined();
+      expect(screen.getByText(/Failed to replace battery in IndexedDB/)).toBeDefined();
+
+      // Dialog remains open and retryable; core load was NOT called, storage retained old pendingSavData
       expect(screen.getByRole('dialog')).toBeDefined();
-      expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(loadGameCallsBaseline);
-    } finally {
-      releaseImport();
-      if (importWorkPromise) await importWorkPromise;
+      expect(confirmRetryBtn.hasAttribute('disabled')).toBe(false);
+      expect(vi.mocked(harness.fakeStorage.replaceBattery).mock.calls.length).toBe(
+        replaceCallsBeforeFail + 1,
+      );
+      expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(loadGameCallsBeforeFail);
+
+      const batteryAfterFail = await harness.fakeStorage.getBattery('stored-emerald');
+      expect(batteryAfterFail).not.toBeNull();
+      expect(new Uint8Array(batteryAfterFail?.data ?? new ArrayBuffer(0))).toEqual(pendingSavData);
+
+      // Successful retry with DIFFERENT retry bytes (fill 5)
+      const retrySavData = new Uint8Array(131072);
+      retrySavData.fill(5);
+      const retryFile = new File([retrySavData], 'backup-retry.sav');
+
+      // Dismiss dialog and re-select new retry file
+      const cancelRetryModalBtn = within(dialogRetry).getByRole('button', { name: '取消' });
+      await userEvent.click(cancelRetryModalBtn);
+      expect(screen.queryByRole('dialog')).toBeNull();
+
+      const dialogFinal = await openImportModalAwaitingCheckpoint(retryFile);
+      const confirmFinalBtn = within(dialogFinal).getByRole('button', { name: '导入并启动' });
+
+      const finalPromise = userEvent.click(confirmFinalBtn);
       await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
       harness.flushEmulatorRafs();
       await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
       harness.flushEmulatorRafs();
-      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    }
+      await finalPromise;
 
-    // After release, replaceBattery executed with exact bytes and game booted
-    expect(harness.fakeStorage.replaceBattery).toHaveBeenCalledTimes(1);
-    const replaceCalls = (harness.fakeStorage.replaceBattery as ReturnType<typeof vi.fn>).mock
-      .calls;
-    expect(replaceCalls.length).toBe(1);
-    const callArgs = replaceCalls[0]?.[0];
-    expect(callArgs.romId).toBe('stored-emerald');
-    expect(new Uint8Array(callArgs.data)).toEqual(validSavData);
-    expect(harness.testCore.loadGame).toHaveBeenCalledWith(
-      '/roms/stored-emerald.gba',
-      '/saves/stored-emerald.sav',
-    );
-    await screen.findByText('正在冒险');
+      await screen.findByText('正在冒险');
+      expect(screen.queryByRole('dialog')).toBeNull();
 
-    // 5. Test import mutation failure: keeps dialog retryable and succeeds on retry
-    fireEvent.change(saveInput, { target: { files: [validFile] } });
-    const dialogRetry = await screen.findByRole('dialog');
-    const confirmRetryBtn = within(dialogRetry).getByRole('button', { name: '导入并启动' });
+      expect(vi.mocked(harness.fakeStorage.replaceBattery).mock.calls.length).toBe(
+        replaceCallsBeforeFail + 2,
+      );
+      expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(
+        loadGameCallsBeforeFail + 1,
+      );
 
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    vi.mocked(harness.fakeStorage.replaceBattery).mockRejectedValueOnce(
-      new Error('Failed to replace battery in IndexedDB'),
-    );
-
-    await userEvent.click(confirmRetryBtn);
-
-    // Toast error shown
-    expect(await screen.findByRole('alert')).toBeDefined();
-    expect(screen.getByText(/Failed to replace battery in IndexedDB/)).toBeDefined();
-
-    // Dialog remains open and retryable
-    expect(screen.getByRole('dialog')).toBeDefined();
-    expect(confirmRetryBtn.hasAttribute('disabled')).toBe(false);
-
-    // Successful retry
-    const retryPromise = userEvent.click(confirmRetryBtn);
-    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
-    harness.flushEmulatorRafs();
-    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
-    harness.flushEmulatorRafs();
-    await retryPromise;
-
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(harness.fakeStorage.replaceBattery).toHaveBeenCalledTimes(3);
-  });
+      const batteryAfterSuccess = await harness.fakeStorage.getBattery('stored-emerald');
+      expect(batteryAfterSuccess).not.toBeNull();
+      expect(new Uint8Array(batteryAfterSuccess?.data ?? new ArrayBuffer(0))).toEqual(retrySavData);
+    },
+  );
 
   it('rejects battery save import when size does not match cartridge capacity', async () => {
     const emeraldCart = createCartridge('stored-emerald');

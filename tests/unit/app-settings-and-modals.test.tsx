@@ -215,175 +215,275 @@ describe('App settings and modal management', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('manages restart confirmation modal: cancels without reset, confirms with emulator reset', async () => {
-    const emeraldCart = createCartridge('stored-emerald');
-    await storage.putCartridge(emeraldCart);
+  it.each(['running', 'paused'] as const)(
+    'manages restart confirmation modal when initially %s: handles pre-confirmation cancellation, rejects dismissals during pending mutation, and recovers on failure',
+    async (initialStatus) => {
+      const emeraldCart = createCartridge('stored-emerald');
+      await storage.putCartridge(emeraldCart);
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation(async (url: string) => {
-        if (url.includes('/api/catalog')) {
-          return {
-            ok: true,
-            json: async () => ({
-              editions: [{ id: 'emerald', available: true, url: '/roms/pokeemerald.gba' }],
-            }),
-          };
-        }
-        if (url.includes('/roms/')) {
-          return {
-            ok: true,
-            headers: new Headers({ 'Content-Type': 'application/octet-stream' }),
-            blob: async () => new Blob([gbaFixture()]),
-          };
-        }
-        return { ok: false };
-      }),
-    );
-
-    render(<App />);
-    await screen.findByText('本地存储已就绪');
-
-    // Start game
-    const startBtn = screen.getByRole('button', { name: '开始冒险' });
-    const startPromise = userEvent.click(startBtn);
-    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
-    harness.flushEmulatorRafs();
-    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
-    harness.flushEmulatorRafs();
-    await startPromise;
-
-    await screen.findByText('正在冒险');
-
-    // Click restart button in stage toolbar
-    const restartToolbarBtn = screen.getByRole('button', { name: '重新启动游戏' });
-    await userEvent.click(restartToolbarBtn);
-
-    const dialog = screen.getByRole('dialog');
-    expect(dialog).toBeDefined();
-    expect(
-      within(dialog).getByRole('heading', { level: 2, name: '重新开启这段冒险？' }),
-    ).toBeDefined();
-
-    // 1. Cancel via '再玩一会儿'
-    const cancelRestartBtn = within(dialog).getByRole('button', { name: '再玩一会儿' });
-    await userEvent.click(cancelRestartBtn);
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(harness.testCore.quickReload).not.toHaveBeenCalled();
-
-    // 2. Escape and backdrop click dismiss restart modal before confirmation
-    await userEvent.click(restartToolbarBtn);
-    const dialogPreConfirm = await screen.findByRole('dialog');
-    fireEvent.keyDown(dialogPreConfirm, { key: 'Escape' });
-    expect(screen.queryByRole('dialog')).toBeNull();
-
-    await userEvent.click(restartToolbarBtn);
-    const dialogPreConfirm2 = await screen.findByRole('dialog');
-    fireEvent.click(dialogPreConfirm2);
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(harness.testCore.quickReload).not.toHaveBeenCalled();
-
-    // 3. Deferred restart mutation: protect against Cancel, Escape, backdrop, and same-event dismissal while pending
-    // First, open the restart modal and wait for opening checkpoint to settle
-    await userEvent.click(restartToolbarBtn);
-    const dialogPending = await screen.findByRole('dialog');
-    const confirmBtnPending = within(dialogPending).getByRole('button', { name: '重新启动' });
-    const cancelBtnPending = within(dialogPending).getByRole('button', { name: '再玩一会儿' });
-
-    // Ensure any opening checkpoint putBattery is completed and settled
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    const originalPutBattery = vi.mocked(harness.fakeStorage.putBattery).getMockImplementation();
-    if (!originalPutBattery) throw new Error('Missing original putBattery implementation');
-
-    let releaseRestart: () => void = () => {};
-    let restartWorkPromise: ReturnType<typeof originalPutBattery> | null = null;
-    const restartDeferred = new Promise<void>((resolve) => {
-      releaseRestart = resolve;
-    });
-
-    const putBatteryCallsBaseline = vi.mocked(harness.fakeStorage.putBattery).mock.calls.length;
-
-    vi.mocked(harness.fakeStorage.putBattery).mockImplementation((save) => {
-      restartWorkPromise = (async () => {
-        await restartDeferred;
-        return originalPutBattery(save);
-      })();
-      return restartWorkPromise;
-    });
-
-    try {
-      // Same-event synchronous dismissal attempt: confirm and immediately cancel before any turn
-      act(() => {
-        (confirmBtnPending as HTMLButtonElement).click();
-        (cancelBtnPending as HTMLButtonElement).click();
-      });
-
-      // Wait until reset's putBattery has been called and is deferred
-      await waitFor(() =>
-        expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(
-          putBatteryCallsBaseline + 1,
-        ),
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockImplementation(async (url: string) => {
+          if (url.includes('/api/catalog')) {
+            return {
+              ok: true,
+              json: async () => ({
+                editions: [{ id: 'emerald', available: true, url: '/roms/pokeemerald.gba' }],
+              }),
+            };
+          }
+          if (url.includes('/roms/')) {
+            return {
+              ok: true,
+              headers: new Headers({ 'Content-Type': 'application/octet-stream' }),
+              blob: async () => new Blob([gbaFixture()]),
+            };
+          }
+          return { ok: false };
+        }),
       );
 
-      // Advance event loop turn
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+      render(<App />);
+      await screen.findByText('本地存储已就绪');
+
+      // Start game
+      const startBtn = screen.getByRole('button', { name: '开始冒险' });
+      const startPromise = userEvent.click(startBtn);
+      await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
+      harness.flushEmulatorRafs();
+      await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
+      harness.flushEmulatorRafs();
+      await startPromise;
+
+      await screen.findByText('正在冒险');
+
+      if (initialStatus === 'paused') {
+        const pauseToggle = screen.getByRole('button', { name: '暂停游戏' });
+        await userEvent.click(pauseToggle);
+        await screen.findByText('已暂停');
+      }
+
+      const restartToolbarBtn = screen.getByRole('button', { name: '重新启动游戏' });
+      const resumeCallsBefore = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
+
+      // Helper to open restart modal and wait for opening checkpoint to settle
+      const openRestartModalAwaitingCheckpoint = async () => {
+        const originalPutSnapshot = vi
+          .mocked(harness.fakeStorage.putSnapshot)
+          .getMockImplementation();
+        if (!originalPutSnapshot) throw new Error('Missing original putSnapshot implementation');
+
+        let checkpointDone = false;
+        let resolveCheckpoint: () => void = () => {};
+        const checkpointPromise = new Promise<void>((resolve) => {
+          resolveCheckpoint = resolve;
+        });
+
+        if (initialStatus === 'running') {
+          vi.mocked(harness.fakeStorage.putSnapshot).mockImplementationOnce(async (snap) => {
+            const res = await originalPutSnapshot(snap);
+            checkpointDone = true;
+            resolveCheckpoint();
+            return res;
+          });
+        }
+
+        await userEvent.click(restartToolbarBtn);
+        const dialog = await screen.findByRole('dialog');
+
+        if (initialStatus === 'running' && !checkpointDone) {
+          await checkpointPromise;
+        }
+
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+
+        return dialog;
+      };
+
+      // 1. Pre-confirmation cancellation: button click
+      let dialog = await openRestartModalAwaitingCheckpoint();
+      expect(dialog).toBeDefined();
+      expect(
+        within(dialog).getByRole('heading', { level: 2, name: '重新开启这段冒险？' }),
+      ).toBeDefined();
+
+      const cancelRestartBtn = within(dialog).getByRole('button', { name: '再玩一会儿' });
+      await userEvent.click(cancelRestartBtn);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(harness.testCore.quickReload).not.toHaveBeenCalled();
+      if (initialStatus === 'paused') {
+        expect(screen.getByText('已暂停')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+      } else {
+        expect(screen.getByText('正在冒险')).toBeDefined();
+      }
+
+      // Pre-confirmation cancellation: Escape key
+      dialog = await openRestartModalAwaitingCheckpoint();
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(harness.testCore.quickReload).not.toHaveBeenCalled();
+      if (initialStatus === 'paused') {
+        expect(screen.getByText('已暂停')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+      }
+
+      // Pre-confirmation cancellation: backdrop click
+      dialog = await openRestartModalAwaitingCheckpoint();
+      fireEvent.click(dialog);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(harness.testCore.quickReload).not.toHaveBeenCalled();
+      if (initialStatus === 'paused') {
+        expect(screen.getByText('已暂停')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+      }
+
+      // Pre-confirmation cancellation: X close button
+      dialog = await openRestartModalAwaitingCheckpoint();
+      const closeXBtn = within(dialog).getByRole('button', { name: '关闭窗口' });
+      await userEvent.click(closeXBtn);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(harness.testCore.quickReload).not.toHaveBeenCalled();
+      if (initialStatus === 'paused') {
+        expect(screen.getByText('已暂停')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+      }
+
+      // Pre-confirmation cancellation: native cancel event
+      dialog = await openRestartModalAwaitingCheckpoint();
+      fireEvent(dialog, new Event('cancel'));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(harness.testCore.quickReload).not.toHaveBeenCalled();
+      if (initialStatus === 'paused') {
+        expect(screen.getByText('已暂停')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+      }
+
+      // 2. Deferred restart mutation: protect against Cancel, Escape, backdrop, X button, native cancel event, and same-event dismissal
+      const dialogPending = await openRestartModalAwaitingCheckpoint();
+      const confirmBtnPending = within(dialogPending).getByRole('button', { name: '重新启动' });
+      const cancelBtnPending = within(dialogPending).getByRole('button', { name: '再玩一会儿' });
+      const closeXPending = within(dialogPending).getByRole('button', { name: '关闭窗口' });
+
+      const originalPutBattery = vi.mocked(harness.fakeStorage.putBattery).getMockImplementation();
+      if (!originalPutBattery) throw new Error('Missing original putBattery implementation');
+
+      let releaseRestart: () => void = () => {};
+      let restartWorkPromise: ReturnType<typeof originalPutBattery> | null = null;
+      const restartDeferred = new Promise<void>((resolve) => {
+        releaseRestart = resolve;
       });
 
-      // Dialog stays open and non-dismissible
+      const putBatteryCallsBaseline = vi.mocked(harness.fakeStorage.putBattery).mock.calls.length;
+      const quickReloadCallsBaseline = vi.mocked(harness.testCore.quickReload).mock.calls.length;
+
+      vi.mocked(harness.fakeStorage.putBattery).mockImplementation((save) => {
+        restartWorkPromise = (async () => {
+          await restartDeferred;
+          return originalPutBattery(save);
+        })();
+        return restartWorkPromise;
+      });
+
+      try {
+        // Repeated confirmation in same act + synchronous cancel
+        act(() => {
+          (confirmBtnPending as HTMLButtonElement).click();
+          (confirmBtnPending as HTMLButtonElement).click();
+          (cancelBtnPending as HTMLButtonElement).click();
+        });
+
+        // Wait until restart's putBattery has been called and is deferred
+        await waitFor(() =>
+          expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(
+            putBatteryCallsBaseline + 1,
+          ),
+        );
+
+        // Advance turn
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+
+        // Dialog stays open and busy
+        expect(screen.getByRole('dialog')).toBeDefined();
+        const processingBtn = within(dialogPending).getByRole('button', { name: '正在重新启动…' });
+        expect(processingBtn).toBeDefined();
+        expect(processingBtn.hasAttribute('disabled')).toBe(true);
+        expect(cancelBtnPending.hasAttribute('disabled')).toBe(true);
+        expect(closeXPending.hasAttribute('disabled')).toBe(true);
+
+        // All dismissal and repeat attempts while busy are rejected
+        await userEvent.click(cancelBtnPending);
+        await userEvent.click(closeXPending);
+        await userEvent.click(processingBtn);
+        fireEvent.keyDown(dialogPending, { key: 'Escape' });
+        fireEvent.click(dialogPending);
+        fireEvent(dialogPending, new Event('cancel'));
+
+        expect(screen.getByRole('dialog')).toBeDefined();
+        // Exactly one pending writer and no premature reload
+        expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(
+          putBatteryCallsBaseline + 1,
+        );
+        expect(vi.mocked(harness.testCore.quickReload).mock.calls.length).toBe(
+          quickReloadCallsBaseline,
+        );
+      } finally {
+        releaseRestart();
+        if (restartWorkPromise) await restartWorkPromise;
+        await screen.findByText('掌机已重新启动');
+        await screen.findByText('正在冒险');
+      }
+
+      // After release, quickReload executes exactly once and game resumes running
+      expect(vi.mocked(harness.testCore.quickReload).mock.calls.length).toBe(
+        quickReloadCallsBaseline + 1,
+      );
+
+      // Verify battery save bytes exist in storage
+      const persistedBattery = await harness.fakeStorage.getBattery('stored-emerald');
+      expect(persistedBattery).not.toBeNull();
+      if (!persistedBattery) throw new Error('Missing battery save');
+      expect(new Uint8Array(persistedBattery.data)).toEqual(new Uint8Array([1, 2, 3, 4]));
+
+      // 3. Test restart mutation failure and successful retry
+      const dialogRetry = await openRestartModalAwaitingCheckpoint();
+      const confirmRetryBtn = within(dialogRetry).getByRole('button', { name: '重新启动' });
+
+      const putBatteryBeforeFail = vi.mocked(harness.fakeStorage.putBattery).mock.calls.length;
+      const reloadBeforeFail = vi.mocked(harness.testCore.quickReload).mock.calls.length;
+
+      vi.mocked(harness.fakeStorage.putBattery).mockRejectedValueOnce(
+        new Error('Storage quota exceeded'),
+      );
+
+      await userEvent.click(confirmRetryBtn);
+
+      expect(await screen.findByRole('alert')).toBeDefined();
+      expect(screen.getByText(/Storage quota exceeded/)).toBeDefined();
+
+      // Quick reload was NOT called on failure; dialog remains open and retryable
+      expect(vi.mocked(harness.testCore.quickReload).mock.calls.length).toBe(reloadBeforeFail);
+      expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(
+        putBatteryBeforeFail + 1,
+      );
       expect(screen.getByRole('dialog')).toBeDefined();
-      expect(within(dialogPending).getByRole('button', { name: '正在重新启动…' })).toBeDefined();
-      expect(cancelBtnPending.hasAttribute('disabled')).toBe(true);
+      expect(confirmRetryBtn.hasAttribute('disabled')).toBe(false);
 
-      // Attempt cancel, Escape, and backdrop click while busy -> all rejected
-      await userEvent.click(cancelBtnPending);
-      fireEvent.keyDown(dialogPending, { key: 'Escape' });
-      fireEvent.click(dialogPending);
+      // Successful retry invokes storage and visibly completes
+      await userEvent.click(confirmRetryBtn);
+      await screen.findByText('掌机已重新启动');
+      await screen.findByText('正在冒险');
 
-      expect(screen.getByRole('dialog')).toBeDefined();
-      expect(harness.testCore.quickReload).not.toHaveBeenCalled();
-    } finally {
-      releaseRestart();
-      if (restartWorkPromise) await restartWorkPromise;
-      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    }
-
-    // After release, quickReload executes exactly once and game resumes running
-    expect(harness.testCore.quickReload).toHaveBeenCalledTimes(1);
-    await screen.findByText('正在冒险');
-
-    // 4. Test restart mutation failure: keeps dialog retryable and succeeds on retry
-    await userEvent.click(restartToolbarBtn);
-    const dialogRetry = await screen.findByRole('dialog');
-    const confirmRetryBtn = within(dialogRetry).getByRole('button', { name: '重新启动' });
-
-    // Wait for opening checkpoint to settle before installing rejection
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    vi.mocked(harness.fakeStorage.putBattery).mockRejectedValueOnce(
-      new Error('Storage quota exceeded'),
-    );
-
-    await userEvent.click(confirmRetryBtn);
-
-    // Toast error shown
-    expect(await screen.findByRole('alert')).toBeDefined();
-    expect(screen.getByText(/Storage quota exceeded/)).toBeDefined();
-
-    // Dialog remains open and retryable
-    expect(screen.getByRole('dialog')).toBeDefined();
-    expect(confirmRetryBtn.hasAttribute('disabled')).toBe(false);
-
-    // Successful retry
-    await userEvent.click(confirmRetryBtn);
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(harness.testCore.quickReload).toHaveBeenCalledTimes(2);
-  });
+      expect(vi.mocked(harness.testCore.quickReload).mock.calls.length).toBe(reloadBeforeFail + 1);
+      expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(
+        putBatteryBeforeFail + 2,
+      );
+    },
+  );
 
   it('restores persisted settings on fresh mount and keeps memory state usable when localStorage.setItem rejects', async () => {
     const emeraldCart = createCartridge('stored-emerald');
