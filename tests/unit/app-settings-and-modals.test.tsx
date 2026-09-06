@@ -261,40 +261,37 @@ describe('App settings and modal management', () => {
         const pauseToggle = screen.getByRole('button', { name: '暂停游戏' });
         await userEvent.click(pauseToggle);
         await screen.findByText('已暂停');
+        // Ensure manual-pause checkpoint write settles
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
       }
 
       const restartToolbarBtn = screen.getByRole('button', { name: '重新启动游戏' });
-      const resumeCallsBefore = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
+      const resumeCallsBaseline = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
 
-      // Helper to open restart modal and wait for opening checkpoint to settle
+      // Helper to open restart modal and wait unconditionally for the new opening checkpoint to settle
       const openRestartModalAwaitingCheckpoint = async () => {
         const originalPutSnapshot = vi
           .mocked(harness.fakeStorage.putSnapshot)
           .getMockImplementation();
         if (!originalPutSnapshot) throw new Error('Missing original putSnapshot implementation');
 
-        let checkpointDone = false;
         let resolveCheckpoint: () => void = () => {};
         const checkpointPromise = new Promise<void>((resolve) => {
           resolveCheckpoint = resolve;
         });
 
-        if (initialStatus === 'running') {
-          vi.mocked(harness.fakeStorage.putSnapshot).mockImplementationOnce(async (snap) => {
-            const res = await originalPutSnapshot(snap);
-            checkpointDone = true;
-            resolveCheckpoint();
-            return res;
-          });
-        }
+        vi.mocked(harness.fakeStorage.putSnapshot).mockImplementationOnce(async (snap) => {
+          const res = await originalPutSnapshot(snap);
+          resolveCheckpoint();
+          return res;
+        });
 
         await userEvent.click(restartToolbarBtn);
         const dialog = await screen.findByRole('dialog');
 
-        if (initialStatus === 'running' && !checkpointDone) {
-          await checkpointPromise;
-        }
-
+        await checkpointPromise;
         await act(async () => {
           await new Promise((resolve) => setTimeout(resolve, 0));
         });
@@ -315,9 +312,12 @@ describe('App settings and modal management', () => {
       expect(harness.testCore.quickReload).not.toHaveBeenCalled();
       if (initialStatus === 'paused') {
         expect(screen.getByText('已暂停')).toBeDefined();
-        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline);
       } else {
         expect(screen.getByText('正在冒险')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+          resumeCallsBaseline + 1,
+        );
       }
 
       // Pre-confirmation cancellation: Escape key
@@ -327,7 +327,12 @@ describe('App settings and modal management', () => {
       expect(harness.testCore.quickReload).not.toHaveBeenCalled();
       if (initialStatus === 'paused') {
         expect(screen.getByText('已暂停')).toBeDefined();
-        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline);
+      } else {
+        expect(screen.getByText('正在冒险')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+          resumeCallsBaseline + 2,
+        );
       }
 
       // Pre-confirmation cancellation: backdrop click
@@ -337,7 +342,12 @@ describe('App settings and modal management', () => {
       expect(harness.testCore.quickReload).not.toHaveBeenCalled();
       if (initialStatus === 'paused') {
         expect(screen.getByText('已暂停')).toBeDefined();
-        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline);
+      } else {
+        expect(screen.getByText('正在冒险')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+          resumeCallsBaseline + 3,
+        );
       }
 
       // Pre-confirmation cancellation: X close button
@@ -348,7 +358,12 @@ describe('App settings and modal management', () => {
       expect(harness.testCore.quickReload).not.toHaveBeenCalled();
       if (initialStatus === 'paused') {
         expect(screen.getByText('已暂停')).toBeDefined();
-        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline);
+      } else {
+        expect(screen.getByText('正在冒险')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+          resumeCallsBaseline + 4,
+        );
       }
 
       // Pre-confirmation cancellation: native cancel event
@@ -358,7 +373,12 @@ describe('App settings and modal management', () => {
       expect(harness.testCore.quickReload).not.toHaveBeenCalled();
       if (initialStatus === 'paused') {
         expect(screen.getByText('已暂停')).toBeDefined();
-        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline);
+      } else {
+        expect(screen.getByText('正在冒险')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+          resumeCallsBaseline + 5,
+        );
       }
 
       // 2. Deferred restart mutation: protect against Cancel, Escape, backdrop, X button, native cancel event, and same-event dismissal
@@ -378,6 +398,12 @@ describe('App settings and modal management', () => {
 
       const putBatteryCallsBaseline = vi.mocked(harness.fakeStorage.putBattery).mock.calls.length;
       const quickReloadCallsBaseline = vi.mocked(harness.testCore.quickReload).mock.calls.length;
+      const quitGameCallsBaseline = vi.mocked(harness.testCore.quitGame).mock.calls.length;
+      const loadGameCallsBaseline = vi.mocked(harness.testCore.loadGame).mock.calls.length;
+
+      // Stored and live core battery bytes before confirmed restart
+      const batteryBeforeConfirmed = await harness.fakeStorage.getBattery('stored-emerald');
+      const coreSaveBeforeConfirmed = harness.testCore.getSave();
 
       vi.mocked(harness.fakeStorage.putBattery).mockImplementation((save) => {
         restartWorkPromise = (async () => {
@@ -409,7 +435,9 @@ describe('App settings and modal management', () => {
 
         // Dialog stays open and busy
         expect(screen.getByRole('dialog')).toBeDefined();
-        const processingBtn = within(dialogPending).getByRole('button', { name: '正在重新启动…' });
+        const processingBtn = within(dialogPending).getByRole('button', {
+          name: '正在重新启动…',
+        });
         expect(processingBtn).toBeDefined();
         expect(processingBtn.hasAttribute('disabled')).toBe(true);
         expect(cancelBtnPending.hasAttribute('disabled')).toBe(true);
@@ -424,18 +452,26 @@ describe('App settings and modal management', () => {
         fireEvent(dialogPending, new Event('cancel'));
 
         expect(screen.getByRole('dialog')).toBeDefined();
-        // Exactly one pending writer and no premature reload
+        // Exactly one pending writer and no premature reload/quit/load
         expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(
           putBatteryCallsBaseline + 1,
         );
         expect(vi.mocked(harness.testCore.quickReload).mock.calls.length).toBe(
           quickReloadCallsBaseline,
         );
+        expect(vi.mocked(harness.testCore.quitGame).mock.calls.length).toBe(quitGameCallsBaseline);
+        expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(loadGameCallsBaseline);
+
+        // Storage and core getSave() bytes remain untouched while pending
+        const batteryDuringPending = await harness.fakeStorage.getBattery('stored-emerald');
+        expect(batteryDuringPending?.data).toEqual(batteryBeforeConfirmed?.data);
+        expect(harness.testCore.getSave()).toEqual(coreSaveBeforeConfirmed);
       } finally {
         releaseRestart();
         if (restartWorkPromise) await restartWorkPromise;
         await screen.findByText('掌机已重新启动');
         await screen.findByText('正在冒险');
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
       }
 
       // After release, quickReload executes exactly once and game resumes running
@@ -473,10 +509,16 @@ describe('App settings and modal management', () => {
       expect(screen.getByRole('dialog')).toBeDefined();
       expect(confirmRetryBtn.hasAttribute('disabled')).toBe(false);
 
+      // Unchanged persisted and core save bytes after failure
+      const batteryAfterFail = await harness.fakeStorage.getBattery('stored-emerald');
+      expect(batteryAfterFail?.data).toEqual(persistedBattery.data);
+      expect(harness.testCore.getSave()).toEqual(coreSaveBeforeConfirmed);
+
       // Successful retry invokes storage and visibly completes
       await userEvent.click(confirmRetryBtn);
       await screen.findByText('掌机已重新启动');
       await screen.findByText('正在冒险');
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
       expect(vi.mocked(harness.testCore.quickReload).mock.calls.length).toBe(reloadBeforeFail + 1);
       expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(

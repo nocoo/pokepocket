@@ -504,6 +504,10 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
         const pauseToggle = screen.getByRole('button', { name: '暂停游戏' });
         await userEvent.click(pauseToggle);
         await screen.findByText('已暂停');
+        // Ensure manual-pause checkpoint write settles
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
       }
 
       const saveInput = container.querySelector(
@@ -511,14 +515,14 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       ) as HTMLInputElement;
       expect(saveInput).toBeDefined();
 
-      const resumeCallsBefore = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
+      const resumeCallsBaseline = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
 
       // 1. Non-sav file rejected with toast
       const invalidFile = new File([new Uint8Array(100)], 'invalid.txt');
       fireEvent.change(saveInput, { target: { files: [invalidFile] } });
       expect(await screen.findByText('请选择 .sav 格式的游戏存档。')).toBeDefined();
 
-      // Helper to open import dialog with a valid file and wait for opening checkpoint
+      // Helper to open import dialog with a valid file and wait unconditionally for opening checkpoint
       const validSavDataInitial = new Uint8Array(131072);
       validSavDataInitial.fill(7);
       const validFileInitial = new File([validSavDataInitial], 'backup-initial.sav');
@@ -529,28 +533,21 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
           .getMockImplementation();
         if (!originalPutSnapshot) throw new Error('Missing original putSnapshot implementation');
 
-        let checkpointDone = false;
         let resolveCheckpoint: () => void = () => {};
         const checkpointPromise = new Promise<void>((resolve) => {
           resolveCheckpoint = resolve;
         });
 
-        if (initialStatus === 'running') {
-          vi.mocked(harness.fakeStorage.putSnapshot).mockImplementationOnce(async (snap) => {
-            const res = await originalPutSnapshot(snap);
-            checkpointDone = true;
-            resolveCheckpoint();
-            return res;
-          });
-        }
+        vi.mocked(harness.fakeStorage.putSnapshot).mockImplementationOnce(async (snap) => {
+          const res = await originalPutSnapshot(snap);
+          resolveCheckpoint();
+          return res;
+        });
 
         fireEvent.change(saveInput, { target: { files: [fileToSelect] } });
         const dialog = await screen.findByRole('dialog');
 
-        if (initialStatus === 'running' && !checkpointDone) {
-          await checkpointPromise;
-        }
-
+        await checkpointPromise;
         await act(async () => {
           await new Promise((resolve) => setTimeout(resolve, 0));
         });
@@ -573,9 +570,12 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
       if (initialStatus === 'paused') {
         expect(screen.getByText('已暂停')).toBeDefined();
-        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline);
       } else {
         expect(screen.getByText('正在冒险')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+          resumeCallsBaseline + 1,
+        );
       }
 
       // Pre-confirmation cancellation: Escape key
@@ -585,7 +585,12 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
       if (initialStatus === 'paused') {
         expect(screen.getByText('已暂停')).toBeDefined();
-        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline);
+      } else {
+        expect(screen.getByText('正在冒险')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+          resumeCallsBaseline + 2,
+        );
       }
 
       // Pre-confirmation cancellation: backdrop click
@@ -595,7 +600,12 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
       if (initialStatus === 'paused') {
         expect(screen.getByText('已暂停')).toBeDefined();
-        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline);
+      } else {
+        expect(screen.getByText('正在冒险')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+          resumeCallsBaseline + 3,
+        );
       }
 
       // Pre-confirmation cancellation: X close button
@@ -606,7 +616,12 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
       if (initialStatus === 'paused') {
         expect(screen.getByText('已暂停')).toBeDefined();
-        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline);
+      } else {
+        expect(screen.getByText('正在冒险')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+          resumeCallsBaseline + 4,
+        );
       }
 
       // Pre-confirmation cancellation: native cancel event
@@ -616,7 +631,12 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       expect(harness.fakeStorage.replaceBattery).not.toHaveBeenCalled();
       if (initialStatus === 'paused') {
         expect(screen.getByText('已暂停')).toBeDefined();
-        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBefore);
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(resumeCallsBaseline);
+      } else {
+        expect(screen.getByText('正在冒险')).toBeDefined();
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+          resumeCallsBaseline + 5,
+        );
       }
 
       // 3. Deferred import mutation: protect against Cancel, Escape, backdrop, X button, native cancel event, and same-event dismissal
@@ -628,7 +648,17 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       const confirmBtnPending = within(dialogPending).getByRole('button', { name: '导入并启动' });
       const cancelBtnPending = within(dialogPending).getByRole('button', { name: '取消' });
       const closeXPending = within(dialogPending).getByRole('button', { name: '关闭窗口' });
+
       const loadGameCallsBaseline = vi.mocked(harness.testCore.loadGame).mock.calls.length;
+      const quitGameCallsBaseline = vi.mocked(harness.testCore.quitGame).mock.calls.length;
+      const replaceCallsBaseline = vi.mocked(harness.fakeStorage.replaceBattery).mock.calls.length;
+
+      // Stored and core bytes before confirmed import
+      const batteryBeforeImport = await harness.fakeStorage.getBattery('stored-emerald');
+      const coreSaveBeforeImport = harness.testCore.getSave();
+      const coreRomBytesBeforeImport = (
+        harness.testCore.FS.readFile as unknown as (p: string) => Uint8Array
+      )('/roms/stored-emerald.gba');
 
       const originalReplaceBattery = vi
         .mocked(harness.fakeStorage.replaceBattery)
@@ -659,7 +689,11 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
         });
 
         // Wait until replaceBattery has been called and is deferred
-        await waitFor(() => expect(harness.fakeStorage.replaceBattery).toHaveBeenCalledTimes(1));
+        await waitFor(() =>
+          expect(vi.mocked(harness.fakeStorage.replaceBattery).mock.calls.length).toBe(
+            replaceCallsBaseline + 1,
+          ),
+        );
 
         // Advance turn
         await act(async () => {
@@ -684,7 +718,21 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
 
         expect(screen.getByRole('dialog')).toBeDefined();
         expect(vi.mocked(harness.testCore.loadGame).mock.calls.length).toBe(loadGameCallsBaseline);
-        expect(vi.mocked(harness.fakeStorage.replaceBattery).mock.calls.length).toBe(1);
+        expect(vi.mocked(harness.testCore.quitGame).mock.calls.length).toBe(quitGameCallsBaseline);
+        expect(vi.mocked(harness.fakeStorage.replaceBattery).mock.calls.length).toBe(
+          replaceCallsBaseline + 1,
+        );
+
+        // Stored and core bytes remain original while pending
+        const batteryDuringPending = await harness.fakeStorage.getBattery('stored-emerald');
+        expect(batteryDuringPending?.data).toEqual(batteryBeforeImport?.data);
+        expect(harness.testCore.getSave()).toEqual(coreSaveBeforeImport);
+        const coreRomBytesDuring = (
+          harness.testCore.FS.readFile as unknown as (p: string) => Uint8Array
+        )('/roms/stored-emerald.gba');
+        expect(new Uint8Array(coreRomBytesDuring)).toEqual(
+          new Uint8Array(coreRomBytesBeforeImport),
+        );
       } finally {
         releaseImport();
         if (importWorkPromise) await importWorkPromise;
@@ -692,15 +740,18 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
         harness.flushEmulatorRafs();
         await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
         harness.flushEmulatorRafs();
+        await screen.findByText('存档已导入，请在游戏中选择 CONTINUE');
         await screen.findByText('正在冒险');
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
       }
 
-      // After release, replaceBattery executed with exact bytes, game booted, and battery verified in storage
-      expect(harness.fakeStorage.replaceBattery).toHaveBeenCalledTimes(1);
+      // After release, replaceBattery executed with exact bytes, game booted, and battery verified in storage and core save
+      expect(vi.mocked(harness.fakeStorage.replaceBattery).mock.calls.length).toBe(
+        replaceCallsBaseline + 1,
+      );
       const replaceCalls = (harness.fakeStorage.replaceBattery as ReturnType<typeof vi.fn>).mock
         .calls;
-      expect(replaceCalls.length).toBe(1);
-      const callArgs = replaceCalls[0]?.[0];
+      const callArgs = replaceCalls[replaceCallsBaseline]?.[0];
       expect(callArgs.romId).toBe('stored-emerald');
       expect(new Uint8Array(callArgs.data)).toEqual(pendingSavData);
 
@@ -708,6 +759,12 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       expect(batteryInStorage).not.toBeNull();
       if (!batteryInStorage) throw new Error('Missing battery in storage');
       expect(new Uint8Array(batteryInStorage.data)).toEqual(pendingSavData);
+
+      // Verify FS save path has exact new bytes
+      const fsSaveAfter = (harness.testCore.FS.readFile as unknown as (p: string) => Uint8Array)(
+        '/saves/stored-emerald.sav',
+      );
+      expect(new Uint8Array(fsSaveAfter)).toEqual(pendingSavData);
 
       expect(harness.testCore.loadGame).toHaveBeenCalledWith(
         '/roms/stored-emerald.gba',
@@ -717,7 +774,7 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
         loadGameCallsBaseline + 1,
       );
 
-      // 4. Test import mutation failure with DIFFERENT bytes and successful retry with another DIFFERENT bytes
+      // 4. Test import mutation failure and REAL same-dialog retry
       const failSavData = new Uint8Array(131072);
       failSavData.fill(3);
       const failFile = new File([failSavData], 'backup-fail.sav');
@@ -751,29 +808,19 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       expect(batteryAfterFail).not.toBeNull();
       expect(new Uint8Array(batteryAfterFail?.data ?? new ArrayBuffer(0))).toEqual(pendingSavData);
 
-      // Successful retry with DIFFERENT retry bytes (fill 5)
-      const retrySavData = new Uint8Array(131072);
-      retrySavData.fill(5);
-      const retryFile = new File([retrySavData], 'backup-retry.sav');
-
-      // Dismiss dialog and re-select new retry file
-      const cancelRetryModalBtn = within(dialogRetry).getByRole('button', { name: '取消' });
-      await userEvent.click(cancelRetryModalBtn);
-      expect(screen.queryByRole('dialog')).toBeNull();
-
-      const dialogFinal = await openImportModalAwaitingCheckpoint(retryFile);
-      const confirmFinalBtn = within(dialogFinal).getByRole('button', { name: '导入并启动' });
-
-      const finalPromise = userEvent.click(confirmFinalBtn);
+      // Real same-dialog retry: click the now-enabled confirmRetryBtn in the same dialog
+      const retryPromise = userEvent.click(confirmRetryBtn);
       await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
       harness.flushEmulatorRafs();
       await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThanOrEqual(1));
       harness.flushEmulatorRafs();
-      await finalPromise;
+      await retryPromise;
 
+      await screen.findByText('存档已导入，请在游戏中选择 CONTINUE');
       await screen.findByText('正在冒险');
-      expect(screen.queryByRole('dialog')).toBeNull();
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
+      // Exactly one additional load and replace
       expect(vi.mocked(harness.fakeStorage.replaceBattery).mock.calls.length).toBe(
         replaceCallsBeforeFail + 2,
       );
@@ -781,9 +828,15 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
         loadGameCallsBeforeFail + 1,
       );
 
+      // Storage and FS save match failSavData (fill 3)
       const batteryAfterSuccess = await harness.fakeStorage.getBattery('stored-emerald');
       expect(batteryAfterSuccess).not.toBeNull();
-      expect(new Uint8Array(batteryAfterSuccess?.data ?? new ArrayBuffer(0))).toEqual(retrySavData);
+      expect(new Uint8Array(batteryAfterSuccess?.data ?? new ArrayBuffer(0))).toEqual(failSavData);
+
+      const fsSaveAfterSuccess = (
+        harness.testCore.FS.readFile as unknown as (p: string) => Uint8Array
+      )('/saves/stored-emerald.sav');
+      expect(new Uint8Array(fsSaveAfterSuccess)).toEqual(failSavData);
     },
   );
 
