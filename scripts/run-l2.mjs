@@ -21,8 +21,8 @@ export async function runL2Gate(options = {}) {
   const handleSigint = () => controller.abort(new Error('Interrupted by SIGINT'));
   const handleSigterm = () => controller.abort(new Error('Interrupted by SIGTERM'));
 
-  process.once('SIGINT', handleSigint);
-  process.once('SIGTERM', handleSigterm);
+  process.on('SIGINT', handleSigint);
+  process.on('SIGTERM', handleSigterm);
 
   let ownedResourceRoot = null;
   let executionError = null;

@@ -204,7 +204,7 @@ describe('run-l2 gate runner policies', () => {
     }
   });
 
-  it('deferred-rm regression: commands succeed, cleanup waits, SIGTERM emitted during cleanup, directory removed, exit143 and listeners restored', async () => {
+  it('deferred-rm regression: retains owned listener across repeated signals (SIGTERM first), verifies pending gate and directory lifecycle, and restores listeners', async () => {
     const savedExitCode = process.exitCode;
     const initialSigint = process.listeners('SIGINT');
     const initialSigterm = process.listeners('SIGTERM');
@@ -219,8 +219,11 @@ describe('run-l2 gate runner policies', () => {
       releaseCleanup = resolve;
     });
 
+    let targetDir = null;
     let removedDir = null;
+    let gateSettled = false;
     const deferredRm = async (dir, opts) => {
+      targetDir = dir;
       resolveEnteredCleanup();
       await cleanupDeferred;
       removedDir = dir;
@@ -236,34 +239,250 @@ describe('run-l2 gate runner policies', () => {
         rmFn: deferredRm,
         silent: true,
       });
+      gatePromise.finally(() => {
+        gateSettled = true;
+      });
 
       // Wait until rmFn has explicitly entered cleanup
       await enteredCleanup;
 
-      // Require the extra owned SIGTERM listener is still present
-      expect(process.listeners('SIGTERM').length).toBe(initialSigterm.length + 1);
+      // Identify exact owned listeners
+      const currentSigtermListeners = process.listeners('SIGTERM');
+      const currentSigintListeners = process.listeners('SIGINT');
+      expect(currentSigtermListeners.length).toBe(initialSigterm.length + 1);
+      expect(currentSigintListeners.length).toBe(initialSigint.length + 1);
+      const ownedSigtermListener = currentSigtermListeners.find(
+        (fn) => !initialSigterm.includes(fn),
+      );
+      const ownedSigintListener = currentSigintListeners.find((fn) => !initialSigint.includes(fn));
+      expect(ownedSigtermListener).toBeDefined();
+      expect(ownedSigintListener).toBeDefined();
 
-      // Emit SIGTERM while cleanup is in progress
+      // Emit first signal (SIGTERM)
       process.emit('SIGTERM');
+
+      // Assert the exact owned listeners remain attached (not dropped by process.once)
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+
+      // Emit the same signal again, then the other signal
+      process.emit('SIGTERM');
+      process.emit('SIGINT');
+
+      // Assert owned listeners still remain attached
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+
+      // Verify gate remains pending until rm is released
+      expect(gateSettled).toBe(false);
+
+      // The real owned directory still exists before release
+      expect(targetDir).toBeDefined();
+      const preStat = await stat(targetDir);
+      expect(preStat.isDirectory()).toBe(true);
 
       // Release cleanup
       releaseCleanup();
 
       const res = await gatePromise;
       expect(res).toBe(false);
+      // Initial signal was SIGTERM, so initial signal status is retained (143)
       expect(process.exitCode).toBe(143);
 
-      // Verify directory was removed
-      expect(removedDir).toBeDefined();
-      const statResult = await stat(removedDir).catch((e) => e);
-      expect(statResult.code).toBe('ENOENT');
+      // Verify directory was removed after release
+      expect(removedDir).toBe(targetDir);
+      const postStat = await stat(removedDir).catch((e) => e);
+      expect(postStat.code).toBe('ENOENT');
 
-      // Verify listeners were restored
+      // Both original listener arrays and exitCode are restored
       expect(process.listeners('SIGINT')).toEqual(initialSigint);
       expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
     } finally {
       if (releaseCleanup) {
         releaseCleanup();
+      }
+      if (gatePromise) {
+        await gatePromise.catch(() => {});
+      }
+      process.exitCode = savedExitCode;
+    }
+  });
+
+  it('deferred-rm regression: retains owned listener across repeated signals (SIGINT first), verifies pending gate and directory lifecycle, and restores listeners', async () => {
+    const savedExitCode = process.exitCode;
+    const initialSigint = process.listeners('SIGINT');
+    const initialSigterm = process.listeners('SIGTERM');
+
+    let resolveEnteredCleanup;
+    const enteredCleanup = new Promise((resolve) => {
+      resolveEnteredCleanup = resolve;
+    });
+
+    let releaseCleanup;
+    const cleanupDeferred = new Promise((resolve) => {
+      releaseCleanup = resolve;
+    });
+
+    let targetDir = null;
+    let removedDir = null;
+    let gateSettled = false;
+    const deferredRm = async (dir, opts) => {
+      targetDir = dir;
+      resolveEnteredCleanup();
+      await cleanupDeferred;
+      removedDir = dir;
+      return rm(dir, opts);
+    };
+
+    const fakeRunner = async () => {};
+
+    let gatePromise;
+    try {
+      gatePromise = runL2Gate({
+        commandRunner: fakeRunner,
+        rmFn: deferredRm,
+        silent: true,
+      });
+      gatePromise.finally(() => {
+        gateSettled = true;
+      });
+
+      // Wait until rmFn has explicitly entered cleanup
+      await enteredCleanup;
+
+      // Identify exact owned listeners
+      const currentSigtermListeners = process.listeners('SIGTERM');
+      const currentSigintListeners = process.listeners('SIGINT');
+      expect(currentSigtermListeners.length).toBe(initialSigterm.length + 1);
+      expect(currentSigintListeners.length).toBe(initialSigint.length + 1);
+      const ownedSigtermListener = currentSigtermListeners.find(
+        (fn) => !initialSigterm.includes(fn),
+      );
+      const ownedSigintListener = currentSigintListeners.find((fn) => !initialSigint.includes(fn));
+      expect(ownedSigtermListener).toBeDefined();
+      expect(ownedSigintListener).toBeDefined();
+
+      // Emit first signal (SIGINT)
+      process.emit('SIGINT');
+
+      // Assert the exact owned listeners remain attached (not dropped by process.once)
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+
+      // Emit the same signal again, then the other signal
+      process.emit('SIGINT');
+      process.emit('SIGTERM');
+
+      // Assert owned listeners still remain attached
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+
+      // Verify gate remains pending until rm is released
+      expect(gateSettled).toBe(false);
+
+      // The real owned directory still exists before release
+      expect(targetDir).toBeDefined();
+      const preStat = await stat(targetDir);
+      expect(preStat.isDirectory()).toBe(true);
+
+      // Release cleanup
+      releaseCleanup();
+
+      const res = await gatePromise;
+      expect(res).toBe(false);
+      // Initial signal was SIGINT, so initial signal status is retained (130)
+      expect(process.exitCode).toBe(130);
+
+      // Verify directory was removed after release
+      expect(removedDir).toBe(targetDir);
+      const postStat = await stat(removedDir).catch((e) => e);
+      expect(postStat.code).toBe('ENOENT');
+
+      // Both original listener arrays and exitCode are restored
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
+    } finally {
+      if (releaseCleanup) {
+        releaseCleanup();
+      }
+      if (gatePromise) {
+        await gatePromise.catch(() => {});
+      }
+      process.exitCode = savedExitCode;
+    }
+  });
+
+  it('runL2Gate retains owned listeners during runner settlement across repeat signals', async () => {
+    const savedExitCode = process.exitCode;
+    const initialSigint = process.listeners('SIGINT');
+    const initialSigterm = process.listeners('SIGTERM');
+
+    let resolveRunnerEntered;
+    const runnerEntered = new Promise((resolve) => {
+      resolveRunnerEntered = resolve;
+    });
+
+    let releaseRunner;
+    const runnerDeferred = new Promise((resolve) => {
+      releaseRunner = resolve;
+    });
+
+    const blockedRunner = async (_commands, { signal }) => {
+      resolveRunnerEntered();
+      await runnerDeferred;
+      if (signal.aborted) {
+        throw new Error(signal.reason?.message || 'Aborted');
+      }
+    };
+
+    let gateSettled = false;
+    let gatePromise;
+    try {
+      gatePromise = runL2Gate({
+        commandRunner: blockedRunner,
+        silent: true,
+      });
+      gatePromise.finally(() => {
+        gateSettled = true;
+      });
+
+      await runnerEntered;
+
+      const currentSigtermListeners = process.listeners('SIGTERM');
+      const currentSigintListeners = process.listeners('SIGINT');
+      const ownedSigtermListener = currentSigtermListeners.find(
+        (fn) => !initialSigterm.includes(fn),
+      );
+      const ownedSigintListener = currentSigintListeners.find((fn) => !initialSigint.includes(fn));
+      expect(ownedSigtermListener).toBeDefined();
+      expect(ownedSigintListener).toBeDefined();
+
+      // Emit first signal
+      process.emit('SIGTERM');
+
+      // Assert owned listeners retained
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+
+      // Emit repeat and alternate signals while runner is still settling
+      process.emit('SIGTERM');
+      process.emit('SIGINT');
+
+      expect(process.listeners('SIGTERM')).toContain(ownedSigtermListener);
+      expect(process.listeners('SIGINT')).toContain(ownedSigintListener);
+      expect(gateSettled).toBe(false);
+
+      releaseRunner();
+
+      const res = await gatePromise;
+      expect(res).toBe(false);
+      expect(process.exitCode).toBe(143);
+
+      expect(process.listeners('SIGINT')).toEqual(initialSigint);
+      expect(process.listeners('SIGTERM')).toEqual(initialSigterm);
+    } finally {
+      if (releaseRunner) {
+        releaseRunner();
       }
       if (gatePromise) {
         await gatePromise.catch(() => {});
