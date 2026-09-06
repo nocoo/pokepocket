@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1, B2, B3, B4a, B4b, B4c1, B4c2, and B4c3 accepted. The B4c4 gamepad-status fix is accepted; input and browser lifecycle coverage are next. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1, B2, B3, B4a, B4b, B4c1, B4c2, and B4c3 accepted. The B4c4 gamepad-status fix and input wiring are accepted; browser lifecycle coverage is next. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -214,22 +214,22 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State    | Implementation commits                                                                                                                                                                                                                           | Review and evidence                                                                                                           |
-| ----- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                                                                                                                                                                                             | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below                     |
-| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                                                                                                                                                                                            | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                                     |
-| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742`                                                                                                                                                                      | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass                                 |
-| B4a   | Accepted | `fff1da2`, `8f9f008`                                                                                                                                                                                                                             | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed                          |
-| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                                                                                                                                                                                            | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass                             |
-| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                                                                                                                                                                                                  | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed                               |
-| B4c2  | Accepted | `b1933ca`, `d08a034`                                                                                                                                                                                                                             | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                         |
-| B4c3  | Accepted | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`, `6f93cc3`, `5fbd930`, `fc8bb52`, `f43069d`, `7d5383f`, `c3a1a36`, `bf8cc79`, `6d629ad`, `79d725c`, `76aea87`, `7ed6ad8`, `850c683`, `e984a6f`, `624322f`, `757a0ed`, `133afc8` | 286 unit tests; independent G1/coverage and modal checkpoint payload/recovery review pass; all B4c3 follow-ups accepted       |
-| B4c4  | Open     | `23f9198`                                                                                                                                                                                                                                        | Gamepad status fix accepted; 287 unit tests, independent regression probe, G1/coverage/build pass; input and lifecycle remain |
-| B4d   | Pending  | —                                                                                                                                                                                                                                                | All four coverage metrics >=90%; L1/G1 pre-commit and commit-message gates                                                    |
-| B5    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                             |
-| B6    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                             |
-| B7    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                             |
-| B8    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                             |
+| Batch | State    | Implementation commits                                                                                                                                                                                                                           | Review and evidence                                                                                                          |
+| ----- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                                                                                                                                                                                             | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below                    |
+| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                                                                                                                                                                                            | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                                    |
+| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742`                                                                                                                                                                      | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass                                |
+| B4a   | Accepted | `fff1da2`, `8f9f008`                                                                                                                                                                                                                             | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed                         |
+| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                                                                                                                                                                                            | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass                            |
+| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                                                                                                                                                                                                  | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed                              |
+| B4c2  | Accepted | `b1933ca`, `d08a034`                                                                                                                                                                                                                             | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                        |
+| B4c3  | Accepted | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`, `6f93cc3`, `5fbd930`, `fc8bb52`, `f43069d`, `7d5383f`, `c3a1a36`, `bf8cc79`, `6d629ad`, `79d725c`, `76aea87`, `7ed6ad8`, `850c683`, `e984a6f`, `624322f`, `757a0ed`, `133afc8` | 286 unit tests; independent G1/coverage and modal checkpoint payload/recovery review pass; all B4c3 follow-ups accepted      |
+| B4c4  | Open     | `23f9198`, `7a534ed`, `d9295ec`                                                                                                                                                                                                                  | Gamepad fix and input accepted; 289 units, independent G1/coverage, input probes and negative guards pass; lifecycle remains |
+| B4d   | Pending  | —                                                                                                                                                                                                                                                | All four coverage metrics >=90%; L1/G1 pre-commit and commit-message gates                                                   |
+| B5    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                            |
+| B6    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                            |
+| B7    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                            |
+| B8    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                            |
 
 ### B1 review evidence
 
@@ -844,6 +844,34 @@ Independent checks on 2026-09-06 used an isolated checkout fixed at `23f9198`:
   `finally` that also covers render/readiness failures.
 
 The focused fix is accepted. B4c4 remains open for the separate input and browser lifecycle commits.
+
+### B4c4 input acceptance
+
+Reviewed implementation: `7a534ed` and `d9295ec`. The new
+[App input suite](../tests/unit/app-input.test.tsx) dispatches DOM events and owned gamepad polls
+through the production controllers and emulator. Both commits change tests only.
+
+Independent checks on 2026-09-06 used an isolated checkout fixed at `d9295ec`:
+
+- `bun run test:coverage`: 289 tests across 33 files pass in 6.05 seconds. Coverage is 90.84%
+  statements (1727/1901), 85.19% branches (1243/1459), 91.59% functions (403/440), and 93.02%
+  lines (1546/1662). Scope is unchanged; branch coverage still falls short of L1.
+- G1 passes with 82 Biome files and zero errors/warnings. Production source is unchanged from
+  the independently built `23f9198`; the implementer reports build and developer HTTP (1/1) passing.
+- Keyboard checks verify mapping/repeats, keyup under changed editing focus without a window blur,
+  editable/modifier guards, button/link/nested activation, real pause checkpoints, mute, rebinding,
+  and restoring a nondefault 2x speed on keyup, blur, and focus-mode cleanup. Nested events execute
+  unconditionally; guards assert core call counts rather than only the running label.
+- Two pads and a keyboard can hold A together. Disconnecting pads preserves remaining holders;
+  the last holder releases A once. Modal, pause/resume, and real return-to-gallery transitions
+  assert new press/release calls, save identity/bytes, and disabled input in the library. Tests
+  inspect RAF cancellation before harness cleanup and restore the navigator descriptor in `finally`.
+- Two independent input probes pass at the unchanged production revision (654 ms). At `7a534ed`,
+  removing the editing guard, repeated-shortcut guard, or paused-gamepad condition separately makes
+  the committed suite fail on unexpected presses, incorrect restored speed, or resume input calls
+  (0.88, 0.90, and 0.92 seconds). Source restoration runs in `finally`; the checkout is clean.
+
+Input wiring is accepted. B4c4 remains open only for browser lifecycle/fullscreen coverage.
 
 ## 5. Final acceptance record
 
