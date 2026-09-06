@@ -1331,7 +1331,7 @@ export default function App() {
           <p className="modal-intro">
             <strong>{pendingSave?.name}</strong>
             <br />
-            将替换当前卡带的游戏存档并重新启动。已有的即时存档仍会保留。
+            将替换当前卡带的游戏存档并重新启动。已有的手动即时存档仍会保留。
           </p>
           <div className="modal-actions">
             <button

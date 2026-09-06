@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures/browser-harness';
 import { readFile } from 'node:fs/promises';
 import { playableFixture } from '../fixtures/headers';
 
@@ -6,9 +6,6 @@ for (const system of ['GB', 'GBC'] as const) {
   test(`exports a sharp 1080p ${system} screenshot while keeping save previews at native resolution`, async ({
     page,
   }) => {
-    await page.route('**/api/catalog', (route) =>
-      route.fulfill({ json: { mode: 'private', editions: [], systems: ['GB', 'GBC', 'GBA'] } }),
-    );
     await page.goto('/');
     const bytes = playableFixture(system === 'GBC');
     await page.getByLabel('载入 GB / GBC / GBA 卡带', { exact: true }).setInputFiles({

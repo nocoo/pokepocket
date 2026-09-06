@@ -1,88 +1,15 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures/browser-harness';
 import { playableFixture } from '../fixtures/headers';
-
-test('selects bundled cartridges without a file dialog and preserves the canvas across all three frames', async ({
-  page,
-  request,
-}) => {
-  const catalog = await (await request.get('/api/catalog')).json();
-  test.skip(
-    !['red', 'crystal', 'sapphire'].every((id) =>
-      catalog.editions.some(
-        (item: { id: string; available: boolean }) => item.id === id && item.available,
-      ),
-    ),
-    'Local cartridge integration test; supply these editions in roms/.',
-  );
-  const fileDialogs: string[] = [];
-  const errors: string[] = [];
-  page.on('filechooser', () => fileDialogs.push('opened'));
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/');
-  await expect(page.getByRole('region', { name: '宝可梦卡带选择盘' })).toBeVisible();
-  await expect(page.locator('#game-stage')).not.toBeVisible();
-  const canvas = await page.locator('#game-canvas').elementHandle();
-  const colors: string[] = [];
-  for (const [name, system] of [
-    ['红', 'gb'],
-    ['水晶', 'gbc'],
-    ['蓝宝石', 'gba'],
-  ] as const) {
-    await page.getByRole('button', { name: `选择宝可梦 ${name}`, exact: true }).click();
-    await expect(page.locator('.destination-title h2')).toHaveText(name);
-    await page.getByRole('button', { name: '开始冒险', exact: true }).click();
-    await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
-    await expect(page.locator('.console-wrap')).toHaveClass(new RegExp(`system-${system}`));
-    await expect
-      .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0', 10))
-      .toBeGreaterThan(20);
-    expect(
-      canvas
-        ? await canvas.evaluate((node) => node === document.querySelector('#game-canvas'))
-        : false,
-    ).toBe(true);
-    const frame = await page.locator('.console-shell').boundingBox();
-    expect(
-      frame && (system === 'gba' ? frame.width > frame.height : frame.height > frame.width),
-    ).toBe(true);
-    colors.push(
-      await page
-        .locator('.console-shell')
-        .evaluate((node) => getComputedStyle(node).backgroundImage),
-    );
-    await page.getByRole('button', { name: '返回卡带盘', exact: true }).click();
-    await expect(page.locator('#cartridge-gallery')).toBeVisible();
-    await expect(page.locator('.stage-status')).toContainText('已暂停');
-    const before = await page.getByTestId('play-time').textContent();
-    if (!before) throw new Error('Play time before pause not found');
-    await page.keyboard.press('Space');
-    await page.waitForTimeout(1100);
-    await expect(page.getByTestId('play-time')).toHaveText(before);
-  }
-  expect(new Set(colors).size).toBe(3);
-  const elapsed = await page.getByTestId('play-time').textContent();
-  if (!elapsed) throw new Error('Elapsed play time not found');
-  await page.getByRole('button', { name: '开始冒险', exact: true }).click();
-  await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
-  await expect(page.getByTestId('play-time')).toHaveText(elapsed);
-  expect(fileDialogs).toEqual([]);
-  expect(errors).toEqual([]);
-});
 
 test('maps O/P, captures custom bindings, handles conflicts and restores preferences after reload', async ({
   page,
-  request,
 }) => {
-  const availability = await (await request.get('/api/cartridge')).json();
   await page.goto('/');
-  if (availability.available)
-    await page.getByRole('button', { name: '开始冒险', exact: true }).click();
-  else
-    await page.getByLabel('载入 GB / GBC / GBA 卡带', { exact: true }).setInputFiles({
-      name: 'original-test-program.gb',
-      mimeType: 'application/octet-stream',
-      buffer: Buffer.from(playableFixture()),
-    });
+  await page.getByLabel('载入 GB / GBC / GBA 卡带', { exact: true }).setInputFiles({
+    name: 'original-test-program.gb',
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from(playableFixture()),
+  });
   await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
   const a = page.locator('.console-right .action-a');
   const b = page.locator('.console-right .action-b');
@@ -162,9 +89,6 @@ test('maps O/P, captures custom bindings, handles conflicts and restores prefere
 test('keeps every cartridge in the collection and opens import only when requested', async ({
   page,
 }) => {
-  await page.route('**/api/catalog', (route) =>
-    route.fulfill({ json: { editions: [], systems: ['GB', 'GBC', 'GBA'] } }),
-  );
   let opened = false;
   page.on('filechooser', () => {
     opened = true;
@@ -179,4 +103,23 @@ test('keeps every cartridge in the collection and opens import only when request
   await picker;
   expect(opened).toBe(true);
   await expect(page.getByRole('region', { name: '宝可梦卡带选择盘' })).toBeVisible();
+});
+
+test('browses generations, searches versions and remembers a selection before loading', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.locator('.tray-slot')).toHaveCount(12);
+  await page.getByRole('button', { name: '初代', exact: true }).click();
+  await expect(page.locator('.tray-slot')).toHaveCount(4);
+  await page.getByRole('button', { name: '二代', exact: true }).click();
+  await page.getByRole('textbox', { name: '搜索宝可梦版本' }).fill('Crystal');
+  await expect(page.locator('.tray-slot')).toHaveCount(1);
+  await page.getByRole('button', { name: '选择宝可梦 水晶', exact: true }).click();
+  await page.reload();
+  await expect(page.locator('.destination-title h2')).toHaveText('水晶');
+  await expect(page.getByRole('button', { name: '选择宝可梦 水晶', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 });

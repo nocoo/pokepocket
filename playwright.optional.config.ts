@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './tests/e2e',
+  testDir: './tests/optional',
   fullyParallel: false,
   workers: 1,
   timeout: 60000,
@@ -20,4 +20,12 @@ export default defineConfig({
       },
     },
   ],
+  webServer: process.env.TEST_BASE_URL
+    ? undefined
+    : {
+        command: 'npm run dev -- --port 27047',
+        url: 'http://127.0.0.1:27047',
+        reuseExistingServer: !process.env.CI,
+        timeout: 30000,
+      },
 });

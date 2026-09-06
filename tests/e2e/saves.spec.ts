@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../fixtures/browser-harness';
 import type { BatterySave, Snapshot } from '../../src/lib/storage';
 import { playableFixture } from '../fixtures/headers';
 

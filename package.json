@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:http": "vitest run --config vitest.http.config.ts",
-    "test:e2e": "playwright test",
+    "test:e2e": "npm run build && playwright test",
     "postinstall": "node scripts/setup-emulator.mjs",
     "rom:build": "node scripts/build-rom.mjs",
     "format": "prettier --write .",
@@ -32,7 +32,8 @@
     "quality:commit": "node scripts/run-parallel.mjs",
     "prepare": "husky",
     "quality:l2": "node scripts/run-l2.mjs",
-    "quality:push": "node scripts/run-push.mjs"
+    "quality:push": "node scripts/run-push.mjs",
+    "test:e2e:optional": "playwright test --config playwright.optional.config.ts"
   },
   "dependencies": {
     "@fontsource/dm-sans": "5.3.0",

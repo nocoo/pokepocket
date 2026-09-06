@@ -171,22 +171,3 @@ test('keeps each platform’s saves separate during hot switching and restores l
   await expect(page.getByRole('status')).toContainText('已继续上次的冒险');
   expect(errors).toEqual([]);
 });
-
-test('browses generations, searches versions and remembers a selection before loading', async ({
-  page,
-}) => {
-  await page.goto('/');
-  await expect(page.locator('.tray-slot')).toHaveCount(12);
-  await page.getByRole('button', { name: '初代', exact: true }).click();
-  await expect(page.locator('.tray-slot')).toHaveCount(4);
-  await page.getByRole('button', { name: '二代', exact: true }).click();
-  await page.getByRole('textbox', { name: '搜索宝可梦版本' }).fill('Crystal');
-  await expect(page.locator('.tray-slot')).toHaveCount(1);
-  await page.getByRole('button', { name: '选择宝可梦 水晶', exact: true }).click();
-  await page.reload();
-  await expect(page.locator('.destination-title h2')).toHaveText('水晶');
-  await expect(page.getByRole('button', { name: '选择宝可梦 水晶', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-});

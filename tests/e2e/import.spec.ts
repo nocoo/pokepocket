@@ -1,14 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures/browser-harness';
 import { playableFixture } from '../fixtures/headers';
 
 test('imports a cartridge into the browser and resumes with no ROM service after reload', async ({
   page,
 }) => {
-  await page.route('**/api/catalog', (route) =>
-    route.fulfill({
-      json: { mode: 'private', editions: [], systems: ['GB', 'GBC', 'GBA'] },
-    }),
-  );
   const romRequests: string[] = [];
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
