@@ -26,7 +26,7 @@ function computeRomId(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function isInitialFixtureFrame(pixels: number[], system: string): boolean {
+function isFixtureFrame(pixels: number[], system: string, state: 1 | 2): boolean {
   if (!Array.isArray(pixels) || pixels.length < 32) return false;
   for (let i = 0; i < 8; i++) {
     if (pixels[i * 4 + 3] !== 255) return false;
@@ -36,7 +36,21 @@ function isInitialFixtureFrame(pixels: number[], system: string): boolean {
       const r = pixels[i * 4] ?? 0;
       const g = pixels[i * 4 + 1] ?? 0;
       const b = pixels[i * 4 + 2] ?? 0;
-      if (r < 200 || g > 50 || b > 50) return false;
+      const activeChannel = state === 1 ? r : g;
+      const inactiveChannel = state === 1 ? g : r;
+      if (activeChannel < 200 || inactiveChannel > 50 || b > 50) return false;
+    }
+    return true;
+  }
+  if (state === 2) {
+    for (let i = 0; i < 8; i++) {
+      if (
+        (pixels[i * 4] ?? 0) < 200 ||
+        (pixels[i * 4 + 1] ?? 0) < 200 ||
+        (pixels[i * 4 + 2] ?? 0) < 200
+      ) {
+        return false;
+      }
     }
     return true;
   }
@@ -354,7 +368,7 @@ test.describe('Core Cartridge Journeys', () => {
         .poll(
           async () => {
             const sample = await sampleCanvasPixels(page);
-            if (isInitialFixtureFrame(sample, system)) {
+            if (isFixtureFrame(sample, system, 1)) {
               initialPixels = sample;
               return true;
             }
@@ -371,18 +385,26 @@ test.describe('Core Cartridge Journeys', () => {
 
       // Press A ('KeyO') to increment SRAM byte 0 to 2 and change screen
       // Hold A until live canvas pixel frame changes to expected next frame, then release in finally
+      let state2Pixels: number[] = [];
       await page.locator('#game-canvas').focus();
       try {
         await page.keyboard.down('KeyO');
         await expect
-          .poll(async () => JSON.stringify(await sampleCanvasPixels(page)), { timeout: 15000 })
-          .not.toBe(JSON.stringify(initialPixels));
+          .poll(
+            async () => {
+              const sample = await sampleCanvasPixels(page);
+              if (!isFixtureFrame(sample, system, 2)) return false;
+              state2Pixels = sample;
+              return true;
+            },
+            { timeout: 15000 },
+          )
+          .toBe(true);
         await expect.poll(getBatteryByte0, { timeout: 15000 }).toBe(2);
       } finally {
         await page.keyboard.up('KeyO');
       }
 
-      const state2Pixels = await sampleCanvasPixels(page);
       expect(state2Pixels).not.toEqual(initialPixels);
 
       // Record manual snapshot records and full battery data before attempting restore
@@ -401,8 +423,7 @@ test.describe('Core Cartridge Journeys', () => {
       await expect(page.getByText('正在冒险', { exact: true })).toBeVisible();
 
       // Verify canvas is still in state 2
-      const postCancelPixels = await sampleCanvasPixels(page);
-      expect(postCancelPixels).toEqual(state2Pixels);
+      await expect.poll(() => sampleCanvasPixels(page), { timeout: 15000 }).toEqual(state2Pixels);
       expect(await getBatteryByte0()).toBe(2);
 
       // Verify full recorded manual snapshot records and battery bytes around cancellation are unchanged
@@ -496,7 +517,9 @@ test.describe('Core Cartridge Journeys', () => {
         await page.keyboard.up('KeyO');
       }
 
-      expect(await sampleCanvasPixels(page)).toEqual(state2Pixels);
+      // SDL's discarded WebGL buffer can be blank between rendered frames, including
+      // after key release. Require the exact target frame within the rendering deadline.
+      await expect.poll(() => sampleCanvasPixels(page), { timeout: 15000 }).toEqual(state2Pixels);
     });
   }
 
