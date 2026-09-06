@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1, B2, B3, B4a, B4b, and B4c1 accepted; B4c2 assigned. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1, B2, B3, B4a, B4b, B4c1, and B4c2 accepted; B4c3 assigned. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -220,8 +220,8 @@ findings through additional atomic fixes, and commits the final implementation/e
 | B4a   | Accepted | `fff1da2`, `8f9f008`                                                        | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed      |
 | B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                       | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass         |
 | B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                             | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed           |
-| B4c2  | Assigned | —                                                                           | CartridgeGallery, SeriesLibrary, SaveSlots, and SnapshotConfirmation interactions                         |
-| B4c3  | Pending  | —                                                                           | Rendered App commands with production controllers                                                         |
+| B4c2  | Accepted | `b1933ca`, `d08a034`                                                        | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed     |
+| B4c3  | Assigned | —                                                                           | Rendered App commands with production controllers                                                         |
 | B4c4  | Pending  | —                                                                           | App keyboard/gamepad and browser lifecycle                                                                |
 | B4d   | Pending  | —                                                                           | All four coverage metrics >=90%; L1/G1 pre-commit and commit-message gates                                |
 | B5    | Pending  | —                                                                           | —                                                                                                         |
@@ -370,8 +370,8 @@ All B3 review findings are resolved. Browser runners are stopped before the next
 
 ### B4 handoff sequence
 
-The B4 atomic boundaries in section 3 are separate implementation/review handoffs. B4a, B4b, and B4c1
-are accepted. B4c is divided into the four bounded handoffs below; only B4c2 is currently assigned, and pi
+The B4 atomic boundaries in section 3 are separate implementation/review handoffs. B4a, B4b, B4c1, and
+B4c2 are accepted. B4c is divided into the four bounded handoffs below; only B4c3 is currently assigned, and pi
 must stop for review after each. Keep coverage scope and thresholds unchanged until the reviewed
 behavior tests meet all four metrics. DOM dependencies must be pinned exactly, and TSX tests must be
 discovered and strictly typechecked. The existing TypeScript test configuration includes `tests/`;
@@ -482,7 +482,35 @@ Review replaced manually assigned DOM globals with per-file browser environments
 cleanup, and restored mocks. It also replaced assertions that could reuse earlier input events with
 complete transition sequences and required a collapse test while the canvas remains mounted.
 No production source changed. The implementer also reports the unchanged developer HTTP case passing;
-browser geometry and actual WASM remain B7 requirements. B4c2 now owns library and save components.
+browser geometry and actual WASM remain B7 requirements. Library and save components are recorded in
+B4c2 below.
+
+### B4c2 acceptance evidence
+
+Reviewed implementation: `d08a034`, following `b1933ca`. Separate atomic commits cover the actual
+CartridgeGallery/SeriesLibrary and SaveSlots/SnapshotConfirmation components. Confirmation tests use
+the production Modal. No production source, dependencies, or coverage scope changed.
+
+Independent checks on 2026-09-06:
+
+- `bun run test:coverage`: 238 tests across 25 files pass in 0.94 seconds wall time. Coverage is
+  70.17% statements (1327/1891), 61.87% branches (896/1448), 63.47% functions (278/438), and 72.42%
+  lines (1200/1657). App and all maintained scripts remain in the denominator.
+- `bun run quality:g1`: Biome checks 73 files with zero errors/warnings; strict TypeScript and
+  formatting pass. `bun run build` passes for the production Worker/client and distribution checks.
+- Library tests verify filtering/search/reset, cached launch while the catalog is pending, exact
+  edition/local revision callbacks, selected states, unknown cartridges, and owned/catalog/unavailable
+  presence. Ready counts use a distinct union, and catalog-only featured cards work before caching.
+- Save tests map unsorted snapshots to manual slots, exclude automatic slots, route exact action
+  payloads, and suppress load/create/replace/delete while inactive or busy. Confirmation preserves
+  Cancel autofocus, accessible title/description references, preview/game/time data, action copy,
+  error feedback, and retry. While busy, Escape/native cancellation prevent default, and backdrop,
+  close, Cancel, and confirm cannot dismiss or mutate; returning idle restores the intended actions.
+
+Review required actual disabled-action attempts and separate cached/catalog-only readiness cases.
+The implementer also reports the unchanged developer HTTP test passing. Browser/WASM regressions
+remain B7 work; these component callbacks do not replace B4c3's actual App/controller wiring tests.
+All B4c2 findings are resolved, and both agents' runners are stopped before the next handoff.
 
 ## 5. Final acceptance record
 
