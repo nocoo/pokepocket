@@ -14,7 +14,7 @@ export const ENV_BROWSER_PORT = 'POKEPOCKET_BROWSER_PORT';
 export const ENV_BROWSER_PID = 'POKEPOCKET_BROWSER_PID';
 export const ENV_BROWSER_WS = 'POKEPOCKET_BROWSER_WS';
 
-export const REQUIRED_TEST_COUNT = 24; // 22 core/feature journeys + 2 authorization tests
+export const REQUIRED_TEST_COUNT = 30; // 28 core/layout/export journeys + 2 authorization tests
 export const OPTIONAL_TEST_COUNT = 16; // 13 series + 3 commercial
 
 export const FORBIDDEN_CLI_FLAGS = new Set([
