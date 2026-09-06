@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -121,5 +121,140 @@ describe('check-no-roms distribution policy', () => {
     expect(list.some((v) => v.includes('leak.gba'))).toBe(true);
     expect(list.some((v) => v.includes('save.sav'))).toBe(true);
     expect(list.some((v) => v.includes('clean.txt'))).toBe(false);
+  });
+
+  it('executes default checkNoRoms options scanning both public and dist alongside tracked repository files', async () => {
+    const root = await createTempRoot();
+
+    // Initialize git repository in root
+    execFileSync('git', ['init', '--quiet'], { cwd: root });
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: root });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: root });
+
+    // Set up default 'public' and 'dist' directories
+    const publicDir = path.join(root, 'public');
+    const distDir = path.join(root, 'dist');
+    await mkdir(publicDir, { recursive: true });
+    await mkdir(distDir, { recursive: true });
+
+    await writeFile(path.join(publicDir, 'index.html'), '<!DOCTYPE html>');
+    await writeFile(path.join(distDir, 'bundle.js'), 'console.log("ok");');
+
+    // Track legitimate clean files in git
+    execFileSync('git', ['add', 'public/index.html', 'dist/bundle.js'], { cwd: root });
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      // 1. Success path: scans public, dist, and tracked files with success log output
+      const cleanResult = await checkNoRoms({
+        root,
+        silent: false, // tests console.log output
+      });
+
+      expect(cleanResult.success).toBe(true);
+      expect(cleanResult.violations).toHaveLength(0);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Distribution check passed'));
+      expect(errorSpy).not.toHaveBeenCalled();
+
+      logSpy.mockClear();
+      errorSpy.mockClear();
+
+      // 2. Failure path: add violation in dist and tracked file, verify console.error output
+      await writeFile(path.join(distDir, 'leaked.sav'), new Uint8Array([1, 2, 3]));
+      execFileSync('git', ['add', 'dist/leaked.sav'], { cwd: root });
+
+      const failResult = await checkNoRoms({
+        root,
+        silent: false, // tests console.error output
+      });
+
+      expect(failResult.success).toBe(false);
+      expect(failResult.violations.length).toBeGreaterThan(0);
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('ROMs, saves and asset symlinks must stay outside Git'),
+      );
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('dist/leaked.sav'));
+      expect(logSpy).not.toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('verifies deep directory recursion, case-insensitive extensions, benign near-misses, symlink root rejection, and non-traversal of symlinks', async () => {
+    const root = await createTempRoot();
+    const publicDir = path.join(root, 'public');
+    const deepDir = path.join(publicDir, 'assets', 'nested', 'deep');
+    await mkdir(deepDir, { recursive: true });
+
+    // 1. Deep directory recursion and case-insensitive extensions (.GBA, .GbC, .SAV)
+    await writeFile(path.join(deepDir, 'UPPERCASE.GBA'), new Uint8Array(50));
+    await writeFile(path.join(deepDir, 'MixedCase.GbC'), new Uint8Array(50));
+    await writeFile(path.join(deepDir, 'savefile.SAV'), new Uint8Array(50));
+
+    // 2. Benign binary/header near-misses:
+    // (a) File smaller than 192 bytes
+    await writeFile(path.join(deepDir, 'small.bin'), new Uint8Array(50));
+
+    // (b) 256-byte file with 0xb2 === 0x96 but INVALID GBA complement checksum
+    const invalidGbaChecksum = new Uint8Array(256);
+    invalidGbaChecksum[0xb2] = 0x96;
+    invalidGbaChecksum[0xbd] = 0x00; // wrong checksum
+    await writeFile(path.join(deepDir, 'near-gba.bin'), invalidGbaChecksum);
+
+    // (c) 350-byte file with partial GB logo bytes mismatch
+    const partialGbLogo = new Uint8Array(350);
+    partialGbLogo[0x104] = 0xce;
+    partialGbLogo[0x105] = 0x00; // corrupted logo byte
+    await writeFile(path.join(deepDir, 'near-gb.bin'), partialGbLogo);
+
+    // 3. Symlink file and directory handling:
+    // File symlink target outside public
+    const externalDir = path.join(root, 'external-outside');
+    await mkdir(externalDir, { recursive: true });
+    const targetFile = path.join(externalDir, 'target.txt');
+    await writeFile(targetFile, 'external content');
+
+    // Create a symlink file inside publicDir
+    await symlink(targetFile, path.join(publicDir, 'symlink-file.txt'));
+
+    // Create a directory symlink inside publicDir pointing to external directory containing a rom
+    await writeFile(path.join(externalDir, 'hidden-rom.gba'), new Uint8Array(10));
+    await symlink(externalDir, path.join(publicDir, 'symlink-dir'));
+
+    const violations = new Set();
+    await scanDirectoryForRoms(publicDir, root, violations);
+    const list = [...violations];
+
+    // Case-insensitive files in deep hierarchy are flagged
+    expect(list.some((v) => v.includes('UPPERCASE.GBA'))).toBe(true);
+    expect(list.some((v) => v.includes('MixedCase.GbC'))).toBe(true);
+    expect(list.some((v) => v.includes('savefile.SAV'))).toBe(true);
+
+    // Symlinks are flagged as violations directly and not traversed into
+    expect(list.some((v) => v.includes('symlink-file.txt'))).toBe(true);
+    expect(list.some((v) => v.includes('symlink-dir'))).toBe(true);
+    // Did NOT traverse into externalDir target through symlink-dir
+    expect(list.some((v) => v.includes('hidden-rom.gba'))).toBe(false);
+
+    // Benign binary near-misses are NOT flagged as violations
+    expect(list.some((v) => v.includes('small.bin'))).toBe(false);
+    expect(list.some((v) => v.includes('near-gba.bin'))).toBe(false);
+    expect(list.some((v) => v.includes('near-gb.bin'))).toBe(false);
+
+    // 4. Rejection of a symlink root directory
+    const symlinkedPublic = path.join(root, 'symlinked-public-root');
+    await symlink(publicDir, symlinkedPublic);
+
+    await expect(
+      checkNoRoms({
+        root,
+        directories: ['symlinked-public-root'],
+        checkTracked: false,
+        silent: true,
+      }),
+    ).rejects.toThrow('Missing or unsafe directory: symlinked-public-root');
   });
 });
