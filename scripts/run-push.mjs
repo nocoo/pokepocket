@@ -61,11 +61,15 @@ export async function runPushGate(options = {}) {
 
   let signalReceived = null;
   const onSigint = () => {
-    signalReceived = 'SIGINT';
+    if (signalReceived === null) {
+      signalReceived = 'SIGINT';
+    }
     abortController.abort();
   };
   const onSigterm = () => {
-    signalReceived = 'SIGTERM';
+    if (signalReceived === null) {
+      signalReceived = 'SIGTERM';
+    }
     abortController.abort();
   };
 
@@ -75,8 +79,8 @@ export async function runPushGate(options = {}) {
 
   const listenToProcess = options.listenToProcess ?? true;
   if (listenToProcess) {
-    process.once('SIGINT', onSigint);
-    process.once('SIGTERM', onSigterm);
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
   }
 
   if (parentSignal) {
