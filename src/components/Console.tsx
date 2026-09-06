@@ -22,6 +22,7 @@ interface ConsoleProps {
   pressed: Set<GameButton>;
   hasCartridge: boolean;
   expanded: boolean;
+  busy?: boolean;
   onStart: () => void;
   onResume: () => void;
 }
@@ -89,6 +90,7 @@ export function Console({
   pressed,
   hasCartridge,
   expanded,
+  busy = false,
   onStart,
   onResume,
 }: ConsoleProps) {
@@ -248,6 +250,7 @@ export function Console({
                 type="button"
                 className="paused-screen"
                 onClick={onResume}
+                disabled={busy}
                 aria-label="点击画面继续游戏"
               >
                 <span className="pause-symbol">

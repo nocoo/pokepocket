@@ -169,18 +169,26 @@ export default function App() {
   const title = current ? cartridgeTitle(current) : `宝可梦 ${preferredEdition.name}`;
   const autoSnapshot = game.snapshots.find((item) => item.slot === 0);
 
+  const isOperationBusy = useCallback(() => {
+    return (
+      isGeneralBusy.current ||
+      snapshotActions.getState().busy ||
+      cartridgeOrchestrator.getState().busy
+    );
+  }, [snapshotActions, cartridgeOrchestrator]);
+
+  const resumeGame = useCallback(() => {
+    if (isOperationBusy()) return;
+    emulator.resume();
+  }, [emulator, isOperationBusy]);
+
   const notify = useCallback(
     (text: string, error = false) => setToast({ text, error, id: Date.now() }),
     [],
   );
   const run = useCallback(
     async (action: () => Promise<unknown>, success?: string) => {
-      if (
-        isGeneralBusy.current ||
-        snapshotActions.getState().busy ||
-        cartridgeOrchestrator.getState().busy
-      )
-        return;
+      if (isOperationBusy()) return;
       isGeneralBusy.current = true;
       setBusy(true);
       try {
@@ -193,7 +201,7 @@ export default function App() {
         setBusy(false);
       }
     },
-    [notify, snapshotActions, cartridgeOrchestrator],
+    [isOperationBusy, notify],
   );
 
   const savePreferences = useCallback((prefs: CartridgePreferences) => {
@@ -385,9 +393,10 @@ export default function App() {
       if (event.code === 'Space' && ['running', 'paused'].includes(state.status)) {
         event.preventDefault();
         if (state.status === 'running') {
+          if (isOperationBusy()) return;
           emulator.pause();
           void emulator.persist(true).catch((error) => notify(message(error), true));
-        } else emulator.resume();
+        } else resumeGame();
       }
       if (event.code === 'KeyM')
         setSettings((currentSettings) => ({ ...currentSettings, muted: !currentSettings.muted }));
@@ -448,6 +457,8 @@ export default function App() {
     focusMode,
     notify,
     keyboardMap,
+    isOperationBusy,
+    resumeGame,
     view,
   ]);
 
@@ -784,8 +795,9 @@ export default function App() {
                 pressed={pressed}
                 hasCartridge={Boolean(selected || localAvailable)}
                 expanded={fullscreen || focusMode}
+                busy={effectiveBusy}
                 onStart={startAdventure}
-                onResume={() => emulator.resume()}
+                onResume={resumeGame}
               />
             </div>
             <div className="stage-toolbar">
@@ -793,11 +805,12 @@ export default function App() {
                 <button
                   type="button"
                   className="play-toggle"
-                  disabled={!active || busy}
+                  disabled={!active || effectiveBusy}
                   aria-label={game.status === 'paused' ? '继续游戏' : '暂停游戏'}
                   onClick={() => {
-                    if (game.status === 'paused') emulator.resume();
+                    if (game.status === 'paused') resumeGame();
                     else {
+                      if (isOperationBusy()) return;
                       emulator.pause();
                       void run(() => emulator.persist(true));
                     }

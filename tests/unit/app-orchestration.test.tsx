@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   IDBCursor,
@@ -314,5 +314,203 @@ describe('App cartridge lifecycle and gallery orchestration', () => {
       '/saves/local-custom-rev1.sav',
     );
     expect(localStorage.getItem('pocket-last-cartridge')).toBe('local-custom-rev1');
+  });
+
+  it.each(['canvas', 'toolbar', 'keyboard'] as const)(
+    'guards resume during pending return-to-gallery via %s and preserves paused gallery',
+    async (control) => {
+      const cart = createCartridge('return-resume-guard');
+      await storage.putCartridge(cart);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ editions: [] }),
+        }),
+      );
+
+      const { container } = render(<App />);
+      await screen.findByText('本地存储已就绪');
+
+      await userEvent.click(screen.getByRole('button', { name: '开始冒险' }));
+      await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThan(0));
+      harness.flushEmulatorRafs();
+      await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThan(0));
+      harness.flushEmulatorRafs();
+      await screen.findByText('正在冒险');
+
+      const originalPut = vi.mocked(harness.fakeStorage.putBattery).getMockImplementation();
+      if (!originalPut) throw new Error('Missing original storage mutation');
+
+      let releaseWrite: () => void = () => {};
+      const writeDeferred = new Promise<void>((resolve) => {
+        releaseWrite = resolve;
+      });
+
+      vi.mocked(harness.fakeStorage.putBattery).mockImplementationOnce(async (save) => {
+        await writeDeferred;
+        await originalPut(save);
+      });
+
+      const coreResumeCallsBefore = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
+
+      const backBtn = screen.getByRole('button', { name: '返回卡带盘' });
+      await userEvent.click(backBtn);
+
+      // Verify putBattery is called and pending
+      await waitFor(() => expect(harness.fakeStorage.putBattery).toHaveBeenCalledTimes(1));
+
+      // Attempt resume during pending return
+      if (control === 'canvas') {
+        const screenBtn = screen.getByRole('button', { name: '点击画面继续游戏' });
+        expect(screenBtn.hasAttribute('disabled')).toBe(true);
+        await userEvent.click(screenBtn);
+      } else if (control === 'toolbar') {
+        const playToggle = screen.getByRole('button', { name: '继续游戏' });
+        expect(playToggle.hasAttribute('disabled')).toBe(true);
+        await userEvent.click(playToggle);
+      } else {
+        fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+      }
+
+      // Event loop turn: resume must not have executed
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(coreResumeCallsBefore);
+      expect(container.querySelector('.stage-status')?.textContent).toContain('已暂停');
+
+      // Release deferred write -> finishes return to gallery
+      releaseWrite();
+      await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
+
+      expect(container.querySelector('.app-layout')?.hasAttribute('hidden')).toBe(true);
+      expect(container.querySelector('.stage-status')?.textContent).toContain('已暂停');
+      expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(coreResumeCallsBefore);
+    },
+  );
+
+  it('blocks Space synchronously before pending return rerenders and verifies data integrity', async () => {
+    const cart = createCartridge('return-immediate-guard');
+    await storage.putCartridge(cart);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ editions: [] }),
+      }),
+    );
+
+    const { container } = render(<App />);
+    await screen.findByText('本地存储已就绪');
+
+    await userEvent.click(screen.getByRole('button', { name: '开始冒险' }));
+    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThan(0));
+    harness.flushEmulatorRafs();
+    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThan(0));
+    harness.flushEmulatorRafs();
+    await screen.findByText('正在冒险');
+
+    const originalPut = vi.mocked(harness.fakeStorage.putBattery).getMockImplementation();
+    if (!originalPut) throw new Error('Missing original storage mutation');
+
+    let releaseWrite: () => void = () => {};
+    const writeDeferred = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+
+    vi.mocked(harness.fakeStorage.putBattery).mockImplementationOnce(async (save) => {
+      await writeDeferred;
+      await originalPut(save);
+    });
+
+    const coreResumeCallsBefore = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
+    const backBtn = screen.getByRole('button', { name: '返回卡带盘' });
+
+    try {
+      act(() => {
+        backBtn.click();
+        window.dispatchEvent(
+          new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true }),
+        );
+      });
+
+      await waitFor(() => expect(harness.fakeStorage.putBattery).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(coreResumeCallsBefore);
+      expect(container.querySelector('.stage-status')?.textContent).toContain('已暂停');
+    } finally {
+      releaseWrite();
+      await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
+    }
+
+    expect(container.querySelector('.app-layout')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('.stage-status')?.textContent).toContain('已暂停');
+    expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(coreResumeCallsBefore);
+    const savedBattery = await harness.fakeStorage.getBattery(cart.id);
+    expect(savedBattery).not.toBeNull();
+    if (!savedBattery) throw new Error('Missing expected saved battery');
+    expect(new Uint8Array(savedBattery.data)).toEqual(new Uint8Array([1, 2, 3, 4]));
+  });
+
+  it('rejects return persistence failure, keeps play paused, clears busy, allows normal resume, and succeeds on retry', async () => {
+    const cart = createCartridge('return-retry-guard');
+    await storage.putCartridge(cart);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ editions: [] }),
+      }),
+    );
+
+    const { container } = render(<App />);
+    await screen.findByText('本地存储已就绪');
+
+    await userEvent.click(screen.getByRole('button', { name: '开始冒险' }));
+    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThan(0));
+    harness.flushEmulatorRafs();
+    await waitFor(() => expect(harness.emulatorRafQueue.length).toBeGreaterThan(0));
+    harness.flushEmulatorRafs();
+    await screen.findByText('正在冒险');
+
+    const originalPut = vi.mocked(harness.fakeStorage.putBattery).getMockImplementation();
+    if (!originalPut) throw new Error('Missing original storage mutation');
+
+    // First attempt rejects
+    vi.mocked(harness.fakeStorage.putBattery).mockRejectedValueOnce(
+      new Error('Disk quota exceeded'),
+    );
+
+    const backBtn = screen.getByRole('button', { name: '返回卡带盘' });
+    await userEvent.click(backBtn);
+
+    // Expect error toast notification
+    expect(await screen.findByText(/Disk quota exceeded/)).toBeDefined();
+
+    // Play view remains active (not hidden) and paused
+    expect(container.querySelector('.app-layout')?.hasAttribute('hidden')).toBe(false);
+    expect(container.querySelector('.stage-status')?.textContent).toContain('已暂停');
+
+    // Controls are no longer busy/disabled
+    const playToggle = screen.getByRole('button', { name: '继续游戏' });
+    expect(playToggle.hasAttribute('disabled')).toBe(false);
+
+    // Normal resume works after failure
+    const coreResumeCallsBefore = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
+    await userEvent.click(playToggle);
+    expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+      coreResumeCallsBefore + 1,
+    );
+    expect(container.querySelector('.stage-status')?.textContent).toContain('正在冒险');
+
+    // Successful retry of return-to-gallery
+    await userEvent.click(backBtn);
+    await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
+    expect(container.querySelector('.app-layout')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('.stage-status')?.textContent).toContain('已暂停');
   });
 });
