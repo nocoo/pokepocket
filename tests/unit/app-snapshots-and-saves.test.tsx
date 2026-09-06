@@ -158,6 +158,9 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
 
     // 2. Click replace on slot 1 -> opens confirmation modal
     const replaceBtn = within(savesDialog).getByRole('button', { name: '替换即时存档 1' });
+    const slot1PutCallsBefore = (
+      harness.fakeStorage.putSnapshot as ReturnType<typeof vi.fn>
+    ).mock.calls.filter((c: unknown[]) => (c[0] as Snapshot | undefined)?.slot === 1).length;
     await userEvent.click(replaceBtn);
 
     const confirmDialog = await screen.findByRole('dialog');
@@ -165,9 +168,14 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       within(confirmDialog).getByRole('heading', { level: 2, name: '替换即时存档 01？' }),
     ).toBeDefined();
 
-    // Cancel first -> original bytes remain completely untouched
+    // Cancel first -> original bytes remain completely untouched and zero extra writes
     const cancelConfirmBtn = within(confirmDialog).getByRole('button', { name: '取消' });
     await userEvent.click(cancelConfirmBtn);
+
+    const slot1PutCallsAfterCancel = (
+      harness.fakeStorage.putSnapshot as ReturnType<typeof vi.fn>
+    ).mock.calls.filter((c: unknown[]) => (c[0] as Snapshot | undefined)?.slot === 1).length;
+    expect(slot1PutCallsAfterCancel).toBe(slot1PutCallsBefore);
 
     const returnedSavesDialog = await screen.findByRole('dialog');
     expect(
@@ -214,12 +222,15 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     });
 
     // Click confirm -> mutation is in-flight
+    const loadGameCallsBefore = (harness.testCore.loadGame as ReturnType<typeof vi.fn>).mock.calls
+      .length;
     await userEvent.click(confirmBtn);
 
     // Advance event loop turn: dialog is busy, confirm button shows processing
     await new Promise((resolve) => setTimeout(resolve, 0));
     const processingBtn = within(confirmDialog2).getByRole('button', { name: '处理中…' });
     expect(processingBtn.hasAttribute('disabled')).toBe(true);
+    expect(putAttempts).toBe(1);
 
     // Repeat confirm, cancel button click, Escape key, backdrop click, and return to gallery while busy are rejected
     await userEvent.click(processingBtn);
@@ -236,6 +247,15 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     expect(escapePrevented).toBe(true);
     fireEvent.click(confirmDialog2);
     expect(confirmDialog2.getAttribute('open')).not.toBeNull();
+
+    // Advance event loop turn after rejected attempts
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Both putAttempts and core loadGame calls remain unchanged while write is pending
+    expect(putAttempts).toBe(1);
+    expect((harness.testCore.loadGame as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+      loadGameCallsBefore,
+    );
 
     // Opening saves modal paused the game; play layout remains active and not hidden
     expect(screen.getByText('已暂停')).toBeDefined();
