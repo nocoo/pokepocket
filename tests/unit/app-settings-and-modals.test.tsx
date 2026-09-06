@@ -376,12 +376,38 @@ describe('App settings and modal management', () => {
     if (!controlsCard) throw new Error('Missing controls card');
     expect(within(controlsCard as HTMLElement).getByText('J')).toBeDefined();
 
+    // Query actual '游玩指南' modal and verify its .full-keyboard A row displays restored 'J'
+    const helpNavBtn = screen.getByRole('button', { name: '游玩指南' });
+    await userEvent.click(helpNavBtn);
+    const helpDialog = await screen.findByRole('dialog');
+    expect(
+      within(helpDialog).getByRole('heading', { level: 2, name: '你好，训练家。' }),
+    ).toBeDefined();
+
+    const fullKeyboard = helpDialog.querySelector('.full-keyboard');
+    expect(fullKeyboard).not.toBeNull();
+    if (!fullKeyboard) throw new Error('Missing full keyboard container in help guide');
+    const fullKeyboardRows = Array.from(fullKeyboard.querySelectorAll('div'));
+    const aRow = fullKeyboardRows.find((row) =>
+      row.querySelector('span')?.textContent?.includes('A · 确认 / 互动'),
+    );
+    expect(aRow).toBeDefined();
+    if (!aRow) throw new Error('Missing A button row in full keyboard guide');
+    expect(aRow.querySelector('kbd')?.textContent).toBe('J');
+
+    const closeHelpBtn = within(helpDialog).getByRole('button', { name: '关闭窗口' });
+    await userEvent.click(closeHelpBtn);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
     // (d) Keyboard behavior responds to restored 'KeyJ' binding and reaches core buttonPress
     vi.mocked(harness.testCore.buttonPress).mockClear();
+    vi.mocked(harness.testCore.buttonUnpress).mockClear();
     fireEvent.keyDown(window, { code: 'KeyJ' });
-    expect(harness.testCore.buttonPress).toHaveBeenCalledWith('A');
+    expect(harness.testCore.buttonPress).toHaveBeenCalledTimes(1);
+    expect(harness.testCore.buttonPress).toHaveBeenLastCalledWith('A');
     fireEvent.keyUp(window, { code: 'KeyJ' });
-    expect(harness.testCore.buttonUnpress).toHaveBeenCalledWith('A');
+    expect(harness.testCore.buttonUnpress).toHaveBeenCalledTimes(1);
+    expect(harness.testCore.buttonUnpress).toHaveBeenLastCalledWith('A');
 
     // (e) Open settings dialog on fresh mount and verify rendered values
     const secondSettingsBtn = screen.getByRole('button', { name: '打开设置' });
@@ -402,6 +428,9 @@ describe('App settings and modal management', () => {
 
     const restoredLcdBtn = within(restoredDialog).getByRole('button', { name: '复古液晶' });
     expect(restoredLcdBtn.classList.contains('selected')).toBe(true);
+
+    const restoredABtn = within(restoredDialog).getByRole('button', { name: '修改 A 主要键位' });
+    expect(restoredABtn.textContent).toContain('J');
 
     // Close settings dialog before testing persistence failure
     const closeSecondSettings = within(restoredDialog).getByRole('button', { name: '关闭窗口' });
@@ -424,7 +453,7 @@ describe('App settings and modal management', () => {
       });
 
     try {
-      // Open settings and modify volume and unmute via toolbar button
+      // (3a) Open settings and modify volume and unmute via toolbar button
       const volumeMuteBtn = screen.getByRole('button', { name: '开启声音' });
       await userEvent.click(volumeMuteBtn);
 
@@ -432,12 +461,12 @@ describe('App settings and modal management', () => {
       expect(setItemAttempts).toBeGreaterThanOrEqual(1);
 
       // Core volume updated to unmuted volume (0.4) despite rejected storage write
-      expect(harness.testCore.setVolume).toHaveBeenCalledWith(0.4);
+      expect(harness.testCore.setVolume).toHaveBeenLastCalledWith(0.4);
 
-      // Storage has NOT been updated with unmuted state; remains original rejected value
+      // Storage has NOT been updated with unmuted state; remains exact original rejected string
       expect(localStorage.getItem('pocket-settings')).toBe(originalSettingsInStorage);
 
-      // Re-open settings modal and verify memory state is still unmuted and usable
+      // (3b) Re-open settings modal and modify key binding from KeyJ to KeyU while rejection is active
       await userEvent.click(secondSettingsBtn);
       const thirdDialog = await screen.findByRole('dialog');
       expect(within(thirdDialog).getByRole('button', { name: '静音游戏' })).toBeDefined();
@@ -447,12 +476,54 @@ describe('App settings and modal management', () => {
       await userEvent.click(crispBtn);
       expect(screenElement?.classList.contains('lcd-filter')).toBe(false);
 
-      // Storage still remains unchanged
-      expect(localStorage.getItem('pocket-settings')).toBe(originalSettingsInStorage);
+      // Change A binding from KeyJ to KeyU in settings UI
+      const aSlotThird = within(thirdDialog).getByRole('button', { name: '修改 A 主要键位' });
+      fireEvent.click(aSlotThird);
+      fireEvent.keyDown(window, { code: 'KeyU' });
 
+      // Verify binding button in settings modal updates to show 'U'
+      expect(
+        within(thirdDialog).getByRole('button', { name: '修改 A 主要键位' }).textContent,
+      ).toContain('U');
+
+      // Close settings modal back to running
       const closeThird = within(thirdDialog).getByRole('button', { name: '关闭窗口' });
       await userEvent.click(closeThird);
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+      // (3c) Help modal reflects unsaved in-memory binding 'U'
+      await userEvent.click(helpNavBtn);
+      const helpDialogThird = await screen.findByRole('dialog');
+      const fullKeyboardThird = helpDialogThird.querySelector('.full-keyboard');
+      const aRowThird = Array.from(fullKeyboardThird?.querySelectorAll('div') ?? []).find((row) =>
+        row.querySelector('span')?.textContent?.includes('A · 确认 / 互动'),
+      );
+      expect(aRowThird?.querySelector('kbd')?.textContent).toBe('U');
+
+      const closeHelpThird = within(helpDialogThird).getByRole('button', { name: '关闭窗口' });
+      await userEvent.click(closeHelpThird);
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+      // (3d) In-memory key dispatch: new KeyU reaches core A, while old KeyJ no longer does
+      vi.mocked(harness.testCore.buttonPress).mockClear();
+      vi.mocked(harness.testCore.buttonUnpress).mockClear();
+
+      // Press old KeyJ -> ignored by core
+      fireEvent.keyDown(window, { code: 'KeyJ' });
+      expect(harness.testCore.buttonPress).not.toHaveBeenCalled();
+      fireEvent.keyUp(window, { code: 'KeyJ' });
+      expect(harness.testCore.buttonUnpress).not.toHaveBeenCalled();
+
+      // Press new KeyU -> reaches core A
+      fireEvent.keyDown(window, { code: 'KeyU' });
+      expect(harness.testCore.buttonPress).toHaveBeenCalledTimes(1);
+      expect(harness.testCore.buttonPress).toHaveBeenLastCalledWith('A');
+      fireEvent.keyUp(window, { code: 'KeyU' });
+      expect(harness.testCore.buttonUnpress).toHaveBeenCalledTimes(1);
+      expect(harness.testCore.buttonUnpress).toHaveBeenLastCalledWith('A');
+
+      // (3e) Storage remains strictly unchanged matching the exact initial persisted string
+      expect(localStorage.getItem('pocket-settings')).toBe(originalSettingsInStorage);
     } finally {
       setItemSpy.mockRestore();
     }
