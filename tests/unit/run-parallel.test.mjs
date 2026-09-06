@@ -211,11 +211,10 @@ describe('runParallelCommands runner', () => {
         ),
       ).rejects.toThrow('exited with code 1');
 
-      let descendantPid = null;
-      try {
-        descendantPid = Number((await readFile(descendantPidFile, 'utf8')).trim());
-        if (descendantPid) capturedPids.push(descendantPid);
-      } catch {}
+      const descendantPid = Number((await readFile(descendantPidFile, 'utf8')).trim());
+      expect(Number.isInteger(descendantPid)).toBe(true);
+      expect(descendantPid).toBeGreaterThan(0);
+      capturedPids.push(descendantPid);
 
       const survivors = await settleChildren(capturedPids, 2000);
       expect(survivors).toEqual([]);
@@ -302,10 +301,10 @@ describe('runParallelCommands runner', () => {
 
       await expect(runPromise).rejects.toThrow('aborted by signal');
 
-      try {
-        const descendantPid = Number((await readFile(descendantPidFile, 'utf8')).trim());
-        if (descendantPid) capturedPids.push(descendantPid);
-      } catch {}
+      const descendantPid = Number((await readFile(descendantPidFile, 'utf8')).trim());
+      expect(Number.isInteger(descendantPid)).toBe(true);
+      expect(descendantPid).toBeGreaterThan(0);
+      capturedPids.push(descendantPid);
 
       const survivors = await settleChildren(capturedPids, 2000);
       expect(survivors).toEqual([]);

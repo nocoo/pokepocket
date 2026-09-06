@@ -415,14 +415,26 @@ if (!ok && process.exitCode === undefined) {
       const ok = await childPromise;
       expect(ok).toBe(false);
 
-      // Read all logged pids from inner runner
-      try {
-        const lines = (await readFile(pidsLogFile, 'utf8')).trim().split('\n').filter(Boolean);
-        for (const line of lines) {
-          const parsed = JSON.parse(line);
-          if (parsed.pid) capturedPids.push(parsed.pid);
-        }
-      } catch {}
+      // Read all logged pids from inner runner unconditionally
+      const pidLines = (await readFile(pidsLogFile, 'utf8')).trim().split('\n').filter(Boolean);
+      expect(pidLines.length).toBeGreaterThan(0);
+      const loggedRecords = pidLines.map((line) => JSON.parse(line));
+      const hasLeafRecord = loggedRecords.some(
+        (rec) => rec.name === 'leaf' && typeof rec.pid === 'number' && rec.pid > 0,
+      );
+      const hasBuildRecord = loggedRecords.some(
+        (rec) =>
+          typeof rec.pid === 'number' &&
+          rec.pid > 0 &&
+          (rec.name === 'npm' || rec.name.includes('node') || rec.name.includes('npm')),
+      );
+      expect(hasLeafRecord).toBe(true);
+      expect(hasBuildRecord).toBe(true);
+      for (const rec of loggedRecords) {
+        expect(typeof rec.pid).toBe('number');
+        expect(rec.pid).toBeGreaterThan(0);
+        capturedPids.push(rec.pid);
+      }
 
       // Verify all captured processes settled cleanly
       const survivors = await settleChildren(capturedPids, 2500);
@@ -433,6 +445,7 @@ if (!ok && process.exitCode === undefined) {
       expect(rootLines.length).toBeGreaterThan(0);
       const { existsSync } = await import('node:fs');
       for (const rootPath of rootLines) {
+        expect(path.basename(rootPath).startsWith('pokepocket-l2-gate-')).toBe(true);
         expect(existsSync(rootPath)).toBe(false);
       }
     } finally {
@@ -451,9 +464,20 @@ if (!ok && process.exitCode === undefined) {
       } catch {}
       for (const pid of capturedPids) {
         try {
+          process.kill(-pid, 'SIGKILL');
+        } catch {}
+        try {
           process.kill(pid, 'SIGKILL');
         } catch {}
       }
+      try {
+        const rootLines = (await readFile(rootLogFile, 'utf8')).trim().split('\n').filter(Boolean);
+        for (const rootPath of rootLines) {
+          if (path.basename(rootPath).startsWith('pokepocket-l2-gate-')) {
+            await rm(rootPath, { recursive: true, force: true });
+          }
+        }
+      } catch {}
       await rm(tempDir, { recursive: true, force: true });
       process.exitCode = savedExitCode;
     }
