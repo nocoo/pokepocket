@@ -640,3 +640,9 @@ the later user-confirmed load. The follow-ups retain these verified constraints.
   B4c3-O must prevent resume throughout the pending cartridge operation, verify all three entry
   points and failure recovery, and preserve ordinary pause/resume after the operation settles.
   The probe uses injected in-memory boundaries and a temporary Vitest root, without user storage.
+- 2026-09-06, B4c3 review: a second isolated App probe at `59680f9` confirms that pending restart
+  can be dismissed through either the cancel button or Escape. The original battery write is still
+  pending when the dialog disappears, and releasing it executes `quickReload` exactly once. B4c3-M
+  must keep an acknowledged restart nondismissible until it settles, retain an actionable error and
+  retry path, and preserve cancellation before confirmation. Review the equivalent pending battery
+  import boundary with a concrete regression before applying the same treatment.
