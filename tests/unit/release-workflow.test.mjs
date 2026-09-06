@@ -90,13 +90,15 @@ describe('release workflow definition and contract', () => {
       expect(checkoutStep.with['persist-credentials']).toBe(false);
     });
 
-    it('fetches remote main before deploy freshness check for workflow_run releases', () => {
-      const fetchStep = deployJob.steps.find((s) => s.run?.includes('git fetch origin main'));
+    it('fetches remote main using explicit refspec immediately before deploy verification for workflow_run releases', () => {
+      const fetchStep = deployJob.steps.find((s) =>
+        s.run?.includes('git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main'),
+      );
       expect(fetchStep).toBeDefined();
       expect(fetchStep.if).toBe("github.event_name == 'workflow_run'");
     });
 
-    it('verifies deploy target freshness and SHA consistency fail-closed before build/deploy', () => {
+    it('verifies deploy target freshness and SHA consistency fail-closed after build and verify:access', () => {
       const verifyStep = deployJob.steps.find((s) => s.run?.includes('scripts/verify-deploy.mjs'));
       expect(verifyStep).toBeDefined();
       expect(verifyStep.env.EVENT_NAME).toBe('${{ ' + 'github.event_name }}');
@@ -105,18 +107,38 @@ describe('release workflow definition and contract', () => {
       expect(verifyStep.env.EXPECTED_VERSION).toBe('${{ ' + 'needs.resolve.outputs.version }}');
     });
 
-    it('runs build and pre/post Access verification steps around deploy', () => {
-      const runs = deployJob.steps.map((s) => s.run).filter(Boolean);
-      expect(runs.some((r) => r.includes('bun run build'))).toBe(true);
-      expect(runs.some((r) => r.includes('bun run verify:access'))).toBe(true);
-      expect(runs.some((r) => r.includes('bun run verify:release'))).toBe(true);
+    it('enforces strict step order: build -> verify:access -> final fetch -> verification -> deployment -> postcheck', () => {
+      const stepOrder = deployJob.steps
+        .map((s) => {
+          if (s.run?.includes('bun run build')) return 'build';
+          if (s.run?.includes('bun run verify:access')) return 'access-precheck';
+          if (s.run?.includes('git fetch')) return 'final-fetch';
+          if (s.run?.includes('scripts/verify-deploy.mjs')) return 'verify-deploy';
+          if (s.uses?.startsWith('cloudflare/wrangler-action')) return 'deploy';
+          if (s.run?.includes('bun run verify:release')) return 'postcheck';
+          return null;
+        })
+        .filter(Boolean);
 
+      expect(stepOrder).toEqual([
+        'build',
+        'access-precheck',
+        'final-fetch',
+        'verify-deploy',
+        'deploy',
+        'postcheck',
+      ]);
+    });
+
+    it('runs deployment with existing production wrangler secrets and configuration', () => {
       const deployStep = deployJob.steps.find((s) =>
         s.uses?.startsWith('cloudflare/wrangler-action'),
       );
       expect(deployStep).toBeDefined();
       expect(deployStep.with.apiToken).toBe('${{ ' + 'secrets.CLOUDFLARE_API_TOKEN }}');
       expect(deployStep.with.accountId).toBe('${{ ' + 'secrets.CLOUDFLARE_ACCOUNT_ID }}');
+      expect(deployStep.with.packageManager).toBe('bun');
+      expect(deployStep.with.command).toBe('deploy');
     });
   });
 });

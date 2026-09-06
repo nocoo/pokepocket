@@ -72,10 +72,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Fetch current remote main tip for freshness check
-        if: github.event_name == 'workflow_run'
-        run: git fetch origin main
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -89,6 +85,16 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build release assets
+        run: bun run build
+
+      - name: Verify Access before deploying
+        run: bun run verify:access
+
+      - name: Fetch current remote main tip for freshness check
+        if: github.event_name == 'workflow_run'
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+
       - name: Check freshness and verify deploy target
         run: node scripts/verify-deploy.mjs
         env:
@@ -96,12 +102,6 @@ jobs:
           EXPECTED_SHA: ${{ needs.quality.outputs.tested-sha }}
           RESOLVED_SHA: ${{ needs.resolve.outputs.target-sha }}
           EXPECTED_VERSION: ${{ needs.resolve.outputs.version }}
-
-      - name: Build release assets
-        run: bun run build
-
-      - name: Verify Access before deploying
-        run: bun run verify:access
 
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v4

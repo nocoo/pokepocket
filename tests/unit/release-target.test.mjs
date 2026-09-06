@@ -506,6 +506,35 @@ describe('release-target policy and git mechanics', () => {
         /workflow_id mismatch/,
       );
     });
+
+    it('validates workflow.id and workflow_run.workflow_id as positive safe integers', () => {
+      const commitA = createCommit(tempRepo, '1.2.0', 'commit A');
+      const invalidValues = [0, -1, 1.5, '123', '', Number.MAX_SAFE_INTEGER + 1, {}, true];
+
+      for (const val of invalidValues) {
+        // Invalid workflow.id
+        const pWorkflow = createValidPayload(commitA);
+        pWorkflow.workflow.id = val;
+        expect(() => resolveWorkflowRunRelease(pWorkflow, validRepo, tempRepo)).toThrow(
+          /Top-level workflow\.id must be a positive safe integer/,
+        );
+
+        // Invalid workflow_run.workflow_id
+        const pRun = createValidPayload(commitA);
+        pRun.workflow_run.workflow_id = val;
+        expect(() => resolveWorkflowRunRelease(pRun, validRepo, tempRepo)).toThrow(
+          /workflow_run\.workflow_id must be a positive safe integer/,
+        );
+
+        // Both invalid with same value (must not pass by equality)
+        const pBoth = createValidPayload(commitA);
+        pBoth.workflow.id = val;
+        pBoth.workflow_run.workflow_id = val;
+        expect(() => resolveWorkflowRunRelease(pBoth, validRepo, tempRepo)).toThrow(
+          /Top-level workflow\.id must be a positive safe integer/,
+        );
+      }
+    });
   });
 
   describe('resolveReleaseTarget general helper', () => {
@@ -628,7 +657,31 @@ describe('release-target policy and git mechanics', () => {
       execGit(tempRepo, ['remote', 'remove', 'origin']);
       expect(() =>
         checkFreshnessAgainstMain('1234567890abcdef1234567890abcdef12345678', tempRepo, 'origin'),
-      ).toThrow(/remote ref "origin\/main" is unavailable/);
+      ).toThrow(/remote ref "refs\/remotes\/origin\/main" is unavailable/);
+    });
+
+    it('resolves remote main tip correctly even when same-name tag origin/main exists', () => {
+      const commitA = execGit(remoteRepo, ['rev-parse', 'main']);
+      // Remote advances to B
+      const commitB = createCommit(remoteRepo, '1.2.1', 'commit B on remote');
+      execGit(tempRepo, [
+        'fetch',
+        '--no-tags',
+        'origin',
+        '+refs/heads/main:refs/remotes/origin/main',
+      ]);
+
+      // Create a same-name tag 'origin/main' pointing at old commit A
+      execGit(tempRepo, ['tag', 'origin/main', commitA]);
+
+      // Target is commit A: should be rejected because actual remote main is commit B
+      const resOld = checkFreshnessAgainstMain(commitA, tempRepo, 'origin');
+      expect(resOld.fresh).toBe(false);
+      expect(resOld.reason).toContain('Stale or mismatched target');
+
+      // Target is commit B: should be accepted because it matches refs/remotes/origin/main
+      const resNew = checkFreshnessAgainstMain(commitB, tempRepo, 'origin');
+      expect(resNew.fresh).toBe(true);
     });
 
     it('rejects invalid target SHA in checkFreshnessAgainstMain', () => {

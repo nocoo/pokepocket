@@ -32,6 +32,10 @@ export function isValidVersion(version) {
   return typeof version === 'string' && /^[0-9]+\.[0-9]+\.[0-9]+$/.test(version.trim());
 }
 
+export function isValidWorkflowId(id) {
+  return typeof id === 'number' && Number.isSafeInteger(id) && id > 0;
+}
+
 export function readPackageJsonAtCommit(commitSha, cwd = process.cwd()) {
   if (!isValidSha(commitSha)) {
     throw new Error(`Invalid commit SHA: "${commitSha}"`);
@@ -76,6 +80,11 @@ export function resolveWorkflowRunRelease(payload, expectedRepo, cwd = process.c
   if (workflow.id === undefined || workflow.id === null) {
     throw new Error('Top-level workflow.id is missing from payload');
   }
+  if (!isValidWorkflowId(workflow.id)) {
+    throw new Error(
+      `Top-level workflow.id must be a positive safe integer: ${JSON.stringify(workflow.id)}`,
+    );
+  }
   if (!workflow.name || typeof workflow.name !== 'string') {
     throw new Error('Top-level workflow.name is missing from payload');
   }
@@ -86,6 +95,11 @@ export function resolveWorkflowRunRelease(payload, expectedRepo, cwd = process.c
   // Required workflow_run fields
   if (run.workflow_id === undefined || run.workflow_id === null) {
     throw new Error('workflow_run.workflow_id is missing from payload');
+  }
+  if (!isValidWorkflowId(run.workflow_id)) {
+    throw new Error(
+      `workflow_run.workflow_id must be a positive safe integer: ${JSON.stringify(run.workflow_id)}`,
+    );
   }
   if (!run.name || typeof run.name !== 'string') {
     throw new Error('workflow_run.name is missing from payload');
@@ -300,18 +314,21 @@ export function checkFreshnessAgainstMain(targetSha, cwd = process.cwd(), remote
   const normTarget = targetSha.toLowerCase();
 
   // Freshly resolve remote main tip; remote main MUST exist and be accessible
+  // Use fully-qualified remote-tracking namespace refs/remotes/<remote>/main
+  // to avoid ambiguous resolution if a tag with the same name exists
+  const fullRemoteRef = `refs/remotes/${remote}/main`;
   let remoteMainTip;
   try {
-    remoteMainTip = runGit(['rev-parse', '--verify', `${remote}/main`], cwd);
+    remoteMainTip = runGit(['rev-parse', '--verify', fullRemoteRef], cwd);
   } catch (err) {
     throw new Error(
-      `Freshness check failed: remote ref "${remote}/main" is unavailable: ${err.message}`,
+      `Freshness check failed: remote ref "${fullRemoteRef}" is unavailable: ${err.message}`,
     );
   }
 
   if (!isValidSha(remoteMainTip)) {
     throw new Error(
-      `Freshness check failed: resolved "${remote}/main" is not a valid commit SHA: "${remoteMainTip}"`,
+      `Freshness check failed: resolved "${fullRemoteRef}" is not a valid commit SHA: "${remoteMainTip}"`,
     );
   }
 
