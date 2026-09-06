@@ -6,7 +6,7 @@ import {
   type EmulatorStorageAdapter,
 } from '../../src/lib/emulator';
 import { parseHeader, type Cartridge } from '../../src/lib/cartridge';
-import type { Snapshot } from '../../src/lib/storage';
+import type { BatterySave, Snapshot } from '../../src/lib/storage';
 import { gbaFixture } from '../fixtures/headers';
 
 function createCartridge(id = 'test-rom'): Cartridge {
@@ -1113,5 +1113,697 @@ describe('PocketEmulator with injected dependencies', () => {
 
     await emulator.load(createCartridge('cart-nobattery'), {} as HTMLCanvasElement);
     await expect(emulator.exportBattery()).rejects.toThrow('尚无游戏存档');
+  });
+
+  it('exercises core callbacks: frames, dirty-save persistence, stale generation protection, and crash error handling', async () => {
+    interface CoreCallbacksBundle {
+      videoFrameEndedCallback: () => void;
+      saveDataUpdatedCallback: () => void;
+      coreCrashedCallback: () => void;
+    }
+    let capturedCallbacks1: CoreCallbacksBundle | null = null;
+    let capturedCallbacks2: CoreCallbacksBundle | null = null;
+
+    let callbackRegistrationCount = 0;
+    const core = createFakeCore();
+    const batterySaveBytes1 = new Uint8Array([10, 20, 30, 40]);
+    const batterySaveBytes2 = new Uint8Array([50, 60, 70, 80]);
+
+    // Drive getSave by active loaded cartridge
+    let loadedRomId = '';
+    core.loadGame = vi.fn().mockImplementation((path: string) => {
+      const parts = path.split('/');
+      const last = parts[parts.length - 1];
+      loadedRomId = (last ?? '').replace(/\.(gba|gbc|gb)$/i, '');
+      return true;
+    });
+    core.getSave = vi.fn().mockImplementation(() => {
+      if (loadedRomId === 'cart-cb-1') return batterySaveBytes1.slice();
+      if (loadedRomId === 'cart-cb-2') return batterySaveBytes2.slice();
+      return null;
+    });
+
+    core.addCoreCallbacks = vi.fn().mockImplementation((cb) => {
+      callbackRegistrationCount++;
+      if (callbackRegistrationCount === 1) {
+        capturedCallbacks1 = cb as unknown as CoreCallbacksBundle;
+      } else {
+        capturedCallbacks2 = cb as unknown as CoreCallbacksBundle;
+      }
+    });
+
+    let intervalHandler: (() => void) | null = null;
+    let timerCleanedUp = false;
+    let clockTime = 1000;
+    const clock: EmulatorClock = {
+      now: () => clockTime,
+      setInterval: vi.fn().mockImplementation((h: () => void) => {
+        intervalHandler = h;
+        timerCleanedUp = false;
+        return 101 as unknown as ReturnType<typeof setInterval>;
+      }),
+      clearInterval: vi.fn().mockImplementation(() => {
+        intervalHandler = null;
+        timerCleanedUp = true;
+      }),
+      requestAnimationFrame: (cb) => cb(),
+    };
+
+    const batteryStorage = new Map<string, BatterySave>();
+    const recordedSeconds = new Map<string, number>();
+    const storage: EmulatorStorageAdapter = {
+      ...createStorageDouble(),
+      putBattery: vi.fn().mockImplementation(async (save) => {
+        batteryStorage.set(save.romId, save);
+      }),
+      getBattery: vi.fn().mockImplementation(async (romId) => batteryStorage.get(romId)),
+      recordPlayTime: vi.fn().mockImplementation(async (romId, secs) => {
+        recordedSeconds.set(romId, (recordedSeconds.get(romId) ?? 0) + secs);
+      }),
+    };
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock,
+    });
+
+    const cart1 = createCartridge('cart-cb-1');
+    await emulator.load(cart1, {} as HTMLCanvasElement);
+
+    expect(capturedCallbacks1).not.toBeNull();
+    const cb1: CoreCallbacksBundle = capturedCallbacks1 ?? {
+      videoFrameEndedCallback: () => {},
+      saveDataUpdatedCallback: () => {},
+      coreCrashedCallback: () => {},
+    };
+    expect(typeof cb1.videoFrameEndedCallback).toBe('function');
+    expect(typeof cb1.saveDataUpdatedCallback).toBe('function');
+    expect(typeof cb1.coreCrashedCallback).toBe('function');
+
+    // Switch to second cartridge: checkpoints cart1 with its original bytes
+    const cart2 = createCartridge('cart-cb-2');
+    await emulator.load(cart2, {} as HTMLCanvasElement);
+
+    expect(capturedCallbacks2).not.toBeNull();
+    const cb2: CoreCallbacksBundle = capturedCallbacks2 ?? {
+      videoFrameEndedCallback: () => {},
+      saveDataUpdatedCallback: () => {},
+      coreCrashedCallback: () => {},
+    };
+
+    // Verify cart1 bytes were checkpointed during switch and retained
+    const cart1Saved = batteryStorage.get('cart-cb-1');
+    expect(cart1Saved).toBeDefined();
+    expect(new Uint8Array(cart1Saved?.data ?? new ArrayBuffer(0))).toEqual(batterySaveBytes1);
+
+    // Take write baselines after legitimate switch
+    const putBatteryCallsBaseline = vi.mocked(storage.putBattery).mock.calls.length;
+    const recordPlayTimeCallsBaseline = vi.mocked(storage.recordPlayTime).mock.calls.length;
+
+    // 1. Invoke stale callbacks from generation 1: must cause zero writes and zero frame attribution
+    for (let i = 0; i < 100; i++) {
+      cb1.videoFrameEndedCallback();
+    }
+    cb1.saveDataUpdatedCallback();
+
+    clockTime += 1000;
+    expect(intervalHandler).not.toBeNull();
+    if (intervalHandler) (intervalHandler as () => void)();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(emulator.getSnapshot().frames).toBe(0);
+    expect(emulator.getSnapshot().fps).toBe(0);
+    expect(vi.mocked(storage.putBattery).mock.calls.length).toBe(putBatteryCallsBaseline);
+    expect(vi.mocked(storage.recordPlayTime).mock.calls.length).toBe(recordPlayTimeCallsBaseline);
+    expect(batteryStorage.has('cart-cb-2')).toBe(false);
+
+    // 2. Invoke active callbacks from generation 2: exact counts and bytes
+    for (let i = 0; i < 60; i++) {
+      cb2.videoFrameEndedCallback();
+    }
+    cb2.saveDataUpdatedCallback();
+
+    clockTime += 1000;
+    expect(intervalHandler).not.toBeNull();
+    if (intervalHandler) (intervalHandler as () => void)();
+    await new Promise((r) => setTimeout(r, 0));
+
+    const snap2 = emulator.getSnapshot();
+    expect(snap2.frames).toBe(60);
+    expect(snap2.fps).toBe(60);
+    expect(snap2.seconds).toBe(cart2.playTime + 2); // 2 timer intervals elapsed
+
+    // Stored battery payload matches exact bytes, romId, and recorded seconds
+    expect(vi.mocked(storage.putBattery).mock.calls.length).toBe(putBatteryCallsBaseline + 1);
+    const storedBat = batteryStorage.get('cart-cb-2');
+    expect(storedBat).toBeDefined();
+    expect(storedBat?.romId).toBe('cart-cb-2');
+    expect(new Uint8Array(storedBat?.data ?? new ArrayBuffer(0))).toEqual(batterySaveBytes2);
+    expect(recordedSeconds.get('cart-cb-2')).toBe(2);
+
+    // 3. Stale crash callback from generation 1 is ignored
+    cb1.coreCrashedCallback();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(emulator.getSnapshot().status).toBe('running');
+    expect(timerCleanedUp).toBe(false);
+
+    // 4. Active crash callback from generation 2 triggers fail and clears the owned interval
+    cb2.coreCrashedCallback();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(emulator.getSnapshot().status).toBe('error');
+    expect(emulator.getSnapshot().error).toContain('运行中断');
+    expect(timerCleanedUp).toBe(true);
+    expect(intervalHandler).toBeNull();
+  });
+
+  it('manages 30-second automatic snapshot boundary (at 29,999ms vs 30,000ms) with exact payload, unchanged recordPlayTime, and strictly read-only pause tick', async () => {
+    const core = createFakeCore();
+    const saveStateBytes = new Uint8Array([77, 88, 99, 111]);
+    core.FS.readFile = vi.fn().mockImplementation((path: string) => {
+      if (path.includes('.ss0')) return saveStateBytes.slice();
+      return new Uint8Array([0]);
+    });
+
+    let intervalHandler: (() => void) | null = null;
+    let clockTime = 10000;
+    const clock: EmulatorClock = {
+      now: () => clockTime,
+      setInterval: vi.fn().mockImplementation((h: () => void) => {
+        intervalHandler = h;
+        return 202 as unknown as ReturnType<typeof setInterval>;
+      }),
+      clearInterval: vi.fn().mockImplementation(() => {
+        intervalHandler = null;
+      }),
+      requestAnimationFrame: (cb) => cb(),
+    };
+
+    const snapshotsMap = new Map<string, Snapshot>();
+    const storage: EmulatorStorageAdapter = {
+      ...createStorageDouble(),
+      putSnapshot: vi.fn().mockImplementation(async (snap) => {
+        snapshotsMap.set(snap.key, snap);
+      }),
+      listSnapshots: vi
+        .fn()
+        .mockImplementation(async (romId) =>
+          Array.from(snapshotsMap.values()).filter((s) => s.romId === romId),
+        ),
+    };
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock,
+    });
+
+    const cart = createCartridge('cart-autosnap');
+    await emulator.load(cart, {} as HTMLCanvasElement);
+
+    // Initial load: 0 auto snapshots
+    expect(snapshotsMap.size).toBe(0);
+
+    // 1. Advance to 29,999 ms from lastAutoCapture: must NOT trigger snapshot
+    clockTime = 10000 + 29999;
+    expect(intervalHandler).not.toBeNull();
+    if (intervalHandler) (intervalHandler as () => void)();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(snapshotsMap.size).toBe(0);
+    expect(storage.putSnapshot).not.toHaveBeenCalled();
+
+    // 2. Advance by 1 ms to reach exactly 30,000 ms: triggers slot 0 snapshot with exact payload
+    clockTime = 10000 + 30000;
+    if (intervalHandler) (intervalHandler as () => void)();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(storage.putSnapshot).toHaveBeenCalledTimes(1);
+    const autoSnap = snapshotsMap.get('cart-autosnap:0');
+    expect(autoSnap).toBeDefined();
+    expect(autoSnap?.key).toBe('cart-autosnap:0');
+    expect(autoSnap?.romId).toBe('cart-autosnap');
+    expect(autoSnap?.slot).toBe(0);
+    expect(autoSnap?.coreVersion).toBe('2.5.1');
+    expect(new Uint8Array(autoSnap?.data ?? new ArrayBuffer(0))).toEqual(saveStateBytes);
+
+    // 3. Pause emulator: timer tick while paused is strictly read-only
+    emulator.pause();
+    expect(emulator.getSnapshot().status).toBe('paused');
+
+    const framesBefore = emulator.getSnapshot().frames;
+    const secondsBefore = emulator.getSnapshot().seconds;
+    const putSnapshotsCountBefore = vi.mocked(storage.putSnapshot).mock.calls.length;
+    const putBatteryCountBefore = vi.mocked(storage.putBattery).mock.calls.length;
+    const recordPlayTimeCountBefore = vi.mocked(storage.recordPlayTime).mock.calls.length;
+
+    // Advance clock by another 40 seconds while paused
+    clockTime += 40000;
+    if (intervalHandler) (intervalHandler as () => void)();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(emulator.getSnapshot().frames).toBe(framesBefore);
+    expect(emulator.getSnapshot().seconds).toBe(secondsBefore);
+    expect(vi.mocked(storage.putSnapshot).mock.calls.length).toBe(putSnapshotsCountBefore);
+    expect(vi.mocked(storage.putBattery).mock.calls.length).toBe(putBatteryCountBefore);
+    expect(vi.mocked(storage.recordPlayTime).mock.calls.length).toBe(recordPlayTimeCountBefore);
+  });
+
+  it('handles automatic snapshot rejection error feedback, leaves storage absent, preserves unrecorded seconds, and recovers on subsequent checkpoint', async () => {
+    const core = createFakeCore();
+    const batteryBytes = new Uint8Array([33, 44, 55, 66]);
+    core.getSave = vi.fn().mockImplementation(() => batteryBytes.slice());
+
+    const saveStateBytes = new Uint8Array([11, 22, 33, 44]);
+    core.FS.readFile = vi.fn().mockImplementation((path: string) => {
+      if (path.includes('.ss0')) return saveStateBytes.slice();
+      return new Uint8Array([0]);
+    });
+
+    let intervalHandler: (() => void) | null = null;
+    let clockTime = 10000;
+    const clock: EmulatorClock = {
+      now: () => clockTime,
+      setInterval: vi.fn().mockImplementation((h: () => void) => {
+        intervalHandler = h;
+        return 303 as unknown as ReturnType<typeof setInterval>;
+      }),
+      clearInterval: vi.fn(),
+      requestAnimationFrame: (cb) => cb(),
+    };
+
+    const snapshotsMap = new Map<string, Snapshot>();
+    const batteryMap = new Map<string, BatterySave>();
+    const recordedSeconds = new Map<string, number>();
+    let rejectNextPutSnapshot = false;
+
+    const storage: EmulatorStorageAdapter = {
+      ...createStorageDouble(),
+      putBattery: vi.fn().mockImplementation(async (save) => {
+        batteryMap.set(save.romId, save);
+      }),
+      getBattery: vi.fn().mockImplementation(async (id) => batteryMap.get(id)),
+      putSnapshot: vi.fn().mockImplementation(async (snap) => {
+        if (rejectNextPutSnapshot) {
+          throw new Error('IndexedDB quota exceeded');
+        }
+        snapshotsMap.set(snap.key, snap);
+      }),
+      listSnapshots: vi
+        .fn()
+        .mockImplementation(async (romId) =>
+          Array.from(snapshotsMap.values()).filter((s) => s.romId === romId),
+        ),
+      recordPlayTime: vi.fn().mockImplementation(async (romId, secs) => {
+        recordedSeconds.set(romId, (recordedSeconds.get(romId) ?? 0) + secs);
+      }),
+    };
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock,
+    });
+
+    const cart = createCartridge('cart-err-snap');
+    await emulator.load(cart, {} as HTMLCanvasElement);
+    expect(recordedSeconds.get('cart-err-snap')).toBe(0);
+
+    // 1. First auto-snapshot rejects: leaves storage absent and exposes error feedback
+    rejectNextPutSnapshot = true;
+    clockTime += 30000; // 30s elapsed
+    expect(intervalHandler).not.toBeNull();
+    if (intervalHandler) (intervalHandler as () => void)();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(snapshotsMap.has('cart-err-snap:0')).toBe(false);
+    expect(emulator.getSnapshot().error).toBe('存档写入失败：IndexedDB quota exceeded');
+    // Failed persist did not record playtime
+    expect(recordedSeconds.get('cart-err-snap')).toBe(0);
+
+    // 2. Subsequent auto-snapshot succeeds: exact bytes stored and accumulated seconds recorded exactly once
+    rejectNextPutSnapshot = false;
+    clockTime += 30000; // another 30s elapsed (total 60s session)
+    if (intervalHandler) (intervalHandler as () => void)();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(snapshotsMap.has('cart-err-snap:0')).toBe(true);
+    const snap = snapshotsMap.get('cart-err-snap:0');
+    expect(snap).toBeDefined();
+    if (!snap) throw new Error('Missing snapshot');
+    expect(snap.key).toBe('cart-err-snap:0');
+    expect(snap.romId).toBe('cart-err-snap');
+    expect(snap.slot).toBe(0);
+    expect(snap.coreVersion).toBe('2.5.1');
+    expect(new Uint8Array(snap.data)).toEqual(saveStateBytes);
+
+    const storedBat = batteryMap.get('cart-err-snap');
+    expect(storedBat).toBeDefined();
+    expect(storedBat?.romId).toBe('cart-err-snap');
+    expect(new Uint8Array(storedBat?.data ?? new ArrayBuffer(0))).toEqual(batteryBytes);
+
+    // Accumulated seconds (60 seconds) recorded exactly once
+    // 2 timer ticks elapsed before successful persist: 2 seconds recorded
+    expect(recordedSeconds.get('cart-err-snap')).toBe(2);
+
+    // 3. Subsequent persist with no elapsed time does not record extra seconds
+    const recordCallsBefore = vi.mocked(storage.recordPlayTime).mock.calls.length;
+    await emulator.persist();
+    expect(vi.mocked(storage.recordPlayTime).mock.calls.length).toBe(recordCallsBefore);
+  });
+
+  it('handles loadGame=false: asserts no timer on initial load failure, and removes owned timer on runtime reload failure with retry possible', async () => {
+    const core = createFakeCore();
+    let timerInstalled = false;
+    let timerRemoved = false;
+    const clock: EmulatorClock = {
+      now: () => 1000,
+      setInterval: vi.fn().mockImplementation(() => {
+        timerInstalled = true;
+        return 404 as unknown as ReturnType<typeof setInterval>;
+      }),
+      clearInterval: vi.fn().mockImplementation(() => {
+        timerRemoved = true;
+        timerInstalled = false;
+      }),
+      requestAnimationFrame: (cb) => cb(),
+    };
+
+    const storage = createStorageDouble();
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock,
+    });
+
+    const cart = createCartridge('cart-bad-load');
+
+    // 1. Initial load failure: core.loadGame returns false
+    core.loadGame = vi.fn().mockReturnValue(false);
+    await expect(emulator.load(cart, {} as HTMLCanvasElement)).rejects.toThrow('无法启动这枚卡带');
+
+    expect(emulator.getSnapshot().status).toBe('error');
+    expect(emulator.getSnapshot().error).toContain('无法启动这枚卡带');
+    // On first loadGame failure before running, no timer was ever installed
+    expect(timerInstalled).toBe(false);
+
+    // 2. Successful load installs live timer
+    core.loadGame = vi.fn().mockReturnValue(true);
+    await emulator.load(cart, {} as HTMLCanvasElement);
+    expect(emulator.getSnapshot().status).toBe('running');
+    expect(timerInstalled).toBe(true);
+    timerRemoved = false;
+
+    // 3. Subsequent reload failure removes the previously running timer
+    core.loadGame = vi.fn().mockReturnValue(false);
+    await expect(emulator.load(cart, {} as HTMLCanvasElement)).rejects.toThrow('无法启动这枚卡带');
+    expect(emulator.getSnapshot().status).toBe('error');
+    expect(timerRemoved).toBe(true);
+    expect(timerInstalled).toBe(false);
+
+    // 4. Successful retry restores running state and reinstalls timer
+    core.loadGame = vi.fn().mockReturnValue(true);
+    await emulator.load(cart, {} as HTMLCanvasElement);
+    expect(emulator.getSnapshot().status).toBe('running');
+    expect(timerInstalled).toBe(true);
+  });
+
+  it('handles failed battery-import reboot: preserves imported battery in storage, stops timer, and allows recovery', async () => {
+    const sharedFiles = new Map<string, Uint8Array>();
+    let currentRomId = '';
+    const initialBatteryBytes = new Uint8Array([1, 2, 3, 4]);
+    const importedBatteryBytes = new Uint8Array([99, 88, 77, 66]);
+    let currentSave = initialBatteryBytes.slice();
+
+    const core = {
+      ...createFakeCore(),
+      loadGame: vi.fn().mockImplementation((path: string, savePath: string) => {
+        const parts = path.split('/');
+        const last = parts[parts.length - 1];
+        currentRomId = (last ?? '').replace(/\.(gba|gbc|gb)$/i, '');
+        const existing = sharedFiles.get(savePath);
+        currentSave = existing ? existing.slice() : initialBatteryBytes.slice();
+        return true;
+      }),
+      quitGame: vi.fn().mockImplementation(() => {
+        if (currentRomId) {
+          sharedFiles.set(`/saves/${currentRomId}.sav`, currentSave.slice());
+        }
+        currentRomId = '';
+      }),
+      getSave: vi.fn().mockImplementation(() => (currentRomId ? currentSave.slice() : null)),
+      FS: {
+        mkdir: vi.fn(),
+        writeFile: vi.fn().mockImplementation((p: string, data: Uint8Array) => {
+          sharedFiles.set(p, new Uint8Array(data));
+        }),
+        readFile: vi.fn().mockImplementation((p: string) => {
+          const value = sharedFiles.get(p);
+          if (!value) throw new Error(`File not found: ${p}`);
+          return value.slice();
+        }),
+        unlink: vi.fn().mockImplementation((p: string) => {
+          sharedFiles.delete(p);
+        }),
+        analyzePath: vi.fn().mockImplementation((p: string) => ({ exists: sharedFiles.has(p) })),
+      },
+    } as unknown as mGBAEmulator;
+
+    let timerRunning = false;
+    const clock: EmulatorClock = {
+      now: () => 1000,
+      setInterval: vi.fn().mockImplementation(() => {
+        timerRunning = true;
+        return 505 as unknown as ReturnType<typeof setInterval>;
+      }),
+      clearInterval: vi.fn().mockImplementation(() => {
+        timerRunning = false;
+      }),
+      requestAnimationFrame: (cb) => cb(),
+    };
+
+    const batteryStorage = new Map<string, BatterySave>();
+    batteryStorage.set('cart-import-reboot', {
+      romId: 'cart-import-reboot',
+      data: initialBatteryBytes.buffer,
+      updatedAt: 1000,
+    });
+
+    const storage: EmulatorStorageAdapter = {
+      ...createStorageDouble(),
+      putBattery: vi.fn().mockImplementation(async (save) => {
+        batteryStorage.set(save.romId, save);
+      }),
+      replaceBattery: vi.fn().mockImplementation(async (save) => {
+        batteryStorage.set(save.romId, save);
+      }),
+      getBattery: vi.fn().mockImplementation(async (id) => batteryStorage.get(id)),
+    };
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock,
+    });
+
+    const cart = createCartridge('cart-import-reboot');
+    await emulator.load(cart, {} as HTMLCanvasElement);
+    expect(emulator.getSnapshot().status).toBe('running');
+    expect(emulator.getSnapshot().cartridge?.id).toBe('cart-import-reboot');
+    expect(timerRunning).toBe(true);
+
+    // Initial core save matches initial bytes
+    const initialCoreSave = core.getSave();
+    expect(initialCoreSave).not.toBeNull();
+    expect(new Uint8Array(initialCoreSave ?? new Uint8Array(0))).toEqual(initialBatteryBytes);
+
+    // Core loadGame fails during post-import reboot
+    core.loadGame = vi.fn().mockReturnValue(false);
+
+    await expect(emulator.importBattery(importedBatteryBytes.buffer)).rejects.toThrow(
+      '无法启动这枚卡带',
+    );
+
+    // 1. Imported battery was preserved in the SAME battery storage despite reboot failure
+    const stored = batteryStorage.get('cart-import-reboot');
+    expect(stored).toBeDefined();
+    expect(new Uint8Array(stored?.data ?? new ArrayBuffer(0))).toEqual(importedBatteryBytes);
+
+    // 2. Emulator transitions to error, cartridge identity preserved, and timer is stopped
+    expect(emulator.getSnapshot().status).toBe('error');
+    expect(emulator.getSnapshot().cartridge?.id).toBe('cart-import-reboot');
+    expect(emulator.getSnapshot().error).toContain('无法启动这枚卡带');
+    expect(timerRunning).toBe(false);
+
+    // 3. Recovery succeeds when loadGame succeeds again, loading the imported save bytes
+    core.loadGame = vi.fn().mockImplementation((path: string, savePath: string) => {
+      const parts = path.split('/');
+      const last = parts[parts.length - 1];
+      currentRomId = (last ?? '').replace(/\.(gba|gbc|gb)$/i, '');
+      const existing = sharedFiles.get(savePath);
+      currentSave = existing ? existing.slice() : initialBatteryBytes.slice();
+      return true;
+    });
+
+    await emulator.load(cart, {} as HTMLCanvasElement);
+    expect(emulator.getSnapshot().status).toBe('running');
+    expect(emulator.getSnapshot().cartridge?.id).toBe('cart-import-reboot');
+    expect(timerRunning).toBe(true);
+    const recoveredCoreSave = core.getSave();
+    expect(recoveredCoreSave).not.toBeNull();
+    expect(new Uint8Array(recoveredCoreSave ?? new Uint8Array(0))).toEqual(importedBatteryBytes);
+
+    // 4. One subsequent persist preserves the exact imported save bytes
+    await emulator.persist();
+    const storedAfterPersist = batteryStorage.get('cart-import-reboot');
+    expect(new Uint8Array(storedAfterPersist?.data ?? new ArrayBuffer(0))).toEqual(
+      importedBatteryBytes,
+    );
+  });
+
+  it('treats idle persist and reset as no-ops without mutation, and asserts zero mutations before idle/foreign rejections', async () => {
+    const core = createFakeCore();
+    const storage = createStorageDouble();
+    const clock = createClockDouble();
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage,
+      clock,
+    });
+
+    // 1. Idle persist and reset are no-ops
+    await expect(emulator.persist()).resolves.toBeUndefined();
+    await expect(emulator.reset()).resolves.toBeUndefined();
+    expect(core.quickReload).not.toHaveBeenCalled();
+    expect(storage.putBattery).not.toHaveBeenCalled();
+    expect(storage.putSnapshot).not.toHaveBeenCalled();
+    expect(core.FS.writeFile).not.toHaveBeenCalled();
+
+    // 2. Idle importBattery rejects before any replacement or file write
+    await expect(emulator.importBattery(new ArrayBuffer(512))).rejects.toThrow(
+      '请先启动对应的卡带',
+    );
+    expect(storage.replaceBattery).not.toHaveBeenCalled();
+    expect(core.FS.writeFile).not.toHaveBeenCalled();
+
+    // 3. Idle saveSlot rejects before any capture or file write
+    await expect(emulator.saveSlot(1)).rejects.toThrow('请先启动游戏');
+    expect(storage.putSnapshot).not.toHaveBeenCalled();
+    expect(core.saveState).not.toHaveBeenCalled();
+
+    // 4. Load valid cartridge to establish baseline
+    await emulator.load(createCartridge('cart-real'), {} as HTMLCanvasElement);
+    const putSnapshotBaseline = vi.mocked(storage.putSnapshot).mock.calls.length;
+    const putBatteryBaseline = vi.mocked(storage.putBattery).mock.calls.length;
+    const replaceBatteryBaseline = vi.mocked(storage.replaceBattery).mock.calls.length;
+    const writeFileBaseline = vi.mocked(core.FS.writeFile).mock.calls.length;
+    const loadStateBaseline = vi.mocked(core.loadState).mock.calls.length;
+    const fsSyncBaseline = vi.mocked(core.FSSync).mock.calls.length;
+
+    // Foreign cartridge loadSlot rejects before any file write, state load, or storage mutation
+    await expect(
+      emulator.loadSlot({
+        key: 'cart-foreign:1',
+        romId: 'cart-foreign',
+        slot: 1,
+        data: new ArrayBuffer(4),
+        thumbnail: '',
+        updatedAt: 100,
+        coreVersion: '2.5.1',
+      }),
+    ).rejects.toThrow('不属于当前卡带');
+
+    expect(vi.mocked(storage.putSnapshot).mock.calls.length).toBe(putSnapshotBaseline);
+    expect(vi.mocked(storage.putBattery).mock.calls.length).toBe(putBatteryBaseline);
+    expect(vi.mocked(storage.replaceBattery).mock.calls.length).toBe(replaceBatteryBaseline);
+    expect(vi.mocked(core.FS.writeFile).mock.calls.length).toBe(writeFileBaseline);
+    expect(vi.mocked(core.loadState).mock.calls.length).toBe(loadStateBaseline);
+    expect(vi.mocked(core.FSSync).mock.calls.length).toBe(fsSyncBaseline);
+  });
+
+  it('exercises default crossOriginIsolated check and default clock under controlled global stubs', async () => {
+    vi.useFakeTimers();
+
+    let ownedLoadPromise: Promise<void> | null = null;
+    let emulatorInstance: PocketEmulator | null = null;
+
+    try {
+      // 1. When crossOriginIsolated is false, load fails with actionable error
+      vi.stubGlobal('window', { crossOriginIsolated: false });
+
+      const core = createFakeCore();
+      const emulatorFail = new PocketEmulator({
+        createCore: async () => core,
+        storage: createStorageDouble(),
+      });
+
+      await expect(
+        emulatorFail.load(createCartridge('cart-noiso'), {} as HTMLCanvasElement),
+      ).rejects.toThrow('浏览器未开启共享内存');
+      expect(emulatorFail.getSnapshot().status).toBe('error');
+
+      // 2. When crossOriginIsolated is true and SharedArrayBuffer is available, load succeeds with default clock
+      vi.stubGlobal('window', { crossOriginIsolated: true });
+      if (typeof globalThis.SharedArrayBuffer === 'undefined') {
+        vi.stubGlobal('SharedArrayBuffer', ArrayBuffer);
+      }
+
+      // Ensure deterministic requestAnimationFrame fallback using setTimeout
+      vi.stubGlobal('requestAnimationFrame', undefined);
+
+      const cart = createCartridge('cart-iso-ok');
+      emulatorInstance = new PocketEmulator({
+        createCore: async () => core,
+        storage: createStorageDouble(),
+      });
+
+      ownedLoadPromise = emulatorInstance.load(cart, {} as HTMLCanvasElement);
+
+      // Advance by 32ms (two 16ms setTimeout hops for RAF fallback in internalLoad)
+      await vi.advanceTimersByTimeAsync(32);
+      await ownedLoadPromise;
+      ownedLoadPromise = null;
+
+      expect(emulatorInstance.getSnapshot().status).toBe('running');
+
+      // Advance fake timers by exactly 1000ms: seconds is exactly cart.playTime + 1
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(emulatorInstance.getSnapshot().seconds).toBe(cart.playTime + 1);
+
+      // Pause emulator: advance by 1000ms, seconds remains unchanged
+      emulatorInstance.pause();
+      expect(emulatorInstance.getSnapshot().status).toBe('paused');
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(emulatorInstance.getSnapshot().seconds).toBe(cart.playTime + 1);
+
+      // Resume emulator: advance by 1000ms, seconds increments by exactly +1
+      emulatorInstance.resume();
+      expect(emulatorInstance.getSnapshot().status).toBe('running');
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(emulatorInstance.getSnapshot().seconds).toBe(cart.playTime + 2);
+    } finally {
+      // Always settle pending load promise if still active
+      if (ownedLoadPromise && emulatorInstance) {
+        try {
+          await vi.advanceTimersByTimeAsync(64);
+          await ownedLoadPromise;
+        } catch {
+          // Ignore settlement error during teardown
+        }
+      }
+      // Stop emulator timer if running
+      if (emulatorInstance) {
+        emulatorInstance.pause();
+      }
+      // Clear all pending fake timers before restoring real timers
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
   });
 });
