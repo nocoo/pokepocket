@@ -196,6 +196,10 @@ plugin HTTP regressions separately.
 15. `chore: enforce integration push gates`
     - Run L2 and G2 concurrently from the pre-push hook; propagate either failure.
     - Enable the same L2 entry point in CI and preserve both existing security scans.
+    - Follow with `fix: retain l2 listeners during cancellation`: retain owned signal listeners
+      until cleanup settles, including repeated signals forwarded by the real npm command chain.
+      Add a regression for repeated signals during deferred cleanup and preserve the initial exit
+      status. Verify the default push-to-npm-to-L2-to-build chain, not only a direct child wrapper.
 
 Review: scanner versions and scope, outgoing Git ranges, argument quoting, installation guidance,
 negative gate probes, isolation guards, and combined runtime under 3 minutes. **Milestone: Tier A.**
@@ -256,7 +260,7 @@ findings through additional atomic fixes, and commits the final implementation/e
 | B4c4  | Accepted    | `23f9198`, `7a534ed`, `d9295ec`, `38f5e03`, `6ef2389`, `dd4aca0`                                                                                                                                                                                 | 292 units; independent G1/coverage, input/lifecycle probes, negative guards, and descriptor cleanup pass                  |
 | B4d   | Accepted    | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`, `fbd52cc`, `8c24c5c`, `9a3545c`, `49a79ab`                                                                                                                                                           | 363 units; G1/build; all four metrics >=90%; actual hooks and failure/process probes pass; Tier B verified                |
 | B5    | Accepted    | `8604276`, `0bfecb5`, `91685a6`, `cf2514d`, `759c65a`, `38cb1f5`, `d5ff4f9`                                                                                                                                                                      | 388 units; G1/L1, production build, 40 real HTTP contracts, independent bytes/authentication and inventory rejection pass |
-| B6    | In progress | `48894ea`, `ca704a2`                                                                                                                                                                                                                             | Security accepted: 440 units, G1/L1/G2 and 40 HTTP cases; 17 scanner/history and six process probes; pre-push pending     |
+| B6    | In progress | `48894ea`, `ca704a2`, `24ee4a1`, `cc58d97`                                                                                                                                                                                                       | Security accepted; pre-push review found repeated-signal cleanup failure in the default npm chain; correction pending     |
 | B7    | Pending     | —                                                                                                                                                                                                                                                | —                                                                                                                         |
 | B8    | Pending     | —                                                                                                                                                                                                                                                | —                                                                                                                         |
 
@@ -1188,6 +1192,29 @@ Independent checks on 2026-09-06:
 The security handoff is accepted. B6 remains in progress until the installed pre-push hook runs
 L2 and G2 together and passes nested build cancellation, stdin propagation, and failure probes.
 Tier A and Tier S are not yet claimed. Daily development and preview services remain preserved.
+
+### B6 pre-push review checkpoint
+
+The pre-push implementation at `24ee4a1e804d8882c7588cf09d85ee9572d00701` adds
+[run-push.mjs](../scripts/run-push.mjs), `quality:push`, and the installed
+[pre-push hook](../.husky/pre-push). It reads and validates Git input once, runs L2 and G2
+concurrently, and applies a 180-second deadline with a 3000 ms outer cancellation grace.
+The additive test-only handoff `cc58d9731efd33671498f1d5eb0a26afd83b1bfa` requires valid
+descendant/build/leaf PID evidence and removes exact captured L2 roots in fallback cleanup.
+
+Independent review reproduces a blocking cleanup defect twice in the default production chain:
+`run-push -> npm run quality:l2 -> run-l2 -> npm run build`. On cancellation, npm can forward
+a second SIGTERM after the first group signal. L2's `process.once` handler has already been removed,
+so the second signal terminates L2 before its deferred root cleanup starts, leaving descendants and
+temporary state. A direct-child unit wrapper does not exercise this npm forwarding behavior.
+
+A temporary change retaining L2 listeners with `process.on` passes all three independent real-chain
+probes: SIGTERM exits 143, SIGINT exits 130, and peer scanner failure exits 1. Each captures nine child
+processes, leaves zero running survivors, and removes its L2 root, with cleanup taking 3.03, 3.03,
+and 4.41 seconds respectively. These are design experiments on an isolated checkout, restored in
+`finally`; they are not acceptance evidence for the committed implementation. The next atomic
+handoff fixes this lifecycle boundary and adds discriminating repeated-signal assertions. B6 remains
+open until the final committed code passes the real chain and installed-hook probes.
 
 ## 5. Final acceptance record
 
