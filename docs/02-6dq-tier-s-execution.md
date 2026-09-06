@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1, B2, B3, B4a, B4b, B4c1, and B4c2 accepted. B4c3 foundation verified; command follow-ups remain open. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1, B2, B3, B4a, B4b, B4c1, and B4c2 accepted. B4c3 foundation and saves/download follow-up verified; cartridge and settings/modal follow-ups remain open. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -21,6 +21,8 @@ reviewing every batch, maintaining numbered documentation, and independently val
   50 characters. Stage explicit paths. Do not amend/rewrite accepted commits or bypass active hooks.
 - pi stops at the batch boundary and notifies the coordinating pane through `herdr agent prompt`,
   without waiting for the coordinator. It must not start the next batch without review acceptance.
+- After the B4c3-S grouping deviation, each implementation handoff assigns one intended commit.
+  Complete and review that logical change before dispatching the next one.
 - Codex uses bounded lifecycle waits and a 45-second progress timer. On timeout, inspect the agent's
   current output and repository progress; on an error or blocked state, diagnose it before resuming.
   While implementation runs, prepare the next review and independent verification work.
@@ -212,22 +214,22 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State    | Implementation commits                                                      | Review and evidence                                                                                         |
-| ----- | -------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                        | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below   |
-| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                       | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                   |
-| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742` | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass               |
-| B4a   | Accepted | `fff1da2`, `8f9f008`                                                        | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed        |
-| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                       | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass           |
-| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                             | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed             |
-| B4c2  | Accepted | `b1933ca`, `d08a034`                                                        | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed       |
-| B4c3  | Open     | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`                                  | 255 unit tests; independent G1, coverage, and build pass; command recovery and busy-state follow-ups remain |
-| B4c4  | Pending  | —                                                                           | App keyboard/gamepad and browser lifecycle                                                                  |
-| B4d   | Pending  | —                                                                           | All four coverage metrics >=90%; L1/G1 pre-commit and commit-message gates                                  |
-| B5    | Pending  | —                                                                           | —                                                                                                           |
-| B6    | Pending  | —                                                                           | —                                                                                                           |
-| B7    | Pending  | —                                                                           | —                                                                                                           |
-| B8    | Pending  | —                                                                           | —                                                                                                           |
+| Batch | State    | Implementation commits                                                      | Review and evidence                                                                                                    |
+| ----- | -------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                        | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below              |
+| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                       | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                              |
+| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742` | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass                          |
+| B4a   | Accepted | `fff1da2`, `8f9f008`                                                        | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed                   |
+| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                       | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass                      |
+| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                             | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed                        |
+| B4c2  | Accepted | `b1933ca`, `d08a034`                                                        | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                  |
+| B4c3  | Open     | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`            | 256 unit tests; independent G1, coverage, and build pass; saves/download follow-up accepted; cartridge/settings remain |
+| B4c4  | Pending  | —                                                                           | App keyboard/gamepad and browser lifecycle                                                                             |
+| B4d   | Pending  | —                                                                           | All four coverage metrics >=90%; L1/G1 pre-commit and commit-message gates                                             |
+| B5    | Pending  | —                                                                           | —                                                                                                                      |
+| B6    | Pending  | —                                                                           | —                                                                                                                      |
+| B7    | Pending  | —                                                                           | —                                                                                                                      |
+| B8    | Pending  | —                                                                           | —                                                                                                                      |
 
 ### B1 review evidence
 
@@ -542,15 +544,11 @@ Independent checks on 2026-09-06:
   supplied encoder bytes, manual toast dismissal, and rejection of a failed image decode.
 
 The implementer also reports the unchanged developer HTTP test passing. These results verify the
-foundation; B4c3 is not accepted because the following assigned behavior is still missing or lacks
-an observable completion assertion:
+foundation. The follow-up status is:
 
-1. **Saves/downloads.** Verify actual replacement with changed bytes, unchanged original data after
-   cancel or a rejected write, and the final stored/UI result of delete retry. Exercise deferred
-   confirmation busy guards through real controls and events. Check exact snapshot bytes at the core
-   boundary, download filename/href and cleanup, toast expiry, and no download on export/capture
-   failures. A test name mentioning expiry is insufficient without advancing owned timers and
-   asserting disappearance.
+1. **Saves/downloads: accepted.** The evidence below covers actual replacement, cancellation and
+   rejected writes, delete retry, deferred busy guards, exact core bytes, download cleanup, toast
+   expiry, and failed export/capture. The initial foundation alone did not establish these results.
 2. **Cartridge commands.** Verify independent pending catalog/storage initialization, actual ROM
    input change/value reset, picker cancellation from running and already-paused games, invalid
    imports and catalog-ROM failures followed by retry, and deferred load/return guards. Assert the
@@ -564,6 +562,48 @@ the assumption that awaiting a click waits for an asynchronous App command. Snap
 account for the automatic checkpoint produced when opening a running game's modal. Seed snapshots
 before emulator load, count mutations for the intended slot, and distinguish boot restoration from
 the later user-confirmed load. The follow-ups retain these verified constraints.
+
+### B4c3-S acceptance evidence
+
+Reviewed implementation: `5b32f30` and the focused cancellation/count correction `afeff79`.
+Only [the App save/download suite](../tests/unit/app-snapshots-and-saves.test.tsx) changed;
+production source, the shared harness, dependencies, and coverage scope are unchanged.
+
+Independent checks on 2026-09-06 used an isolated checkout pinned to `afeff79`, with separate
+TypeScript/Vite caches and coverage output:
+
+- `bun run test:coverage`: 256 tests across 28 files pass in 2.81 seconds. Coverage is 86.30%
+  statements (1632/1891), 79.55% branches (1152/1448), 87.67% functions (384/438), and 88.53%
+  lines (1467/1657).
+- `bun run quality:g1`: Biome checks 77 files with zero errors/warnings; TypeScript and Prettier pass.
+  `bun run build` passes for the production Worker/client and both distribution scans.
+- Manual creation stores known bytes. Cancelling replacement performs no extra manual-slot writes.
+  Deferred replacement blocks repeat confirmation, cancellation, Escape, backdrop dismissal, and
+  returning to the gallery; a later event-loop turn confirms unchanged write/load counts and data.
+  A rejected write preserves the original bytes, and retry executes the original storage mutation
+  with different bytes. Manual load performs no pre-confirmation load/write and supplies the correct
+  state path and bytes after confirmation. Failed delete retains data; retry removes it in storage
+  and restores the empty-slot UI with exactly two attempts.
+- Screenshot checks retain exact source, dimensions, MIME, and bytes, and verify filename/href and
+  a connected-then-removed download anchor. Owned clocks verify revocation at 1000 ms, a success toast
+  present at 3799 ms and absent at 3800 ms, and an error toast present at 7499 ms and absent at 7500 ms.
+  Battery export drains its own revocation callback. Capture/decode/export failures do not download;
+  manual error-toast dismissal remains covered.
+
+The implementer also reports the unchanged developer HTTP test passing. Review corrected the
+fake-timer interaction with Testing Library asynchronous queries; the probe-evidence correction is
+recorded in [Retrospective.md](../Retrospective.md). No browser or hosted-login evidence is claimed
+for this unit-test follow-up.
+
+Commit grouping deviated from the requested two implementation commits: `5b32f30` combined the two
+S groups before the coordinator's split reminder arrived. That history is preserved, and `afeff79`
+adds the review correction without rewriting it. Subsequent handoffs each assign one intended
+commit; documentation stays in separate commits.
+
+B4c3 remains open. The next handoffs are O1 (resume race fix), O2 (initialization readiness),
+O3 (ROM picker lifecycle), and O4 (ROM-fetch recovery and deferred command guards), followed by
+M1 (restored preferences), M2 (pending restart/import dismissal fix), and any remaining M3 modal
+checkpoint/pause-ownership tests. Each handoff must stop for review before the next begins.
 
 ## 5. Final acceptance record
 
