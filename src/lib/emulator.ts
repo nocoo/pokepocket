@@ -256,7 +256,7 @@ export class PocketEmulator {
       if (resumeAuto && previous?.coreVersion === CORE_VERSION) {
         const path = `${core.filePaths().saveStatePath}/${cartridge.id}.ss0`;
         core.FS.writeFile(path, new Uint8Array(previous.data));
-        resumedAutomatically = core.loadState(0);
+        resumedAutomatically = this.restoreState(core, 0, true);
       }
 
       this.update({
@@ -430,6 +430,28 @@ export class PocketEmulator {
     });
   }
 
+  /**
+   * Restores an active snapshot into running CPU/video/active SRAM memory.
+   *
+   * In mGBA 2.5.1 (specifically GB/GBC _GBCoreSavedataRestore in src/gb/core.c),
+   * forced writeback (flags & SAVESTATE_SAVEDATA, used by loadState with SAVESTATE_ALL=31)
+   * flushes to the backing VFile without refreshing live mapped SRAM. The non-writeback
+   * path uses GBSavedataMask and immediately updates active SRAM memory.
+   *
+   * The pinned SDK's raw loadStateSlot default mask is 61 (which excludes flag 2),
+   * correctly restoring active memory across all platforms while leaving synchronous file
+   * writeback to in-game saves. Because loadStateSlot lacks internal thread interrupt
+   * wrappers, we explicitly pause the core around it and preserve original running ownership.
+   */
+  private restoreState(core: mGBAEmulator, slot: number, resumeAfter: boolean): boolean {
+    core.pauseGame();
+    try {
+      return core.loadStateSlot(slot, 61);
+    } finally {
+      if (resumeAfter) core.resumeGame();
+    }
+  }
+
   private async internalLoadSlot(snapshot: Snapshot): Promise<void> {
     if (!this.core || snapshot.romId !== this.state.cartridge?.id) {
       throw new Error('这份即时存档不属于当前卡带。');
@@ -439,7 +461,7 @@ export class PocketEmulator {
     }
     const path = `${this.core.filePaths().saveStatePath}/${snapshot.romId}.ss${snapshot.slot}`;
     this.core.FS.writeFile(path, new Uint8Array(snapshot.data));
-    if (!this.core.loadState(snapshot.slot)) {
+    if (!this.restoreState(this.core, snapshot.slot, this.state.status === 'running')) {
       throw new Error('即时存档读取失败，原文件可能已损坏。');
     }
     await this.internalPersist();

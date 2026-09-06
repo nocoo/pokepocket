@@ -43,6 +43,7 @@ function createFakeCore(): mGBAEmulator {
     setFastForwardMultiplier: vi.fn(),
     addCoreCallbacks: vi.fn().mockImplementation((cb) => Object.assign(callbacks, cb)),
     loadState: vi.fn().mockReturnValue(true),
+    loadStateSlot: vi.fn().mockReturnValue(true),
     saveState: vi.fn().mockReturnValue(true),
     getSave: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3, 4])),
     screenshot: vi.fn().mockReturnValue(true),
@@ -630,6 +631,234 @@ describe('PocketEmulator with injected dependencies', () => {
     expect(core.quickReload).toHaveBeenCalledTimes(1);
   });
 
+  it('manages pauseGame/resumeGame lifecycle and ownership across loadSlot success and failures', async () => {
+    const callOrder: string[] = [];
+    const core = createFakeCore();
+    core.pauseGame = vi.fn().mockImplementation(() => {
+      callOrder.push('pauseGame');
+    });
+    core.resumeGame = vi.fn().mockImplementation(() => {
+      callOrder.push('resumeGame');
+    });
+    core.loadStateSlot = vi.fn().mockImplementation((slot: number, flags?: number) => {
+      callOrder.push(`loadStateSlot:${slot}:${flags}`);
+      return true;
+    });
+
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    await emulator.load(createCartridge('cart-lifecycle'), {} as HTMLCanvasElement);
+    expect(emulator.getSnapshot().status).toBe('running');
+
+    // 1. Successful loadSlot while running: pauses, restores with flag 61, resumes
+    callOrder.length = 0;
+    const snap1: Snapshot = {
+      key: 'cart-lifecycle:1',
+      romId: 'cart-lifecycle',
+      slot: 1,
+      data: new Uint8Array([1, 1, 1, 1]).buffer,
+      thumbnail: '',
+      updatedAt: 100,
+      coreVersion: '2.5.1',
+    };
+    await emulator.loadSlot(snap1);
+    expect(callOrder).toEqual(['pauseGame', 'loadStateSlot:1:61', 'resumeGame']);
+    expect(emulator.getSnapshot().status).toBe('running');
+
+    // 2. Successful loadSlot while paused:
+    // restoreState keeps core paused during load and persist (resumeAfter=false),
+    // and then internalLoadSlot's success logic calls this.resume()
+    emulator.pause();
+    expect(emulator.getSnapshot().status).toBe('paused');
+    callOrder.length = 0;
+    await emulator.loadSlot(snap1);
+    expect(callOrder).toEqual(['pauseGame', 'loadStateSlot:1:61', 'resumeGame']);
+    expect(emulator.getSnapshot().status).toBe('running');
+
+    // 3. Failed loadSlot returning false while paused:
+    // restoreState has resumeAfter=false, so core stays paused on failure and does not resume
+    emulator.pause();
+    expect(emulator.getSnapshot().status).toBe('paused');
+    core.loadStateSlot = vi.fn().mockImplementation((slot: number, flags?: number) => {
+      callOrder.push(`loadStateSlot:${slot}:${flags}`);
+      return false;
+    });
+    callOrder.length = 0;
+    await expect(emulator.loadSlot(snap1)).rejects.toThrow('即时存档读取失败');
+    expect(callOrder).toEqual(['pauseGame', 'loadStateSlot:1:61']);
+    expect(emulator.getSnapshot().status).toBe('paused');
+
+    // Resume for failure tests while running
+    emulator.resume();
+    expect(emulator.getSnapshot().status).toBe('running');
+
+    // 4. Failed loadSlot returning false while running:
+    // pauses, attempts loadStateSlot, resumes in finally (resumeAfter=true), then throws
+    core.loadStateSlot = vi.fn().mockImplementation((slot: number, flags?: number) => {
+      callOrder.push(`loadStateSlot:${slot}:${flags}`);
+      return false;
+    });
+    callOrder.length = 0;
+    await expect(emulator.loadSlot(snap1)).rejects.toThrow('即时存档读取失败');
+    expect(callOrder).toEqual(['pauseGame', 'loadStateSlot:1:61', 'resumeGame']);
+    expect(emulator.getSnapshot().status).toBe('running');
+
+    // 5. Failed loadSlot throwing an exception: pauses, attempts loadStateSlot, resumes in finally, re-throws
+    core.loadStateSlot = vi.fn().mockImplementation((slot: number, flags?: number) => {
+      callOrder.push(`loadStateSlot:${slot}:${flags}`);
+      throw new Error('low-level wasm trap');
+    });
+    callOrder.length = 0;
+    await expect(emulator.loadSlot(snap1)).rejects.toThrow('low-level wasm trap');
+    expect(callOrder).toEqual(['pauseGame', 'loadStateSlot:1:61', 'resumeGame']);
+    expect(emulator.getSnapshot().status).toBe('running');
+
+    // 6. Retry settles cleanly after failure
+    core.loadStateSlot = vi.fn().mockImplementation((slot: number, flags?: number) => {
+      callOrder.push(`loadStateSlot:${slot}:${flags}`);
+      return true;
+    });
+    callOrder.length = 0;
+    await emulator.loadSlot(snap1);
+    expect(callOrder).toEqual(['pauseGame', 'loadStateSlot:1:61', 'resumeGame']);
+    expect(emulator.getSnapshot().status).toBe('running');
+  });
+
+  it('handles automatic slot 0 restore lifecycle on load: success, false fallback, version mismatch, and thrown failure', async () => {
+    const autoData = new Uint8Array([9, 8, 7, 6]).buffer;
+    const cart = createCartridge('cart-auto-lifecycle');
+
+    // 1. Success on matching coreVersion: calls restoreState with (0, 61), resumes and sets resumedAutomatically=true
+    const callOrder1: string[] = [];
+    const core1 = createFakeCore();
+    core1.pauseGame = vi.fn().mockImplementation(() => {
+      callOrder1.push('pauseGame');
+    });
+    core1.resumeGame = vi.fn().mockImplementation(() => {
+      callOrder1.push('resumeGame');
+    });
+    core1.loadStateSlot = vi.fn().mockImplementation((slot: number, flags?: number) => {
+      callOrder1.push(`loadStateSlot:${slot}:${flags}`);
+      return true;
+    });
+
+    const storage1 = createStorageDouble();
+    storage1.listSnapshots = vi.fn().mockResolvedValue([
+      {
+        key: 'cart-auto-lifecycle:0',
+        romId: 'cart-auto-lifecycle',
+        slot: 0,
+        data: autoData,
+        thumbnail: '',
+        updatedAt: 100,
+        coreVersion: '2.5.1',
+      },
+    ]);
+
+    const emu1 = new PocketEmulator({
+      createCore: async () => core1,
+      checkCrossOriginIsolated: () => true,
+      storage: storage1,
+      clock: createClockDouble(),
+    });
+
+    await emu1.load(cart, {} as HTMLCanvasElement, true);
+    expect(callOrder1).toEqual(['pauseGame', 'loadStateSlot:0:61', 'resumeGame']);
+    expect(emu1.getSnapshot().resumedAutomatically).toBe(true);
+    expect(emu1.getSnapshot().status).toBe('running');
+
+    // 2. loadStateSlot returns false (e.g. corrupted state): fallback keeps running with resumedAutomatically=false
+    const core2 = createFakeCore();
+    core2.loadStateSlot = vi.fn().mockReturnValue(false);
+    const storage2 = createStorageDouble();
+    storage2.listSnapshots = vi.fn().mockResolvedValue([
+      {
+        key: 'cart-auto-lifecycle:0',
+        romId: 'cart-auto-lifecycle',
+        slot: 0,
+        data: autoData,
+        thumbnail: '',
+        updatedAt: 100,
+        coreVersion: '2.5.1',
+      },
+    ]);
+
+    const emu2 = new PocketEmulator({
+      createCore: async () => core2,
+      checkCrossOriginIsolated: () => true,
+      storage: storage2,
+      clock: createClockDouble(),
+    });
+
+    await emu2.load(cart, {} as HTMLCanvasElement, true);
+    expect(core2.loadStateSlot).toHaveBeenCalledWith(0, 61);
+    expect(emu2.getSnapshot().resumedAutomatically).toBe(false);
+    expect(emu2.getSnapshot().status).toBe('running');
+
+    // 3. Incompatible coreVersion: ignored completely, loadStateSlot not called
+    const core3 = createFakeCore();
+    const storage3 = createStorageDouble();
+    storage3.listSnapshots = vi.fn().mockResolvedValue([
+      {
+        key: 'cart-auto-lifecycle:0',
+        romId: 'cart-auto-lifecycle',
+        slot: 0,
+        data: autoData,
+        thumbnail: '',
+        updatedAt: 100,
+        coreVersion: '2.4.0', // older incompatible version
+      },
+    ]);
+
+    const emu3 = new PocketEmulator({
+      createCore: async () => core3,
+      checkCrossOriginIsolated: () => true,
+      storage: storage3,
+      clock: createClockDouble(),
+    });
+
+    await emu3.load(cart, {} as HTMLCanvasElement, true);
+    expect(core3.loadStateSlot).not.toHaveBeenCalled();
+    expect(emu3.getSnapshot().resumedAutomatically).toBe(false);
+    expect(emu3.getSnapshot().status).toBe('running');
+
+    // 4. Automatic thrown failure: retains expected error status
+    const core4 = createFakeCore();
+    core4.loadStateSlot = vi.fn().mockImplementation(() => {
+      throw new Error('auto-slot corrupted');
+    });
+    const storage4 = createStorageDouble();
+    storage4.listSnapshots = vi.fn().mockResolvedValue([
+      {
+        key: 'cart-auto-lifecycle:0',
+        romId: 'cart-auto-lifecycle',
+        slot: 0,
+        data: autoData,
+        thumbnail: '',
+        updatedAt: 100,
+        coreVersion: '2.5.1',
+      },
+    ]);
+
+    const emu4 = new PocketEmulator({
+      createCore: async () => core4,
+      checkCrossOriginIsolated: () => true,
+      storage: storage4,
+      clock: createClockDouble(),
+    });
+
+    await expect(emu4.load(cart, {} as HTMLCanvasElement, true)).rejects.toThrow(
+      'auto-slot corrupted',
+    );
+    expect(emu4.getSnapshot().status).toBe('error');
+    expect(emu4.getSnapshot().error).toContain('auto-slot corrupted');
+  });
+
   it('serializes background save before loadSlot without early state restore', async () => {
     let deferredFSSync: { promise: Promise<void>; resolve: () => void } | null = null;
     let enteredSync: () => void = () => {};
@@ -646,6 +875,7 @@ describe('PocketEmulator with injected dependencies', () => {
         }
       }),
       loadState: vi.fn().mockReturnValue(true),
+      loadStateSlot: vi.fn().mockReturnValue(true),
     } as unknown as mGBAEmulator;
 
     const emulator = new PocketEmulator({
@@ -679,14 +909,15 @@ describe('PocketEmulator with injected dependencies', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // loadState must not be called while prior persist is in flight
-    expect(core.loadState).not.toHaveBeenCalled();
+    // loadStateSlot must not be called while prior persist is in flight
+    expect(core.loadStateSlot).not.toHaveBeenCalled();
 
     deferredFSSync.resolve();
     deferredFSSync = null;
     await Promise.all([persistPromise, slotPromise]);
 
-    expect(core.loadState).toHaveBeenCalledTimes(1);
+    expect(core.loadStateSlot).toHaveBeenCalledTimes(1);
+    expect(core.loadStateSlot).toHaveBeenCalledWith(1, 61);
   });
 
   it('serializes exportBattery before cartridge switch retaining original ROM bytes', async () => {
@@ -722,6 +953,7 @@ describe('PocketEmulator with injected dependencies', () => {
       setFastForwardMultiplier: vi.fn(),
       addCoreCallbacks: vi.fn(),
       loadState: vi.fn().mockReturnValue(true),
+      loadStateSlot: vi.fn().mockReturnValue(true),
       saveState: vi.fn().mockReturnValue(true),
       getSave: vi.fn().mockImplementation(() => (currentRomId ? currentSave.slice() : null)),
       screenshot: vi.fn().mockReturnValue(true),
@@ -842,6 +1074,7 @@ describe('PocketEmulator with injected dependencies', () => {
       setFastForwardMultiplier: vi.fn(),
       addCoreCallbacks: vi.fn(),
       loadState: vi.fn().mockReturnValue(true),
+      loadStateSlot: vi.fn().mockReturnValue(true),
       saveState: vi.fn().mockReturnValue(true),
       getSave: vi.fn().mockImplementation(() => (currentRomId ? currentSave.slice() : null)),
       screenshot: vi.fn().mockReturnValue(true),
@@ -1036,9 +1269,9 @@ describe('PocketEmulator with injected dependencies', () => {
     await expect(emulator.saveSlot(1)).rejects.toThrow('即时存档失败');
   });
 
-  it('rejects loadSlot when core.loadState fails', async () => {
+  it('rejects loadSlot when core.loadStateSlot fails', async () => {
     const core = createFakeCore();
-    core.loadState = vi.fn().mockReturnValue(false);
+    core.loadStateSlot = vi.fn().mockReturnValue(false);
 
     const emulator = new PocketEmulator({
       createCore: async () => core,
@@ -1702,7 +1935,7 @@ describe('PocketEmulator with injected dependencies', () => {
     const putBatteryBaseline = vi.mocked(storage.putBattery).mock.calls.length;
     const replaceBatteryBaseline = vi.mocked(storage.replaceBattery).mock.calls.length;
     const writeFileBaseline = vi.mocked(core.FS.writeFile).mock.calls.length;
-    const loadStateBaseline = vi.mocked(core.loadState).mock.calls.length;
+    const loadStateBaseline = vi.mocked(core.loadStateSlot).mock.calls.length;
     const fsSyncBaseline = vi.mocked(core.FSSync).mock.calls.length;
 
     // Foreign cartridge loadSlot rejects before any file write, state load, or storage mutation
@@ -1722,7 +1955,7 @@ describe('PocketEmulator with injected dependencies', () => {
     expect(vi.mocked(storage.putBattery).mock.calls.length).toBe(putBatteryBaseline);
     expect(vi.mocked(storage.replaceBattery).mock.calls.length).toBe(replaceBatteryBaseline);
     expect(vi.mocked(core.FS.writeFile).mock.calls.length).toBe(writeFileBaseline);
-    expect(vi.mocked(core.loadState).mock.calls.length).toBe(loadStateBaseline);
+    expect(vi.mocked(core.loadStateSlot).mock.calls.length).toBe(loadStateBaseline);
     expect(vi.mocked(core.FSSync).mock.calls.length).toBe(fsSyncBaseline);
   });
 

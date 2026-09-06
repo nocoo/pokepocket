@@ -309,8 +309,8 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       within(loadConfirmDialog).getByRole('heading', { level: 2, name: '读取即时存档 01？' }),
     ).toBeDefined();
 
-    // Before confirming load: core loadState has not been called
-    expect(harness.testCore.loadState).not.toHaveBeenCalledWith(1);
+    // Before confirming load: core loadStateSlot has not been called
+    expect(harness.testCore.loadStateSlot).not.toHaveBeenCalledWith(1, 61);
     expect(harness.testCore.FS.writeFile).not.toHaveBeenCalled();
 
     const confirmLoadBtn = within(loadConfirmDialog).getByRole('button', { name: '确认读取' });
@@ -318,7 +318,7 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
 
     // Modal closes upon load completion
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(harness.testCore.loadState).toHaveBeenCalledWith(1);
+    expect(harness.testCore.loadStateSlot).toHaveBeenCalledWith(1, 61);
     expect(harness.testCore.FS.writeFile).toHaveBeenCalledWith(
       '/states/stored-emerald.ss1',
       newReplacementBytes,
@@ -352,8 +352,8 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     await harness.fakeStorage.putSnapshot(snap2);
 
     await startLoadedApp(emeraldCart);
-    const bootLoadStateCalls = (harness.testCore.loadState as ReturnType<typeof vi.fn>).mock.calls
-      .length;
+    const bootLoadStateCalls = (harness.testCore.loadStateSlot as ReturnType<typeof vi.fn>).mock
+      .calls.length;
 
     // 1. Confirm automatic resume point recovery from saves manager
     const savesNavBtn = screen.getByRole('button', { name: '我的存档' });
@@ -371,11 +371,11 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     // Cancel auto load first -> no extra loadState call
     const cancelAutoBtn = within(autoConfirmDialog).getByRole('button', { name: '取消' });
     await userEvent.click(cancelAutoBtn);
-    expect((harness.testCore.loadState as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+    expect((harness.testCore.loadStateSlot as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
       bootLoadStateCalls,
     );
 
-    // Open auto load confirm again and confirm -> exactly one confirmation loadState(0)
+    // Open auto load confirm again and confirm -> exactly one confirmation loadStateSlot(0, 61)
     const dialogReturned = await screen.findByRole('dialog');
     const restoreAutoBtn2 = within(dialogReturned).getByRole('button', { name: /恢复进度/ });
     await userEvent.click(restoreAutoBtn2);
@@ -385,10 +385,10 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
     await userEvent.click(confirmAutoBtn);
 
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect((harness.testCore.loadState as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+    expect((harness.testCore.loadStateSlot as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
       bootLoadStateCalls + 1,
     );
-    expect(harness.testCore.loadState).toHaveBeenLastCalledWith(0);
+    expect(harness.testCore.loadStateSlot).toHaveBeenLastCalledWith(0, 61);
 
     // 2. Open saves manager again to test manual slot 2 delete with error and retry
     await userEvent.click(savesNavBtn);

@@ -72,6 +72,7 @@ export function createTestAppHarness(): TestAppHarness {
     setFastForwardMultiplier: vi.fn(),
     addCoreCallbacks: vi.fn(),
     loadState: vi.fn().mockReturnValue(true),
+    loadStateSlot: vi.fn().mockReturnValue(true),
     saveState: vi.fn().mockImplementation((slot: number) => {
       if (!currentRomId) return false;
       files.set(`/states/${currentRomId}.ss${slot}`, currentSave.slice());
