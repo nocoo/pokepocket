@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { Buffer } from 'node:buffer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -26,6 +27,13 @@ import {
 } from '../helpers/app-test-helper';
 
 let harness: TestAppHarness;
+
+function expectExactSaveBytes(actual: ArrayBuffer | Uint8Array, expected: Uint8Array) {
+  const bytes = actual instanceof Uint8Array ? actual : new Uint8Array(actual);
+  expect(bytes.byteLength).toBe(expected.byteLength);
+  // Compare every byte without constructing a deep assertion tree for 128 KiB saves.
+  expect(Buffer.compare(bytes, expected)).toBe(0);
+}
 
 vi.mock('../../src/lib/emulator', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/lib/emulator')>();
@@ -759,18 +767,18 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
         .calls;
       const callArgs = replaceCalls[replaceCallsBaseline]?.[0];
       expect(callArgs.romId).toBe('stored-emerald');
-      expect(new Uint8Array(callArgs.data)).toEqual(pendingSavData);
+      expectExactSaveBytes(callArgs.data, pendingSavData);
 
       const batteryInStorage = await harness.fakeStorage.getBattery('stored-emerald');
       expect(batteryInStorage).not.toBeNull();
       if (!batteryInStorage) throw new Error('Missing battery in storage');
-      expect(new Uint8Array(batteryInStorage.data)).toEqual(pendingSavData);
+      expectExactSaveBytes(batteryInStorage.data, pendingSavData);
 
       // Verify FS save path has exact new bytes
       const fsSaveAfter = (harness.testCore.FS.readFile as unknown as (p: string) => Uint8Array)(
         '/saves/stored-emerald.sav',
       );
-      expect(new Uint8Array(fsSaveAfter)).toEqual(pendingSavData);
+      expectExactSaveBytes(fsSaveAfter, pendingSavData);
 
       expect(harness.testCore.loadGame).toHaveBeenCalledWith(
         '/roms/stored-emerald.gba',
@@ -825,7 +833,7 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
 
       const batteryAfterFail = await harness.fakeStorage.getBattery('stored-emerald');
       expect(batteryAfterFail).not.toBeNull();
-      expect(new Uint8Array(batteryAfterFail?.data ?? new ArrayBuffer(0))).toEqual(pendingSavData);
+      expectExactSaveBytes(batteryAfterFail?.data ?? new ArrayBuffer(0), pendingSavData);
 
       // Real same-dialog retry: click the now-enabled confirmRetryBtn in the same dialog
       const retryPromise = userEvent.click(confirmRetryBtn);
@@ -850,12 +858,12 @@ describe('App snapshots, battery imports, export, and screenshot integration', (
       // Storage and FS save match failSavData (fill 3)
       const batteryAfterSuccess = await harness.fakeStorage.getBattery('stored-emerald');
       expect(batteryAfterSuccess).not.toBeNull();
-      expect(new Uint8Array(batteryAfterSuccess?.data ?? new ArrayBuffer(0))).toEqual(failSavData);
+      expectExactSaveBytes(batteryAfterSuccess?.data ?? new ArrayBuffer(0), failSavData);
 
       const fsSaveAfterSuccess = (
         harness.testCore.FS.readFile as unknown as (p: string) => Uint8Array
       )('/saves/stored-emerald.sav');
-      expect(new Uint8Array(fsSaveAfterSuccess)).toEqual(failSavData);
+      expectExactSaveBytes(fsSaveAfterSuccess, failSavData);
     },
   );
 

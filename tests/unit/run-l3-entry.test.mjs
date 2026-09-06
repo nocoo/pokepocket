@@ -1124,98 +1124,105 @@ describe('runL3Gate gaps (1)-(3): TEST_BASE_URL, interruption lifecycle, and def
     }
   });
 
-  it('(3a) default chromium.launchServer wiring passes channel:undefined under CI=1 with exact launch options', async () => {
-    isolatedCwd = mkdtempSync(path.join(tmpdir(), 'l3-ci-launch-'));
-    const isolatedLockFile = path.join(isolatedCwd, 'mock.lock');
+  it.each([
+    { ci: undefined, channel: 'chrome' },
+    { ci: '1', channel: undefined },
+  ])(
+    '(3a) default chromium.launchServer uses channel $channel with CI=$ci and exact launch options',
+    async ({ ci, channel }) => {
+      isolatedCwd = mkdtempSync(path.join(tmpdir(), 'l3-ci-launch-'));
+      const isolatedLockFile = path.join(isolatedCwd, 'mock.lock');
 
-    let mockBrowserAlive = true;
-    const fakeBrowserPid = 777797;
+      let mockBrowserAlive = true;
+      const fakeBrowserPid = 777797;
 
-    const mockBrowserServer = {
-      process: () => ({
-        pid: fakeBrowserPid,
-        spawnargs: ['chrome', `--user-data-dir=${path.join(isolatedCwd, 'profile-ci')}`],
-      }),
-      wsEndpoint: () => 'ws://127.0.0.1:9999/mock',
-      close: async () => {
-        mockBrowserAlive = false;
-      },
-      kill: async () => {
-        mockBrowserAlive = false;
-      },
-    };
+      const mockBrowserServer = {
+        process: () => ({
+          pid: fakeBrowserPid,
+          spawnargs: ['chrome', `--user-data-dir=${path.join(isolatedCwd, 'profile-ci')}`],
+        }),
+        wsEndpoint: () => 'ws://127.0.0.1:9999/mock',
+        close: async () => {
+          mockBrowserAlive = false;
+        },
+        kill: async () => {
+          mockBrowserAlive = false;
+        },
+      };
 
-    launchServerMock.mockImplementation(async () => mockBrowserServer);
+      launchServerMock.mockImplementation(async () => mockBrowserServer);
 
-    const fakeRunner = async (cmds) => {
-      for (const cmd of cmds) {
-        if (cmd.command === 'npx') {
-          const repPath = path.resolve(isolatedCwd, 'test-results/required/report.json');
-          mkdirSync(path.dirname(repPath), { recursive: true });
-          writeFileSync(
-            repPath,
-            JSON.stringify({
-              errors: [],
-              stats: { expected: 1, unexpected: 0, flaky: 0, skipped: 0 },
-              suites: [
-                {
-                  specs: [
-                    {
-                      title: 'ci spec',
-                      ok: true,
-                      tests: [
-                        {
-                          expectedStatus: 'passed',
-                          status: 'expected',
-                          results: [{ status: 'passed', retry: 0 }],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            }),
-          );
+      const fakeRunner = async (cmds) => {
+        for (const cmd of cmds) {
+          if (cmd.command === 'npx') {
+            const repPath = path.resolve(isolatedCwd, 'test-results/required/report.json');
+            mkdirSync(path.dirname(repPath), { recursive: true });
+            writeFileSync(
+              repPath,
+              JSON.stringify({
+                errors: [],
+                stats: { expected: 1, unexpected: 0, flaky: 0, skipped: 0 },
+                suites: [
+                  {
+                    specs: [
+                      {
+                        title: 'ci spec',
+                        ok: true,
+                        tests: [
+                          {
+                            expectedStatus: 'passed',
+                            status: 'expected',
+                            results: [{ status: 'passed', retry: 0 }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              }),
+            );
+          }
         }
-      }
-    };
+      };
 
-    const savedEnvCi = process.env.CI;
-    const savedExitCode = process.exitCode;
-    try {
-      process.env.CI = '1';
-      const ok = await runL3Gate({
-        silent: true,
-        cwd: isolatedCwd,
-        argv: ['node', 'scripts/run-l3.mjs'],
-        env: {},
-        lockFilePath: isolatedLockFile,
-        checkPortAvailableFn: async () => ({ available: true }),
-        commandRunner: fakeRunner,
-        isProcessAliveFn: (pid) =>
-          pid === fakeBrowserPid ? mockBrowserAlive : pid === process.pid,
-        expectedTestCount: 1,
-      });
+      const savedEnvCi = process.env.CI;
+      const savedExitCode = process.exitCode;
+      try {
+        if (ci === undefined) delete process.env.CI;
+        else process.env.CI = ci;
+        const ok = await runL3Gate({
+          silent: true,
+          cwd: isolatedCwd,
+          argv: ['node', 'scripts/run-l3.mjs'],
+          env: {},
+          lockFilePath: isolatedLockFile,
+          checkPortAvailableFn: async () => ({ available: true }),
+          commandRunner: fakeRunner,
+          isProcessAliveFn: (pid) =>
+            pid === fakeBrowserPid ? mockBrowserAlive : pid === process.pid,
+          expectedTestCount: 1,
+        });
 
-      expect(ok).toBe(true);
-      expect(launchServerMock).toHaveBeenCalledTimes(1);
-      expect(launchServerMock).toHaveBeenCalledWith({
-        host: '127.0.0.1',
-        handleSIGINT: false,
-        handleSIGTERM: false,
-        channel: undefined,
-      });
-      expect(existsSync(isolatedLockFile)).toBe(false);
-    } finally {
-      if (savedEnvCi === undefined) {
-        delete process.env.CI;
-      } else {
-        process.env.CI = savedEnvCi;
+        expect(ok).toBe(true);
+        expect(launchServerMock).toHaveBeenCalledTimes(1);
+        expect(launchServerMock).toHaveBeenCalledWith({
+          host: '127.0.0.1',
+          handleSIGINT: false,
+          handleSIGTERM: false,
+          channel,
+        });
+        expect(existsSync(isolatedLockFile)).toBe(false);
+      } finally {
+        if (savedEnvCi === undefined) {
+          delete process.env.CI;
+        } else {
+          process.env.CI = savedEnvCi;
+        }
+        process.exitCode = savedExitCode;
+        launchServerMock.mockReset();
       }
-      process.exitCode = savedExitCode;
-      launchServerMock.mockReset();
-    }
-  });
+    },
+  );
 
   it('(3b) runL3TestsAndReport runs default runner options with successful report validation', async () => {
     isolatedCwd = mkdtempSync(path.join(tmpdir(), 'l3-report-default-'));
