@@ -355,34 +355,38 @@ describe('App cartridge lifecycle and gallery orchestration', () => {
       const coreResumeCallsBefore = vi.mocked(harness.testCore.resumeGame).mock.calls.length;
 
       const backBtn = screen.getByRole('button', { name: '返回卡带盘' });
-      await userEvent.click(backBtn);
+      try {
+        await userEvent.click(backBtn);
 
-      // Verify putBattery is called and pending
-      await waitFor(() => expect(harness.fakeStorage.putBattery).toHaveBeenCalledTimes(1));
+        // Verify putBattery is called and pending
+        await waitFor(() => expect(harness.fakeStorage.putBattery).toHaveBeenCalledTimes(1));
 
-      // Attempt resume during pending return
-      if (control === 'canvas') {
-        const screenBtn = screen.getByRole('button', { name: '点击画面继续游戏' });
-        expect(screenBtn.hasAttribute('disabled')).toBe(true);
-        await userEvent.click(screenBtn);
-      } else if (control === 'toolbar') {
-        const playToggle = screen.getByRole('button', { name: '继续游戏' });
-        expect(playToggle.hasAttribute('disabled')).toBe(true);
-        await userEvent.click(playToggle);
-      } else {
-        fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+        // Attempt resume during pending return
+        if (control === 'canvas') {
+          const screenBtn = screen.getByRole('button', { name: '点击画面继续游戏' });
+          expect(screenBtn.hasAttribute('disabled')).toBe(true);
+          await userEvent.click(screenBtn);
+        } else if (control === 'toolbar') {
+          const playToggle = screen.getByRole('button', { name: '继续游戏' });
+          expect(playToggle.hasAttribute('disabled')).toBe(true);
+          await userEvent.click(playToggle);
+        } else {
+          fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+        }
+
+        // Event loop turn: resume must not have executed
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+        expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(
+          coreResumeCallsBefore,
+        );
+        expect(container.querySelector('.stage-status')?.textContent).toContain('已暂停');
+      } finally {
+        // Release deferred write -> finishes return to gallery
+        releaseWrite();
+        await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
       }
-
-      // Event loop turn: resume must not have executed
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      });
-      expect(vi.mocked(harness.testCore.resumeGame).mock.calls.length).toBe(coreResumeCallsBefore);
-      expect(container.querySelector('.stage-status')?.textContent).toContain('已暂停');
-
-      // Release deferred write -> finishes return to gallery
-      releaseWrite();
-      await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
 
       expect(container.querySelector('.app-layout')?.hasAttribute('hidden')).toBe(true);
       expect(container.querySelector('.stage-status')?.textContent).toContain('已暂停');
@@ -481,9 +485,9 @@ describe('App cartridge lifecycle and gallery orchestration', () => {
     if (!originalPut) throw new Error('Missing original storage mutation');
 
     // First attempt rejects
-    vi.mocked(harness.fakeStorage.putBattery).mockRejectedValueOnce(
-      new Error('Disk quota exceeded'),
-    );
+    vi.mocked(harness.fakeStorage.putBattery).mockImplementationOnce(async () => {
+      throw new Error('Disk quota exceeded');
+    });
 
     const backBtn = screen.getByRole('button', { name: '返回卡带盘' });
     await userEvent.click(backBtn);
@@ -507,10 +511,16 @@ describe('App cartridge lifecycle and gallery orchestration', () => {
     );
     expect(container.querySelector('.stage-status')?.textContent).toContain('正在冒险');
 
-    // Successful retry of return-to-gallery
+    // Successful retry of return-to-gallery calls originalPut implementation
     await userEvent.click(backBtn);
     await screen.findByText(/打开卡带盒，把那个舍不得结束的夏天，再过一遍/);
     expect(container.querySelector('.app-layout')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('.stage-status')?.textContent).toContain('已暂停');
+    expect(vi.mocked(harness.fakeStorage.putBattery).mock.calls.length).toBe(2);
+
+    const savedBattery = await harness.fakeStorage.getBattery(cart.id);
+    expect(savedBattery).not.toBeNull();
+    if (!savedBattery) throw new Error('Missing expected saved battery');
+    expect(new Uint8Array(savedBattery.data)).toEqual(new Uint8Array([1, 2, 3, 4]));
   });
 });
