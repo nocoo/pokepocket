@@ -1,6 +1,6 @@
 # Workspace recovery and browser-test containment
 
-Date: 2026-09-06. Status: the accepted source and main history are restored; B7 isolation remains pending.
+Date: 2026-09-06. Status: the accepted source and main history are restored; the early artifact guard is accepted at `cc48e66`, while full B7 isolation remains pending.
 
 ## 1. Incident
 
@@ -127,3 +127,9 @@ not accept the quarantined isolation draft or establish Tier S.
 The remaining order is artifact containment, full B7 isolation, navigation contrast, layout/PNG
 coverage, B8 CI, B8 release gates, and final independent acceptance. Each implementation and
 documentation change remains an atomic commit through the installed hooks.
+
+The artifact-containment step is now complete at `cc48e66`. Both configurations reject unsafe
+outputs during loading, before Playwright cleanup. An independent disposable clone passed 42 real
+CLI checks, including sentinel preservation and consecutive successful cleanup cycles. The exact
+implementation and evidence are recorded in the [execution ledger](02-6dq-tier-s-execution.md).
+The quarantined isolation draft remains unaccepted; the owned L3 runner is the next handoff.

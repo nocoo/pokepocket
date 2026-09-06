@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress, Tier A verified. B1 through B6 and B7's executable fixtures, snapshot correction, and required journey suite are accepted. All four aggregate coverage metrics exceed 90%; installed commit and pre-push hooks pass independent positive, negative, and process-cleanup checks. Browser ownership gates, contrast/layout coverage, and CI/release alignment remain pending; Tier S is not yet verified.
+Status: in progress, Tier A verified. B1 through B6 and B7's executable fixtures, snapshot correction, required journey suite, and early artifact guard are accepted. All four aggregate coverage metrics exceed 90%; installed commit and pre-push hooks pass independent positive, negative, and process-cleanup checks. Full browser ownership gates, contrast/layout coverage, and CI/release alignment remain pending; Tier S is not yet verified.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -300,7 +300,7 @@ findings through additional atomic fixes, and commits the final implementation/e
 | B4d   | Accepted    | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`, `fbd52cc`, `8c24c5c`, `9a3545c`, `49a79ab`                                                                                                                                                           | 363 units; G1/build; all four metrics >=90%; actual hooks and failure/process probes pass; Tier B verified                |
 | B5    | Accepted    | `8604276`, `0bfecb5`, `91685a6`, `cf2514d`, `759c65a`, `38cb1f5`, `d5ff4f9`                                                                                                                                                                      | 388 units; G1/L1, production build, 40 real HTTP contracts, independent bytes/authentication and inventory rejection pass |
 | B6    | Accepted    | `48894ea`, `ca704a2`, `24ee4a1`, `cc58d97`, `4195859`, `72b0dab`, `0d3a3be`                                                                                                                                                                      | 467 units; all coverage metrics >=90%; installed push hook, real npm cancellation, L2/G2 pass; Tier A verified            |
-| B7    | In progress | `a29eff5`, `0d60e83`, `19f0b0f`, `94cbe07`, `d563a35`                                                                                                                                                                                            | Fixtures, snapshot correction and 21 required browser journeys accepted; ownership gate, contrast/layout pending          |
+| B7    | In progress | `a29eff5`, `0d60e83`, `19f0b0f`, `94cbe07`, `d563a35`, `cc48e66`                                                                                                                                                                                 | Fixtures, snapshot correction, 21 required journeys and artifact guard accepted; full ownership, contrast/layout pending  |
 | B8    | Pending     | —                                                                                                                                                                                                                                                | —                                                                                                                         |
 
 ### B1 review evidence
@@ -1451,6 +1451,48 @@ configuration retains legacy target/reuse behavior, and required config still ex
 target override. The next handoff removes those paths, protects artifacts before Playwright cleanup,
 and makes complete, zero-skip execution an enforced gate. Browser authorization proves the
 application's real signature verification; it does not demonstrate a hosted Cloudflare SSO login.
+
+### B7 artifact foundation acceptance
+
+Accepted implementation: `cc48e669ffd8edf6f0c26db75d1be047181839d8`.
+The five committed files exactly match the independently reviewed byte manifest. The implementation
+was made in an independent clone and imported into main by fast-forward without rewriting history.
+
+[browser-artifacts.ts](../scripts/browser-artifacts.ts) runs while both Playwright configurations
+load, before the runner can remove output. It allows only `test-results/required` and
+`test-results/optional` beneath the canonical project directory. Their durable `.owner` marker
+lives in the parent, survives suite cleanup, and must be a regular file with the expected contents.
+Existing unowned directories, symlinks (including dangling links), and file/directory conflicts
+fail closed. New directories and the marker use exclusive creation. Commands must originate inside
+the project tree. Raw output, reporter, extra-reporter, last-run-file flags and the installed
+runner's output-related environment overrides are rejected before filesystem writes.
+
+The unit contracts independently list required flags and environment variables rather than deriving
+their cases from the implementation's deny list. They cover fresh/owned/unowned paths, marker
+contents/types, symlink boundaries, sentinel preservation and repeated cleanup. Filesystem errors
+other than `ENOENT` propagate; the uncovered error branch is not disguised by a missing-path test.
+[tsconfig.node.json](../tsconfig.node.json) now includes all root `*.config.ts`, including L2 and
+optional browser configuration, in strict typechecking.
+
+Independent verification on the committed file bytes:
+
+- `quality:commit` passes in 6.64 seconds: 525 tests in 44 files, 107 linted files, strict TypeScript
+  and formatting with zero warnings. Coverage is 94.56% statements (2455/2596), 90.44% branches
+  (1760/1946), 94.65% functions (496/524), and 95.68% lines (2240/2341).
+- A second disposable clone with an exact five-file overlay passes 42 real CLI checks: unchanged
+  required/optional discovery (21/16), 36 rejection and sentinel cases across both actual configs,
+  and two normal cleanup cycles for each configuration. Checkout, Git and outside-fixture sentinels
+  remain intact; prior suite artifacts are removed only on the normal runs, and the marker survives.
+- Those probes use a tiny fixture with no browser or HTTP allocation. Every possible output and
+  symlink target is inside the owned disposable parent, including the negative checkout/ancestor
+  targets. Evidence is in `pokepocket-b7-artifact-probe-0y24ho00/summary.json` and its logs; the
+  independent gate log is `/tmp/pokepocket-b7-artifact-independent-quality.log`.
+- The installed pre-commit and commit-message hooks pass on the implementation commit.
+
+This accepts early artifact containment. It does not accept the legacy target overrides, optional
+server reuse, concurrent execution, report validation, or process/signal ownership. The next handoff
+must finish those boundaries while retaining this guard. An existing unmarked `test-results`
+directory is intentionally rejected; the guard does not adopt or erase it automatically.
 
 ### B7 navigation contrast finding
 
