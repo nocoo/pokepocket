@@ -5,6 +5,7 @@ export const ORIGINAL_BATTERY_SIZE = 32_768;
 /**
  * GB/GBC program bytes matching tests/fixtures/source/original-gb.asm.
  *
+ * SM83/Game Boy assembly occupying 0x0150 through 0x01df inclusive.
  * Entry vector at 0x0100 jumps to Boot at 0x0150.
  * Enables SRAM (MBC3/MBC1), initializes first byte at 0xa000 to 1,
  * sets palettes and tilemap, renders initial pattern, and handles button A
@@ -34,13 +35,13 @@ export const ORIGINAL_GB_PROGRAM = new Uint8Array([
   0xfe,
   0xff, // cp $ff
   0x20,
-  0x05, // jr nz, .saveReady (+$05 -> $016b)
+  0x05, // jr nz, .saveReady (+$05 -> $016c)
   0x3e,
   0x01, // ld a, 1
   0xea,
   0x00,
   0xa0, // ld [$a000], a
-  // .saveReady ($016b):
+  // .saveReady ($016c):
   0x3e,
   0x80, // ld a, $80 (auto-increment CGB palette 0)
   0xe0,
@@ -50,13 +51,13 @@ export const ORIGINAL_GB_PROGRAM = new Uint8Array([
   0x01, // ld hl, Palette ($01d8)
   0x06,
   0x08, // ld b, 8
-  // .palette ($0173):
+  // .palette ($0175):
   0x2a, // ld a, [hli]
   0xe0,
   0x69, // ldh [$ff69], a
   0x05, // dec b
   0x20,
-  0xfa, // jr nz, .palette (-$06 -> $0173)
+  0xfa, // jr nz, .palette (-$06 -> $0175)
   0x3e,
   0xe4, // ld a, $e4 (DMG palette)
   0xe0,
@@ -67,28 +68,28 @@ export const ORIGINAL_GB_PROGRAM = new Uint8Array([
   0x01,
   0x00,
   0x04, // ld bc, $0400 (1024 bytes tilemap)
-  // .tileMap ($0183):
+  // .tileMap ($0185):
   0xaf, // xor a
   0x22, // ld [hli], a
   0x0b, // dec bc
   0x78, // ld a, b
   0xb1, // or c
   0x20,
-  0xf9, // jr nz, .tileMap (-$07 -> $0183)
+  0xf9, // jr nz, .tileMap (-$07 -> $0185)
   0xcd,
   0xbb,
   0x01, // call Paint ($01bb)
   0x3e,
-  0x10, // ld a, $10 (P14 low -> select direction/action buttons)
+  0x10, // ld a, $10 (P15 low, P14 high -> select action buttons)
   0xe0,
   0x00, // ldh [$ff00], a
-  // .press ($0194):
+  // .press ($0193):
   0xf0,
   0x00, // ldh a, [$ff00]
   0xcb,
   0x47, // bit 0, a (button A pressed = bit 0 low)
   0x20,
-  0xfa, // jr nz, .press (-$06 -> $0194)
+  0xfa, // jr nz, .press (-$06 -> $0193)
   0xfa,
   0x00,
   0xa0, // ld a, [$a000]
@@ -99,15 +100,15 @@ export const ORIGINAL_GB_PROGRAM = new Uint8Array([
   0xcd,
   0xbb,
   0x01, // call Paint ($01bb)
-  // .release ($01a5):
+  // .release ($01a3):
   0xf0,
   0x00, // ldh a, [$ff00]
   0xcb,
   0x47, // bit 0, a
   0x28,
-  0xfa, // jr z, .release (-$06 -> $01a5)
+  0xfa, // jr z, .release (-$06 -> $01a3)
   0x18,
-  0xe8, // jr .press (-$18 -> $0194)
+  0xe8, // jr .press (-$18 -> $0193)
 
   // StopLcd ($01ab):
   0xf0,
@@ -141,21 +142,21 @@ export const ORIGINAL_GB_PROGRAM = new Uint8Array([
   0x16,
   0x00, // ld d, $00
   0x28,
-  0x02, // jr z, .pattern (+$02 -> $01c7)
+  0x02, // jr z, .pattern (+$02 -> $01c9)
   0x16,
   0xaa, // ld d, $aa
-  // .pattern ($01c7):
+  // .pattern ($01c9):
   0x21,
   0x00,
   0x80, // ld hl, $8000
   0x06,
   0x10, // ld b, 16
-  // .pixel ($01cd):
+  // .pixel ($01ce):
   0x7a, // ld a, d
   0x22, // ld [hli], a
   0x05, // dec b
   0x20,
-  0xfb, // jr nz, .pixel (-$05 -> $01cd)
+  0xfb, // jr nz, .pixel (-$05 -> $01ce)
   0x3e,
   0x91, // ld a, $91 (LCD on, BG on, tile data $8000)
   0xe0,
@@ -403,7 +404,8 @@ export function createExecutableGbaCartridge(): Uint8Array {
 
 /**
  * Creates an empty, initialized original 32,768-byte battery save
- * matching the initial external SRAM state with byte 0 set to 1.
+ * providing a deterministic import payload with byte 0 set to 1 and
+ * remaining bytes 0.
  */
 export function createInitialBattery(): Uint8Array {
   const battery = new Uint8Array(ORIGINAL_BATTERY_SIZE);

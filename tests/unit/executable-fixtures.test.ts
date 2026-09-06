@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
   ORIGINAL_BATTERY_SIZE,
@@ -16,7 +15,7 @@ function sha256(data: Uint8Array): string {
 }
 
 describe('executable cartridge fixtures generator contracts', () => {
-  it('generates exact verified GB cartridge binary matching reference', async () => {
+  it('generates exact verified GB cartridge binary matching reference', () => {
     const gb = createExecutableGbCartridge();
     expect(gb.length).toBe(32_768);
     expect(sha256(gb)).toBe('3a805823b9b750e5a87e658bcb3950ce9871e1b0c79c811398393199fb2c510c');
@@ -31,17 +30,9 @@ describe('executable cartridge fixtures generator contracts', () => {
     expect(gb[0x148]).toBe(0x00); // 32KB ROM
     expect(gb[0x149]).toBe(0x03); // 32KB RAM
     expect(gb[0x14d]).toBe(0x73); // Header checksum
-
-    // If reference file exists, verify exact byte equality
-    try {
-      const ref = await readFile('/tmp/pokepocket-original-gb.gb');
-      expect(Buffer.from(gb)).toEqual(ref);
-    } catch {
-      // tmp reference optional in isolated CI
-    }
   });
 
-  it('generates exact verified GBC cartridge binary matching reference', async () => {
+  it('generates exact verified GBC cartridge binary matching reference', () => {
     const gbc = createExecutableGbcCartridge();
     expect(gbc.length).toBe(32_768);
     expect(sha256(gbc)).toBe('da4ebf2bc83dcc193c2a0ce117c697a9a0c74c1939b189bf6cf8d948bc28c36a');
@@ -56,14 +47,9 @@ describe('executable cartridge fixtures generator contracts', () => {
     expect(gbc[0x148]).toBe(0x00); // 32KB ROM
     expect(gbc[0x149]).toBe(0x03); // 32KB RAM
     expect(gbc[0x14d]).toBe(0xf3); // Header checksum
-
-    try {
-      const ref = await readFile('/tmp/pokepocket-original-gb.gbc');
-      expect(Buffer.from(gbc)).toEqual(ref);
-    } catch {}
   });
 
-  it('generates exact verified GBA cartridge binary matching reference with ZPPE and SRAM_V110', async () => {
+  it('generates exact verified GBA cartridge binary matching reference with ZPPE and SRAM_V110', () => {
     const gba = createExecutableGbaCartridge();
     expect(gba.length).toBe(32_768);
     expect(sha256(gba)).toBe('369d40a2b77d3c55f1b966dc8dbfbd2100195a3fcf31625891e7ea6bc8055ab8');
@@ -81,11 +67,6 @@ describe('executable cartridge fixtures generator contracts', () => {
 
     // SRAM detector string at 0x400
     expect(new TextDecoder().decode(gba.subarray(0x400, 0x409))).toBe('SRAM_V110');
-
-    try {
-      const ref = await readFile('/tmp/pokepocket-original-gba.gba');
-      expect(Buffer.from(gba)).toEqual(ref);
-    } catch {}
   });
 
   it('provides verified program byte constants matching assembly sources', () => {
