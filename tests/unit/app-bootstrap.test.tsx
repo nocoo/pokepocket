@@ -1,65 +1,139 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup } from '@testing-library/react';
+import { act } from '@testing-library/react';
+import type { Root, createRoot } from 'react-dom/client';
 import { EDITIONS, DEFAULT_EDITION, getEdition, identifyEdition } from '../../src/lib/catalog';
+
+type CreateRootArgs = Parameters<typeof createRoot>;
 
 describe('Application bootstrap and catalog public contracts', () => {
   describe('src/main.tsx startup boundaries', () => {
-    let originalBodyHtml: string;
+    let capturedRoots: Root[] = [];
+    let createRootCallCount = 0;
+    let lastContainer: CreateRootArgs[0] | null = null;
+    let ownedContainers: HTMLElement[] = [];
 
-    beforeEach(() => {
-      originalBodyHtml = document.body.innerHTML;
-      vi.resetModules();
+    beforeEach(async () => {
+      capturedRoots = [];
+      createRootCallCount = 0;
+      lastContainer = null;
+      ownedContainers = [];
+
+      const actual = await vi.importActual<typeof import('react-dom/client')>('react-dom/client');
+      vi.doMock('react-dom/client', () => ({
+        ...actual,
+        createRoot: (...args: CreateRootArgs) => {
+          createRootCallCount++;
+          lastContainer = args[0];
+          const root = actual.createRoot(...args);
+          capturedRoots.push(root);
+          return root;
+        },
+      }));
     });
 
     afterEach(() => {
-      document.body.innerHTML = originalBodyHtml;
-      cleanup();
-      vi.restoreAllMocks();
-      vi.resetModules();
+      // Single, reliable cleanup path: unmount all captured roots first (without swallowing errors)
+      try {
+        while (capturedRoots.length > 0) {
+          const root = capturedRoots.pop();
+          if (root) {
+            act(() => {
+              root.unmount();
+            });
+          }
+        }
+      } finally {
+        // Remove only the owned DOM nodes tracked by this test
+        while (ownedContainers.length > 0) {
+          const container = ownedContainers.pop();
+          container?.remove();
+        }
+
+        // Fully unmock and reset modules so react-dom/client wrapper does not persist
+        vi.doUnmock('react-dom/client');
+        vi.doUnmock('../../src/App');
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+        vi.resetModules();
+      }
     });
 
     it('fails with actionable error when #root element is missing before creating a root', async () => {
-      // Ensure #root does not exist in DOM
-      const existingRoot = document.getElementById('root');
-      if (existingRoot) existingRoot.remove();
+      // Assert the test DOM has no root element, never deleting foreign roots
+      expect(document.getElementById('root')).toBeNull();
 
       await expect(async () => {
         await import('../../src/main');
       }).rejects.toThrow('Root element not found');
+
+      // Missing root must fail before creating a root
+      expect(createRootCallCount).toBe(0);
+      expect(capturedRoots.length).toBe(0);
     });
 
-    it('mounts real application into present #root element and cleans up resources', async () => {
-      // Create fresh owned #root element
+    it('mounts real application entrypoint into present #root element and cleans up resources reliably', async () => {
+      // Create fresh owned #root element tracked for cleanup
       const rootDiv = document.createElement('div');
       rootDiv.id = 'root';
       document.body.appendChild(rootDiv);
+      ownedContainers.push(rootDiv);
 
-      // Mock fetch for catalog API during bootstrap
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-          ok: true,
-          json: async () => ({ editions: [] }),
-        }),
-      );
+      // Minimal App module fixture to avoid duplicating App integration and background storage/RAF work
+      vi.doMock('../../src/App', () => ({
+        default: () => <div className="mock-pocket-app-entry">POKEPOCKET_MOUNTED</div>,
+      }));
 
       // Dynamically import main.tsx which executes createRoot(rootElement).render(<App />)
       await act(async () => {
         await import('../../src/main');
       });
 
-      // Verify that React rendered inside #root
-      expect(rootDiv.childNodes.length).toBeGreaterThan(0);
-      expect(rootDiv.querySelector('.pocket-app')).not.toBeNull();
+      // Assert expected owned root argument and rendered fixture
+      expect(createRootCallCount).toBe(1);
+      expect(lastContainer).toBe(rootDiv);
+      expect(capturedRoots.length).toBe(1);
 
-      // Clean up owned root element
-      rootDiv.remove();
-      expect(document.getElementById('root')).toBeNull();
+      expect(rootDiv.childNodes.length).toBeGreaterThan(0);
+      expect(rootDiv.querySelector('.mock-pocket-app-entry')).not.toBeNull();
+      expect(rootDiv.textContent).toContain('POKEPOCKET_MOUNTED');
     });
   });
 
   describe('catalog public contracts and edition identification', () => {
+    it('throws actionable error when default emerald edition is missing from catalog configuration', async () => {
+      vi.resetModules();
+      vi.doMock('../../src/data/editions.json', () => ({
+        default: [
+          {
+            id: 'red',
+            name: '红',
+            english: 'Red',
+            system: 'GB',
+            generation: 1,
+            year: 1996,
+            region: '关都',
+            regionEn: 'Kanto',
+            mascot: 'charizard',
+            mascotName: '喷火龙',
+            color: '#ad5349',
+            fileName: 'pokered.gb',
+            language: 'zh-Hans',
+            source: 'https://github.com/pret/pokered',
+          },
+        ],
+      }));
+
+      try {
+        await expect(async () => {
+          await import('../../src/lib/catalog');
+        }).rejects.toThrow('默认版本 emerald 未配置');
+      } finally {
+        vi.doUnmock('../../src/data/editions.json');
+        vi.resetModules();
+      }
+    });
+
     it('provides valid default edition and catalog entries', () => {
       expect(DEFAULT_EDITION.id).toBe('emerald');
       expect(DEFAULT_EDITION.name).toBe('绿宝石');
