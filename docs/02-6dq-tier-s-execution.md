@@ -18,7 +18,8 @@ reviewing every batch, maintaining numbered documentation, and independently val
 - Both agents share the existing checkout and branch. Codex does not edit pi-owned code while pi is
   working. pi does not edit this document, the assessment, or documentation indexes.
 - Each logical change gets a separate Conventional Commit with a lowercase subject of at most
-  50 characters. Stage explicit paths. Do not amend/rewrite accepted commits or bypass active hooks.
+  50 characters. Stage explicit paths. Do not reset, amend, rebase, or rewrite any created commit,
+  including unaccepted handoffs. Review corrections are additional commits. Do not bypass active hooks.
 - pi stops at the batch boundary and notifies the coordinating pane through `herdr agent prompt`,
   without waiting for the coordinator. It must not start the next batch without review acceptance.
 - After the B4c3-S grouping deviation, each implementation handoff assigns one intended commit.
@@ -26,7 +27,7 @@ reviewing every batch, maintaining numbered documentation, and independently val
 - Codex uses bounded lifecycle waits and a 45-second progress timer. On timeout, inspect the agent's
   current output and repository progress; on an error or blocked state, diagnose it before resuming.
   While implementation runs, prepare the next review and independent verification work.
-- Preserve the daily development server on 7047 and its Caddy domain. Test runners own only their own
+- Preserve the daily development server on 7047, its Caddy domain, and the existing preview on 17047. Test runners own only their own
   temporary processes, ports, directories, and browser contexts.
 - Browser verification starts only after the implementer has explicitly stopped. Use a separate
   output directory for independent review; B7 must reject concurrent runs before clearing artifacts.
