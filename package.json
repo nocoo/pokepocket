@@ -29,7 +29,8 @@
     "verify:release": "node scripts/verify-access.mjs --release",
     "quality:l1": "vitest run --coverage",
     "quality:commit": "node scripts/run-parallel.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "quality:l2": "node scripts/run-l2.mjs"
   },
   "dependencies": {
     "@fontsource/dm-sans": "5.3.0",

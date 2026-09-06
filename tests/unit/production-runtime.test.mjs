@@ -1,0 +1,322 @@
+import { describe, it, expect, afterEach } from 'vitest';
+import net from 'node:net';
+import { stat, mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import {
+  checkPortAvailable,
+  createProductionRuntime,
+  DEFAULT_L2_HOST,
+  DEFAULT_L2_PORT,
+  EXPECTED_CERTS_URL,
+} from '../../scripts/production-runtime.mjs';
+
+describe('production-runtime policy and contracts', () => {
+  const cleanups = [];
+
+  afterEach(async () => {
+    while (cleanups.length > 0) {
+      const fn = cleanups.pop();
+      try {
+        await fn();
+      } catch {}
+    }
+  });
+
+  async function createMockBuildFixture(overrides = {}) {
+    const dir = await mkdtemp(path.join(tmpdir(), 'mock-build-fixture-'));
+    cleanups.push(() => rm(dir, { recursive: true, force: true }));
+
+    const wranglerConfig = {
+      compatibility_date: '2026-09-05',
+      compatibility_flags: ['nodejs_compat'],
+      vars: {
+        ACCESS_TEAM: 'nocoo',
+        ACCESS_AUD: 'mock-access-aud-12345',
+        ...(overrides.vars || {}),
+      },
+      assets: {
+        directory: '../assets',
+        not_found_handling: 'single-page-application',
+        runWorkerFirst: true,
+        ...(overrides.assets || {}),
+      },
+    };
+
+    if (overrides.omitAccessTeam) {
+      delete wranglerConfig.vars.ACCESS_TEAM;
+    }
+    if (overrides.omitAccessAud) {
+      delete wranglerConfig.vars.ACCESS_AUD;
+    }
+    if (overrides.omitAssetsDirectory) {
+      delete wranglerConfig.assets.directory;
+    }
+
+    await writeFile(path.join(dir, 'wrangler.json'), JSON.stringify(wranglerConfig));
+    await writeFile(path.join(dir, 'index.js'), overrides.workerScript || 'export default {};');
+    await mkdir(path.join(dir, 'assets'), { recursive: true });
+
+    return dir;
+  }
+
+  it('exposes expected host, port, and certs URL constants', () => {
+    expect(DEFAULT_L2_PORT).toBe(17048);
+    expect(DEFAULT_L2_HOST).toBe('127.0.0.1');
+    expect(EXPECTED_CERTS_URL).toBe('https://nocoo.cloudflareaccess.com/cdn-cgi/access/certs');
+  });
+
+  it('detects available and occupied ports', async () => {
+    const freeServer = net.createServer();
+    const freePort = await new Promise((resolve) => {
+      freeServer.listen(0, '127.0.0.1', () => {
+        const port = freeServer.address().port;
+        freeServer.close(() => resolve(port));
+      });
+    });
+    const avail = await checkPortAvailable(freePort, '127.0.0.1');
+    expect(avail.available).toBe(true);
+
+    const occupiedServer = net.createServer();
+    await new Promise((resolve) => occupiedServer.listen(0, '127.0.0.1', resolve));
+    const occupiedPort = occupiedServer.address().port;
+    try {
+      const occupiedRes = await checkPortAvailable(occupiedPort, '127.0.0.1');
+      expect(occupiedRes.available).toBe(false);
+      expect(occupiedRes.error).toBeDefined();
+    } finally {
+      await new Promise((resolve) => occupiedServer.close(resolve));
+    }
+  });
+
+  it('rejects occupied port preflight without killing or reusing listener', async () => {
+    const occupiedServer = net.createServer();
+    await new Promise((resolve) => occupiedServer.listen(0, '127.0.0.1', resolve));
+    const occupiedPort = occupiedServer.address().port;
+    try {
+      await expect(
+        createProductionRuntime({
+          port: occupiedPort,
+        }),
+      ).rejects.toThrow(`Port ${occupiedPort} on 127.0.0.1 is already in use`);
+    } finally {
+      await new Promise((resolve) => occupiedServer.close(resolve));
+    }
+  });
+
+  it('validates required configuration bindings and fails closed', async () => {
+    const missingTeamDir = await createMockBuildFixture({ omitAccessTeam: true });
+    await expect(createProductionRuntime({ buildDir: missingTeamDir, port: 0 })).rejects.toThrow(
+      'missing required ACCESS_TEAM',
+    );
+
+    const missingAudDir = await createMockBuildFixture({ omitAccessAud: true });
+    await expect(createProductionRuntime({ buildDir: missingAudDir, port: 0 })).rejects.toThrow(
+      'missing required ACCESS_AUD',
+    );
+
+    const missingAssetsDir = await createMockBuildFixture({ omitAssetsDirectory: true });
+    await expect(createProductionRuntime({ buildDir: missingAssetsDir, port: 0 })).rejects.toThrow(
+      'missing required assets.directory',
+    );
+  });
+
+  it('cleans up isolated directory when Miniflare constructor throws', async () => {
+    const buildDir = await createMockBuildFixture();
+    let capturedDir = null;
+    const constructorErr = new Error('Injected miniflare constructor error');
+    class FailingCtor {
+      constructor(options) {
+        capturedDir = options.isolatedResourcePersistencePath;
+        throw constructorErr;
+      }
+    }
+
+    await expect(
+      createProductionRuntime({
+        buildDir,
+        port: 0,
+        Miniflare: FailingCtor,
+      }),
+    ).rejects.toBe(constructorErr);
+
+    expect(capturedDir).toBeDefined();
+    const statResult = await stat(capturedDir).catch((e) => e);
+    expect(statResult.code).toBe('ENOENT');
+  });
+
+  it('cleans up isolated directory and preserves initial ready error when ready rejects', async () => {
+    const buildDir = await createMockBuildFixture();
+    let capturedDir = null;
+    const readyErr = new Error('Injected miniflare ready error');
+    class FailingReady {
+      constructor(options) {
+        capturedDir = options.isolatedResourcePersistencePath;
+      }
+      get ready() {
+        return Promise.reject(readyErr);
+      }
+      async dispose() {
+        throw new Error('Dispose also failed');
+      }
+    }
+
+    await expect(
+      createProductionRuntime({
+        buildDir,
+        port: 0,
+        Miniflare: FailingReady,
+      }),
+    ).rejects.toBe(readyErr);
+
+    expect(capturedDir).toBeDefined();
+    const statResult = await stat(capturedDir).catch((e) => e);
+    expect(statResult.code).toBe('ENOENT');
+  });
+
+  it('shares single disposal promise across concurrent dispose calls', async () => {
+    const buildDir = await createMockBuildFixture();
+    let release;
+    const deferred = new Promise((resolve) => {
+      release = resolve;
+    });
+    let disposeCalls = 0;
+
+    class DeferredMiniflare {
+      constructor() {
+        this.ready = Promise.resolve(new URL('http://127.0.0.1:17048'));
+      }
+      async dispose() {
+        disposeCalls++;
+        await deferred;
+      }
+    }
+
+    const runtime = await createProductionRuntime({
+      buildDir,
+      port: 0,
+      Miniflare: DeferredMiniflare,
+    });
+
+    let secondSettled = false;
+    const first = runtime.dispose();
+    const second = runtime.dispose().then(() => {
+      secondSettled = true;
+    });
+
+    expect(disposeCalls).toBe(1);
+    expect(secondSettled).toBe(false);
+
+    release();
+    await Promise.all([first, second]);
+    expect(secondSettled).toBe(true);
+    expect(disposeCalls).toBe(1);
+  });
+
+  it('disposes runtime and cleans up temp state on process signal', async () => {
+    const buildDir = await createMockBuildFixture();
+    let disposedCalled = false;
+    class SignalTrackingMiniflare {
+      constructor() {
+        this.ready = Promise.resolve(new URL('http://127.0.0.1:17048'));
+      }
+      async dispose() {
+        disposedCalled = true;
+      }
+    }
+
+    const runtime = await createProductionRuntime({
+      buildDir,
+      port: 0,
+      Miniflare: SignalTrackingMiniflare,
+    });
+
+    // Emitting SIGINT triggers runtime disposal
+    process.emit('SIGINT');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(disposedCalled).toBe(true);
+
+    const statResult = await stat(runtime.isolatedDir).catch((e) => e);
+    expect(statResult.code).toBe('ENOENT');
+  });
+
+  it('handles dispose failure and rm failure during runtime.dispose()', async () => {
+    const buildDir = await createMockBuildFixture();
+    class FakeMiniflareDisposeFail {
+      constructor() {
+        this.ready = Promise.resolve(new URL('http://127.0.0.1:17048'));
+      }
+      async dispose() {
+        throw new Error('Injected dispose exception');
+      }
+    }
+
+    const runtime = await createProductionRuntime({
+      buildDir,
+      port: 0,
+      Miniflare: FakeMiniflareDisposeFail,
+    });
+
+    await expect(runtime.dispose()).rejects.toThrow('Injected dispose exception');
+    await expect(runtime.dispose()).rejects.toThrow('Injected dispose exception');
+
+    let leakedDir = null;
+    class FakeMiniflareRmFail {
+      constructor(options) {
+        leakedDir = options.isolatedResourcePersistencePath;
+        this.ready = Promise.resolve('http://127.0.0.1:17048');
+      }
+      async dispose() {
+        return Promise.resolve();
+      }
+    }
+    const runtimeRm = await createProductionRuntime({
+      buildDir,
+      port: 0,
+      Miniflare: FakeMiniflareRmFail,
+      rmFn: async () => {
+        throw new Error('Injected rm error');
+      },
+    });
+    cleanups.push(() => leakedDir && rm(leakedDir, { recursive: true, force: true }));
+    await expect(runtimeRm.dispose()).rejects.toThrow('Injected rm error');
+  });
+
+  it('outbound service rejects unexpected egress and supports token generation', async () => {
+    const buildDir = await createMockBuildFixture();
+    let capturedHandler = null;
+    class FakeMiniflareWithOutbound {
+      constructor(options) {
+        capturedHandler = options.workers[0].dev.outboundService.handler;
+        this.ready = Promise.resolve(new URL('http://127.0.0.1:17048'));
+      }
+      async dispose() {
+        return Promise.resolve();
+      }
+    }
+
+    const runtime = await createProductionRuntime({
+      buildDir,
+      port: 0,
+      Miniflare: FakeMiniflareWithOutbound,
+    });
+
+    try {
+      expect(typeof capturedHandler).toBe('function');
+      const res = capturedHandler({ url: EXPECTED_CERTS_URL });
+      expect(res).toBeDefined();
+      expect(runtime.getJwksRequestsCount()).toBe(1);
+
+      expect(() => capturedHandler({ url: 'https://evil.com/leak' })).toThrow(
+        'Unexpected egress rejected: https://evil.com/leak',
+      );
+
+      const defaultToken = await runtime.signToken();
+      expect(typeof defaultToken).toBe('string');
+      const customToken = await runtime.signToken({ exp: '1h', aud: 'custom-aud' });
+      expect(typeof customToken).toBe('string');
+    } finally {
+      await runtime.dispose();
+    }
+  });
+});
