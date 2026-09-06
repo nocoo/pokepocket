@@ -1,7 +1,14 @@
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
+import { resolveGuardedOutputDir } from './scripts/browser-artifacts.ts';
+
+const configDir = dirname(fileURLToPath(import.meta.url));
+const outputDir = resolveGuardedOutputDir({ configDir, suiteSubdir: 'required' });
 
 export default defineConfig({
   testDir: './tests/e2e',
+  outputDir,
   fullyParallel: false,
   workers: 1,
   timeout: 60000,
