@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress. B1, B2, B3, B4a, B4b, B4c1, and B4c2 accepted. B4c3 foundation, saves/downloads, cartridge commands, and settings restoration verified; pending-confirmation and modal recovery follow-ups remain open. Overall status remains Tier C until L1 reaches its gate.
+Status: in progress. B1, B2, B3, B4a, B4b, B4c1, and B4c2 accepted. B4c3 foundation, saves/downloads, cartridge commands, settings restoration, and pending-confirmation protection verified; modal checkpoint recovery remains open. Overall status remains Tier C until L1 reaches its gate.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -214,22 +214,22 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State    | Implementation commits                                                                                                                                                                    | Review and evidence                                                                                                           |
-| ----- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                                                                                                                                      | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below                     |
-| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                                                                                                                                     | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                                     |
-| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742`                                                                                                               | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass                                 |
-| B4a   | Accepted | `fff1da2`, `8f9f008`                                                                                                                                                                      | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed                          |
-| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                                                                                                                                     | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass                             |
-| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                                                                                                                                           | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed                               |
-| B4c2  | Accepted | `b1933ca`, `d08a034`                                                                                                                                                                      | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                         |
-| B4c3  | Open     | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`, `6f93cc3`, `5fbd930`, `fc8bb52`, `f43069d`, `7d5383f`, `c3a1a36`, `bf8cc79`, `6d629ad`, `79d725c`, `76aea87`, `7ed6ad8` | 278 unit tests; independent G1/coverage and settings/help discrimination pass; pending confirmation and modal recovery remain |
-| B4c4  | Pending  | —                                                                                                                                                                                         | App keyboard/gamepad and browser lifecycle                                                                                    |
-| B4d   | Pending  | —                                                                                                                                                                                         | All four coverage metrics >=90%; L1/G1 pre-commit and commit-message gates                                                    |
-| B5    | Pending  | —                                                                                                                                                                                         | —                                                                                                                             |
-| B6    | Pending  | —                                                                                                                                                                                         | —                                                                                                                             |
-| B7    | Pending  | —                                                                                                                                                                                         | —                                                                                                                             |
-| B8    | Pending  | —                                                                                                                                                                                         | —                                                                                                                             |
+| Batch | State    | Implementation commits                                                                                                                                                                                                     | Review and evidence                                                                                                                     |
+| ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                                                                                                                                                                       | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below                               |
+| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                                                                                                                                                                      | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                                               |
+| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742`                                                                                                                                                | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass                                           |
+| B4a   | Accepted | `fff1da2`, `8f9f008`                                                                                                                                                                                                       | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed                                    |
+| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                                                                                                                                                                      | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass                                       |
+| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                                                                                                                                                                            | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed                                         |
+| B4c2  | Accepted | `b1933ca`, `d08a034`                                                                                                                                                                                                       | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                                   |
+| B4c3  | Open     | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`, `6f93cc3`, `5fbd930`, `fc8bb52`, `f43069d`, `7d5383f`, `c3a1a36`, `bf8cc79`, `6d629ad`, `79d725c`, `76aea87`, `7ed6ad8`, `850c683`, `e984a6f`, `624322f` | 280 unit tests; independent G1/coverage, production build, and pending-dialog regression probes pass; modal checkpoint recovery remains |
+| B4c4  | Pending  | —                                                                                                                                                                                                                          | App keyboard/gamepad and browser lifecycle                                                                                              |
+| B4d   | Pending  | —                                                                                                                                                                                                                          | All four coverage metrics >=90%; L1/G1 pre-commit and commit-message gates                                                              |
+| B5    | Pending  | —                                                                                                                                                                                                                          | —                                                                                                                                       |
+| B6    | Pending  | —                                                                                                                                                                                                                          | —                                                                                                                                       |
+| B7    | Pending  | —                                                                                                                                                                                                                          | —                                                                                                                                       |
+| B8    | Pending  | —                                                                                                                                                                                                                          | —                                                                                                                                       |
 
 ### B1 review evidence
 
@@ -752,12 +752,47 @@ Independent checks on 2026-09-06 used an isolated checkout fixed at `7ed6ad8`:
   `76aea87` restoration test still passes in 681 ms; the final test fails on the expected O-versus-J
   assertion in 663 ms. Source restoration runs in `finally`; the isolated checkout is clean.
 
-M1 is accepted. M2 must now protect confirmed restart/import operations until completion and retain
-failure/retry and pre-confirmation cancellation. In addition to the four documented Cancel/Escape
-baseline failures, two independent same-event confirm/cancel cases at `79d725c` fail in 775 ms:
+M1 is accepted. The M2 baseline review required protection for confirmed restart/import operations
+until completion, while retaining failure/retry and pre-confirmation cancellation. In addition to the
+four documented Cancel/Escape baseline failures, two independent same-event confirm/cancel cases at
+`79d725c` failed in 775 ms:
 both dialogs disappear while the original deferred write still completes. The owned probe suite
 now contains six cases and awaits the complete command, including its success UI and final bytes.
 M3 remains limited to modal checkpoint ownership/recovery cases not already covered by M1/M2.
+
+### B4c3-M2 acceptance evidence
+
+Reviewed implementation: `850c683`, `e984a6f`, and `624322f`. The production change in
+[App.tsx](../src/App.tsx) protects restart/import dismissal synchronously and disables confirmation
+controls while the operation is pending. Successful commands retain their internal close path;
+failed commands leave an enabled confirmation dialog for retry.
+
+Independent checks on 2026-09-06 used an isolated checkout fixed at `624322f`:
+
+- `bun run test:coverage`: 280 tests across 31 files pass in 5.86 seconds. Coverage is 88.65%
+  statements (1688/1904), 82.75% branches (1209/1461), 90.00% functions (396/440), and 90.99%
+  lines (1515/1665). The complete first-party inventory remains included; L1 is not yet accepted.
+- `bun run quality:g1`: Biome checks 80 files with zero errors/warnings; TypeScript and Prettier
+  pass. The production build and both no-ROM checks passed independently at `850c683`; the two
+  later commits change tests only. The implementer also reports the developer HTTP regression
+  passing (1/1), with all runners stopped.
+- Running and already-paused games preserve their pause ownership through Cancel, Escape,
+  backdrop, X, and native cancel events before confirmation. Tests assert exact resume counts,
+  wait for each opening checkpoint, and retain actual core/storage mutations behind deferred writes.
+- During confirmation, same-event repeated confirmation and cancellation start only one write.
+  All dismissal controls remain blocked, with unchanged stored/live save bytes and no premature
+  reset, quit, or load. Cleanup releases and settles the operation through its success UI and
+  closed dialog. Restart failure preserves saved bytes; retry resets exactly once.
+- Battery import verifies all 131072 replacement bytes in storage and the core save path. A failed
+  replacement retains the old bytes and load count; retrying in the same dialog writes distinct
+  replacement bytes and loads the cartridge exactly once more.
+- Six independent pending-dialog probes pass at the production revision. Removing only the
+  synchronous `dismissModal` guard, while retaining rendered busy and Modal protections, makes
+  both same-event probes fail on the missing dialog in 778 ms. Source restoration runs in
+  `finally`; the isolated checkout is clean afterward.
+
+M2 is accepted. M3 will complete the remaining ordinary-modal checkpoint recovery and pause
+ownership cases. B4c3 remains open until that review; B4c4 and B4d-B8 remain pending.
 
 ## 5. Final acceptance record
 
