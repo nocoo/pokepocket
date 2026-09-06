@@ -5,7 +5,7 @@ import { playableFixture } from '../fixtures/headers';
 for (const system of ['GB', 'GBC'] as const) {
   test(`exports a sharp 1080p ${system} screenshot while keeping save previews at native resolution`, async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.goto('/');
     const bytes = playableFixture(system === 'GBC');
     await page.getByLabel('载入 GB / GBC / GBA 卡带', { exact: true }).setInputFiles({
@@ -27,8 +27,8 @@ for (const system of ['GB', 'GBC'] as const) {
     const downloaded = page.waitForEvent('download');
     await page.getByRole('button', { name: '保存游戏截图', exact: true }).click();
     const png = await downloaded;
-    const pngPath = await png.path();
-    if (!pngPath) throw new Error('Downloaded PNG path not found');
+    const pngPath = testInfo.outputPath(png.suggestedFilename());
+    await png.saveAs(pngPath);
     const data = await readFile(pngPath);
     expect(png.suggestedFilename()).toMatch(/^pocket-.*\.png$/);
     expect(data.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');

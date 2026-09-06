@@ -8,6 +8,8 @@ export interface ProductionWorkerHarness {
     url: string;
     dispose: () => Promise<void>;
     signToken: (claims?: Record<string, unknown>) => Promise<string>;
+    getOutboundUrls: () => string[];
+    getJwksRequestsCount: () => number;
   };
 }
 
@@ -27,9 +29,11 @@ export const test = base.extend<
   productionWorker: [
     // biome-ignore lint/correctness/noEmptyPattern: playwright fixtures require object destructuring
     async ({}, use) => {
+      const resourceRoot = process.env.POKEPOCKET_BROWSER_RESOURCE_ROOT;
       const runtime = await createProductionRuntime({
         root: process.cwd(),
         port: 27047,
+        resourceRoot,
       });
       try {
         await use({ runtime });

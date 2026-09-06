@@ -458,7 +458,7 @@ test.describe('Core Cartridge Journeys', () => {
   for (const { system, ext, builder } of PLATFORMS) {
     test(`${system}: battery roundtrip - export and import 32768-byte payload, remove slot0, preserve manual snapshots`, async ({
       page,
-    }) => {
+    }, testInfo) => {
       await page.goto('/');
       const romBytes = builder();
       const romId = computeRomId(romBytes);
@@ -537,8 +537,8 @@ test.describe('Core Cartridge Journeys', () => {
       const downloadPromise = page.waitForEvent('download');
       await manager.getByRole('button', { name: '导出存档', exact: true }).click();
       const download = await downloadPromise;
-      const downloadPath = await download.path();
-      if (!downloadPath) throw new Error('Export download path missing');
+      const downloadPath = testInfo.outputPath(download.suggestedFilename());
+      await download.saveAs(downloadPath);
       const exportedBytes = await readFile(downloadPath);
 
       // Compare exported payload against actual stored battery in IndexedDB
@@ -601,8 +601,10 @@ test.describe('Core Cartridge Journeys', () => {
       const secondDownloadPromise = page.waitForEvent('download');
       await manager.getByRole('button', { name: '导出存档', exact: true }).click();
       const secondDownload = await secondDownloadPromise;
-      const secondDownloadPath = await secondDownload.path();
-      if (!secondDownloadPath) throw new Error('Second export download path missing');
+      const secondDownloadPath = testInfo.outputPath(
+        `second-${secondDownload.suggestedFilename()}`,
+      );
+      await secondDownload.saveAs(secondDownloadPath);
       const secondExportedBytes = await readFile(secondDownloadPath);
       expect(secondExportedBytes.length).toBe(ORIGINAL_BATTERY_SIZE);
       expect(new Uint8Array(secondExportedBytes)).toEqual(importPayload);

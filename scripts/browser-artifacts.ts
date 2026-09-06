@@ -8,63 +8,180 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
+// @ts-expect-error browser-lock is a maintained mjs script without ambient declarations
+import { readAndVerifyHeldLock, isProcessAlive } from './browser-lock.mjs';
+import {
+  ARTIFACTS_ROOT_NAME,
+  BROWSER_PORT,
+  BROWSER_TARGET_URL,
+  ENV_BROWSER_NONCE,
+  ENV_BROWSER_PID,
+  ENV_BROWSER_PORT,
+  ENV_BROWSER_RESOURCE_ROOT,
+  ENV_BROWSER_WS,
+  FORBIDDEN_CLI_FLAGS,
+  FORBIDDEN_OUTPUT_ENVS,
+  OWNERSHIP_MARKER_MAGIC,
+  getBrowserLockPath,
+  assertNoForbiddenInvocation as rawAssertNoForbiddenInvocation,
+  validateBrowserTarget,
+  validateBrowserWsEndpoint,
+  // @ts-expect-error browser-shared is a maintained mjs script without ambient declarations
+} from './browser-shared.mjs';
 
-export const ARTIFACTS_ROOT_NAME = 'test-results';
-export const OWNERSHIP_MARKER_MAGIC = 'pokepocket-owned-artifacts-v1';
+export {
+  ARTIFACTS_ROOT_NAME,
+  BROWSER_PORT,
+  BROWSER_TARGET_URL,
+  ENV_BROWSER_NONCE,
+  ENV_BROWSER_PID,
+  ENV_BROWSER_PORT,
+  ENV_BROWSER_RESOURCE_ROOT,
+  ENV_BROWSER_WS,
+  FORBIDDEN_CLI_FLAGS,
+  FORBIDDEN_OUTPUT_ENVS,
+  OWNERSHIP_MARKER_MAGIC,
+  getBrowserLockPath,
+  assertNoForbiddenInvocation as rawAssertNoForbiddenInvocation,
+  validateBrowserTarget,
+  validateBrowserWsEndpoint,
+};
 
-export const FORBIDDEN_CLI_FLAGS = new Set([
-  '--output',
-  '-o',
-  '--reporter',
-  '--add-reporter',
-  '--last-failed-file',
-]);
+export interface AssertGuardedInvocationLockOptions {
+  lockFilePath?: string;
+  isProcessAliveFn?: (pid: number) => boolean;
+}
 
-export const FORBIDDEN_OUTPUT_ENVS = [
-  'PW_TEST_REPORTER',
-  'PLAYWRIGHT_BLOB_OUTPUT_DIR',
-  'PLAYWRIGHT_BLOB_OUTPUT_FILE',
-  'PLAYWRIGHT_BLOB_OUTPUT_NAME',
-  'PLAYWRIGHT_HTML_OUTPUT_DIR',
-  'PLAYWRIGHT_HTML_REPORT',
-  'PLAYWRIGHT_JSON_OUTPUT_DIR',
-  'PLAYWRIGHT_JSON_OUTPUT_FILE',
-  'PLAYWRIGHT_JSON_OUTPUT_NAME',
-  'PLAYWRIGHT_JUNIT_OUTPUT_DIR',
-  'PLAYWRIGHT_JUNIT_OUTPUT_FILE',
-  'PLAYWRIGHT_JUNIT_OUTPUT_NAME',
-  'PLAYWRIGHT_LAST_RUN_OUTPUT_FILE',
-  'PLAYWRIGHT_PERFETTO_OUTPUT_DIR',
-  'PLAYWRIGHT_PERFETTO_OUTPUT_FILE',
-  'PLAYWRIGHT_PERFETTO_OUTPUT_NAME',
-] as const;
-
-export function assertNoForbiddenInvocation(
-  argv: readonly string[] = process.argv,
+export function assertGuardedInvocationLock(
+  canonicalConfigDir: string,
+  suiteSubdir: AllowedSuiteLeaf,
   env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
-): void {
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (typeof arg !== 'string') continue;
-    if (FORBIDDEN_CLI_FLAGS.has(arg)) {
-      throw new Error(
-        `Raw Playwright CLI flag "${arg}" is forbidden; use guarded configuration defaults.`,
-      );
-    }
-    for (const flag of FORBIDDEN_CLI_FLAGS) {
-      if (arg.startsWith(`${flag}=`)) {
-        throw new Error(
-          `Raw Playwright CLI flag "${arg}" is forbidden; use guarded configuration defaults.`,
-        );
-      }
-    }
+  options: AssertGuardedInvocationLockOptions = {},
+): string {
+  const nonce = env[ENV_BROWSER_NONCE];
+  if (!nonce) {
+    throw new Error(
+      `Missing required runner authorization nonce (${ENV_BROWSER_NONCE}). Direct raw execution without runner lock is forbidden.`,
+    );
   }
 
-  for (const envKey of FORBIDDEN_OUTPUT_ENVS) {
-    if (env[envKey]) {
-      throw new Error(`Overriding ${envKey} is forbidden.`);
-    }
+  const pidStr = env[ENV_BROWSER_PID];
+  if (!pidStr) {
+    throw new Error(
+      `Missing required runner owner PID (${ENV_BROWSER_PID}). Direct raw execution without runner lock is forbidden.`,
+    );
   }
+  if (!/^\d+$/.test(pidStr.trim())) {
+    throw new Error(`Invalid runner owner PID: "${pidStr}"`);
+  }
+  const pid = Number(pidStr.trim());
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    throw new Error(`Invalid runner owner PID: "${pidStr}"`);
+  }
+
+  const resourceRoot = env[ENV_BROWSER_RESOURCE_ROOT];
+  if (!resourceRoot) {
+    throw new Error(
+      `Missing required runner resource root (${ENV_BROWSER_RESOURCE_ROOT}). Direct raw execution without runner lock is forbidden.`,
+    );
+  }
+
+  const portStr = env[ENV_BROWSER_PORT];
+  if (portStr !== undefined && portStr !== String(BROWSER_PORT)) {
+    throw new Error(`Authorized port mismatch: expected "${BROWSER_PORT}", received "${portStr}"`);
+  }
+  const port = portStr ? parseInt(portStr, 10) : BROWSER_PORT;
+
+  // Pure tests can pass an explicit lockFilePath via in-memory options, NEVER from env
+  const lockFilePath = options.lockFilePath ?? getBrowserLockPath(port);
+  readAndVerifyHeldLock({
+    port,
+    pid,
+    nonce,
+    checkoutDir: canonicalConfigDir,
+    suite: suiteSubdir,
+    runResourceRoot: resourceRoot,
+    lockFilePath,
+    isProcessAliveFn: options.isProcessAliveFn,
+  });
+
+  // Verify and read owned browser metadata recorded in resourceRoot
+  const metaPath = resolve(resourceRoot, 'browser-metadata.json');
+  let metaStat: Stats;
+  try {
+    metaStat = lstatSync(metaPath);
+  } catch (err: unknown) {
+    throw new Error(
+      `Missing or unreadable runner browser metadata at "${metaPath}": ${(err as Error).message}`,
+    );
+  }
+  if (metaStat.isSymbolicLink()) {
+    throw new Error(`Runner browser metadata "${metaPath}" must not be a symbolic link`);
+  }
+  if (!metaStat.isFile()) {
+    throw new Error(`Runner browser metadata "${metaPath}" must be a regular file`);
+  }
+
+  let browserMeta: {
+    browserPid?: number;
+    wsEndpoint?: string;
+    port?: number;
+    lockNonce?: string;
+    browserProfilePath?: string | null;
+  };
+  try {
+    browserMeta = JSON.parse(readFileSync(metaPath, 'utf8'));
+  } catch (err: unknown) {
+    throw new Error(
+      `Runner browser metadata at "${metaPath}" contains invalid JSON: ${(err as Error).message}`,
+    );
+  }
+
+  if (
+    !browserMeta.browserPid ||
+    !Number.isSafeInteger(browserMeta.browserPid) ||
+    browserMeta.browserPid <= 0
+  ) {
+    throw new Error(
+      `Runner browser metadata contains invalid browserPid: ${browserMeta.browserPid}`,
+    );
+  }
+
+  const checkAlive = options.isProcessAliveFn ?? isProcessAlive;
+  if (!checkAlive(browserMeta.browserPid)) {
+    throw new Error(
+      `Runner browser process ${browserMeta.browserPid} is dead or unresponsive; execution aborted before resolving output directory`,
+    );
+  }
+  if (browserMeta.port !== port) {
+    throw new Error(
+      `Runner browser metadata port mismatch: expected ${port}, found ${browserMeta.port}`,
+    );
+  }
+  if (browserMeta.lockNonce !== nonce) {
+    throw new Error(
+      `Runner browser metadata lockNonce mismatch: expected ${nonce}, found ${browserMeta.lockNonce}`,
+    );
+  }
+  if (!browserMeta.wsEndpoint) {
+    throw new Error('Runner browser metadata missing wsEndpoint');
+  }
+  const validatedWs = validateBrowserWsEndpoint(browserMeta.wsEndpoint);
+
+  // If environment provides ENV_BROWSER_WS, it must match browser metadata exactly
+  const envWs = env[ENV_BROWSER_WS];
+  if (!envWs) {
+    throw new Error(
+      `Missing required runner browser endpoint (${ENV_BROWSER_WS}). Execution must connect to parent BrowserServer.`,
+    );
+  }
+  if (envWs !== validatedWs) {
+    throw new Error(
+      `Runner browser endpoint mismatch: environment (${envWs}) does not match recorded metadata (${validatedWs})`,
+    );
+  }
+
+  return validatedWs;
 }
 
 function lstatIfPresent(path: string): Stats | undefined {
@@ -191,4 +308,11 @@ export function resolveGuardedOutputDir(options: ResolveGuardedOutputDirOptions)
 
   mkdirSync(resolvedTarget);
   return resolvedTarget;
+}
+
+export function assertNoForbiddenInvocation(
+  argv: readonly string[] = process.argv,
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): void {
+  rawAssertNoForbiddenInvocation(argv, env);
 }

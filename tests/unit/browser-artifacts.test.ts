@@ -14,9 +14,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   ARTIFACTS_ROOT_NAME,
   OWNERSHIP_MARKER_MAGIC,
+  assertGuardedInvocationLock,
   assertNoForbiddenInvocation,
   resolveGuardedOutputDir,
+  ENV_BROWSER_NONCE,
+  ENV_BROWSER_PID,
+  ENV_BROWSER_PORT,
+  ENV_BROWSER_RESOURCE_ROOT,
+  ENV_BROWSER_WS,
 } from '../../scripts/browser-artifacts.ts';
+// @ts-expect-error browser-lock is a maintained mjs script without ambient declarations
+import { acquireBrowserLock } from '../../scripts/browser-lock.mjs';
 
 const LITERAL_FORBIDDEN_FLAGS = [
   '--output',
@@ -95,6 +103,236 @@ describe('browser-artifacts policy', () => {
         );
       });
     }
+  });
+
+  describe('assertGuardedInvocationLock and metadata policy', () => {
+    let mockResourceRoot: string;
+    let mockLockFile: string;
+    let heldNonce = '';
+    let releaseLock: (() => void) | null = null;
+
+    beforeEach(() => {
+      mockResourceRoot = join(fixtureParent, 'run-resource');
+      mkdirSync(mockResourceRoot, { recursive: true });
+      mockLockFile = join(fixtureParent, 'mock.lock');
+
+      const lock = acquireBrowserLock({
+        lockFilePath: mockLockFile,
+        checkoutDir: testRoot,
+        suite: 'required',
+        runResourceRoot: mockResourceRoot,
+      });
+      heldNonce = lock.nonce;
+      releaseLock = () => lock.release();
+
+      writeFileSync(
+        join(mockResourceRoot, 'browser-metadata.json'),
+        JSON.stringify({
+          browserPid: process.pid,
+          browserProfilePath: join(mockResourceRoot, 'profile'),
+          wsEndpoint: 'ws://127.0.0.1:9222/devtools/browser/mock',
+          port: 27047,
+          lockNonce: heldNonce,
+          acquiredAt: Date.now(),
+        }),
+        { flag: 'wx' },
+      );
+    });
+
+    afterEach(() => {
+      if (releaseLock) {
+        releaseLock();
+        releaseLock = null;
+      }
+    });
+
+    it('passes and returns validated wsEndpoint when held lock and metadata match', () => {
+      const env = {
+        [ENV_BROWSER_NONCE]: heldNonce,
+        [ENV_BROWSER_PID]: String(process.pid),
+        [ENV_BROWSER_RESOURCE_ROOT]: mockResourceRoot,
+        [ENV_BROWSER_PORT]: '27047',
+        [ENV_BROWSER_WS]: 'ws://127.0.0.1:9222/devtools/browser/mock',
+      };
+
+      const ws = assertGuardedInvocationLock(testRoot, 'required', env, {
+        lockFilePath: mockLockFile,
+      });
+      expect(ws).toBe('ws://127.0.0.1:9222/devtools/browser/mock');
+    });
+
+    it('rejects when ENV_BROWSER_NONCE is missing', () => {
+      const env = {
+        [ENV_BROWSER_PID]: String(process.pid),
+        [ENV_BROWSER_RESOURCE_ROOT]: mockResourceRoot,
+        [ENV_BROWSER_PORT]: '27047',
+        [ENV_BROWSER_WS]: 'ws://127.0.0.1:9222/devtools/browser/mock',
+      };
+      expect(() =>
+        assertGuardedInvocationLock(testRoot, 'required', env, { lockFilePath: mockLockFile }),
+      ).toThrow(/Missing required runner authorization nonce/);
+    });
+
+    it('rejects when owner PID is missing or invalid (non-integer / suffix junk)', () => {
+      const env = {
+        [ENV_BROWSER_NONCE]: heldNonce,
+        [ENV_BROWSER_PID]: '123abc',
+        [ENV_BROWSER_RESOURCE_ROOT]: mockResourceRoot,
+        [ENV_BROWSER_PORT]: '27047',
+        [ENV_BROWSER_WS]: 'ws://127.0.0.1:9222/devtools/browser/mock',
+      };
+      expect(() =>
+        assertGuardedInvocationLock(testRoot, 'required', env, { lockFilePath: mockLockFile }),
+      ).toThrow(/Invalid runner owner PID/);
+    });
+
+    it('rejects when resource root is missing', () => {
+      const env = {
+        [ENV_BROWSER_NONCE]: heldNonce,
+        [ENV_BROWSER_PID]: String(process.pid),
+        [ENV_BROWSER_PORT]: '27047',
+        [ENV_BROWSER_WS]: 'ws://127.0.0.1:9222/devtools/browser/mock',
+      };
+      expect(() =>
+        assertGuardedInvocationLock(testRoot, 'required', env, { lockFilePath: mockLockFile }),
+      ).toThrow(/Missing required runner resource root/);
+    });
+
+    it('rejects when port mismatches authorized port 27047', () => {
+      const env = {
+        [ENV_BROWSER_NONCE]: heldNonce,
+        [ENV_BROWSER_PID]: String(process.pid),
+        [ENV_BROWSER_RESOURCE_ROOT]: mockResourceRoot,
+        [ENV_BROWSER_PORT]: '7047',
+        [ENV_BROWSER_WS]: 'ws://127.0.0.1:9222/devtools/browser/mock',
+      };
+      expect(() =>
+        assertGuardedInvocationLock(testRoot, 'required', env, { lockFilePath: mockLockFile }),
+      ).toThrow(/Authorized port mismatch/);
+    });
+
+    it('rejects when browser-metadata.json is missing or a symlink', () => {
+      const metaPath = join(mockResourceRoot, 'browser-metadata.json');
+      rmSync(metaPath);
+
+      const env = {
+        [ENV_BROWSER_NONCE]: heldNonce,
+        [ENV_BROWSER_PID]: String(process.pid),
+        [ENV_BROWSER_RESOURCE_ROOT]: mockResourceRoot,
+        [ENV_BROWSER_PORT]: '27047',
+        [ENV_BROWSER_WS]: 'ws://127.0.0.1:9222/devtools/browser/mock',
+      };
+      expect(() =>
+        assertGuardedInvocationLock(testRoot, 'required', env, { lockFilePath: mockLockFile }),
+      ).toThrow(/Missing or unreadable runner browser metadata/);
+
+      const outsideFile = join(fixtureParent, 'outside-meta.json');
+      writeFileSync(outsideFile, '{}');
+      symlinkSync(outsideFile, metaPath);
+
+      expect(() =>
+        assertGuardedInvocationLock(testRoot, 'required', env, { lockFilePath: mockLockFile }),
+      ).toThrow(/must not be a symbolic link/);
+    });
+
+    it('rejects when runner browser process is dead', () => {
+      const env = {
+        [ENV_BROWSER_NONCE]: heldNonce,
+        [ENV_BROWSER_PID]: String(process.pid),
+        [ENV_BROWSER_RESOURCE_ROOT]: mockResourceRoot,
+        [ENV_BROWSER_PORT]: '27047',
+        [ENV_BROWSER_WS]: 'ws://127.0.0.1:9222/devtools/browser/mock',
+      };
+
+      const deadMetaPath = join(mockResourceRoot, 'browser-metadata.json');
+      writeFileSync(
+        deadMetaPath,
+        JSON.stringify({
+          browserPid: 99999999,
+          browserProfilePath: join(mockResourceRoot, 'profile'),
+          wsEndpoint: 'ws://127.0.0.1:9222/devtools/browser/mock',
+          port: 27047,
+          lockNonce: heldNonce,
+          acquiredAt: Date.now(),
+        }),
+      );
+
+      const fakeIsAlive = (pid: number) => {
+        // Runner process PID is alive for held lock check, browserPid 99999999 is dead
+        return pid === process.pid;
+      };
+
+      expect(() =>
+        assertGuardedInvocationLock(testRoot, 'required', env, {
+          lockFilePath: mockLockFile,
+          isProcessAliveFn: fakeIsAlive,
+        }),
+      ).toThrow(/Runner browser process .* is dead or unresponsive/);
+    });
+
+    it('rejects when browser metadata has wrong nonce, port, or invalid browserPid', () => {
+      const metaPath = join(mockResourceRoot, 'browser-metadata.json');
+      writeFileSync(
+        metaPath,
+        JSON.stringify({
+          browserPid: -1,
+          wsEndpoint: 'ws://127.0.0.1:9222/mock',
+          port: 27047,
+          lockNonce: heldNonce,
+        }),
+      );
+
+      const env = {
+        [ENV_BROWSER_NONCE]: heldNonce,
+        [ENV_BROWSER_PID]: String(process.pid),
+        [ENV_BROWSER_RESOURCE_ROOT]: mockResourceRoot,
+        [ENV_BROWSER_PORT]: '27047',
+        [ENV_BROWSER_WS]: 'ws://127.0.0.1:9222/mock',
+      };
+
+      expect(() =>
+        assertGuardedInvocationLock(testRoot, 'required', env, { lockFilePath: mockLockFile }),
+      ).toThrow(/contains invalid browserPid/);
+
+      writeFileSync(
+        metaPath,
+        JSON.stringify({
+          browserPid: process.pid,
+          wsEndpoint: 'ws://127.0.0.1:9222/mock',
+          port: 27047,
+          lockNonce: 'wrong-nonce',
+        }),
+      );
+      expect(() =>
+        assertGuardedInvocationLock(testRoot, 'required', env, { lockFilePath: mockLockFile }),
+      ).toThrow(/lockNonce mismatch/);
+    });
+
+    it('rejects when ENV_BROWSER_WS does not match browser-metadata.json exactly', () => {
+      const env = {
+        [ENV_BROWSER_NONCE]: heldNonce,
+        [ENV_BROWSER_PID]: String(process.pid),
+        [ENV_BROWSER_RESOURCE_ROOT]: mockResourceRoot,
+        [ENV_BROWSER_PORT]: '27047',
+        [ENV_BROWSER_WS]: 'ws://127.0.0.1:9999/altered',
+      };
+      expect(() =>
+        assertGuardedInvocationLock(testRoot, 'required', env, { lockFilePath: mockLockFile }),
+      ).toThrow(/environment .* does not match recorded metadata/);
+    });
+
+    it('rejects when suite mismatches held lock suite', () => {
+      const env = {
+        [ENV_BROWSER_NONCE]: heldNonce,
+        [ENV_BROWSER_PID]: String(process.pid),
+        [ENV_BROWSER_RESOURCE_ROOT]: mockResourceRoot,
+        [ENV_BROWSER_PORT]: '27047',
+        [ENV_BROWSER_WS]: 'ws://127.0.0.1:9222/devtools/browser/mock',
+      };
+      expect(() =>
+        assertGuardedInvocationLock(testRoot, 'optional', env, { lockFilePath: mockLockFile }),
+      ).toThrow(/Browser lock suite mismatch/);
+    });
   });
 
   describe('resolveGuardedOutputDir', () => {

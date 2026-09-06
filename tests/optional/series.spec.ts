@@ -6,7 +6,7 @@ for (const edition of EDITIONS) {
   test(`runs real Pokémon ${edition.english} with the correct native video and a save state`, async ({
     page,
     request,
-  }) => {
+  }, testInfo) => {
     const catalog = await (await request.get('/api/catalog')).json();
     test.skip(
       !catalog.editions.some(
@@ -72,12 +72,11 @@ for (const edition of EDITIONS) {
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: '保存游戏截图', exact: true }).click();
     const screenshot = await download;
-    const screenshotPath = await screenshot.path();
-    if (!screenshotPath) throw new Error('Screenshot path not found');
+    const screenshotPath = testInfo.outputPath(`series-${edition.id}.png`);
+    await screenshot.saveAs(screenshotPath);
     const data = await readFile(screenshotPath);
     expect(data.readUInt32BE(16)).toBe(Math.round((pixels.width / pixels.height) * 1080));
     expect(data.readUInt32BE(20)).toBe(1080);
-    await screenshot.saveAs(`artifacts/series-${edition.id}.png`);
     expect(errors).toEqual([]);
   });
 }

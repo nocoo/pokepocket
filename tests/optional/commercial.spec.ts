@@ -72,7 +72,7 @@ test('selects bundled cartridges without a file dialog and preserves the canvas 
 test('runs the real Emerald ROM and restores an actual state after reloading', async ({
   page,
   request,
-}) => {
+}, testInfo) => {
   const availability = await (await request.get('/api/cartridge')).json();
   test.skip(
     !availability.available,
@@ -155,8 +155,8 @@ test('runs the real Emerald ROM and restores an actual state after reloading', a
   const downloaded = page.waitForEvent('download');
   await page.getByRole('button', { name: '保存游戏截图', exact: true }).click();
   const png = await downloaded;
-  const pngPath = await png.path();
-  if (!pngPath) throw new Error('PNG download path not found');
+  const pngPath = testInfo.outputPath(png.suggestedFilename());
+  await png.saveAs(pngPath);
   const data = await readFile(pngPath);
   expect(data.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
   expect(data.readUInt32BE(16)).toBe(1620);
