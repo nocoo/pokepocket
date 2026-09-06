@@ -262,6 +262,11 @@ negative gate probes, isolation guards, and combined runtime under 3 minutes. **
 20. `test: verify console layout and export behavior`
     - Cover fullscreen centering, proportional fonts/buttons, mobile/modals, and button contrast states.
     - Verify 1080-pixel-high PNG exports with the correct aspect ratio across all three platforms.
+    - Before accepting this handoff, complete the independently identified prerequisite
+      `test: wait for initial cartridge frames` in a fresh clone. The existing snapshot regression
+      waits for battery byte 1 but reads the initial frame only once; wait for an observable valid
+      frame and retain that successful sample before creating the snapshot. Preserve the layout
+      draft, all live-state/persistence assertions, and the required no-skip inventory.
 
 Review: every required browser test executes without commercial ROM availability, failure artifacts
 are usable, assertions validate behavior rather than implementation details, and shared storage stays
@@ -1622,6 +1627,27 @@ Browser/report/color evidence is under
 `navigation-review.json` and `navigation-measurements.json` retain the independent checks.
 Fullscreen geometry, proportional scaling, mobile/modal usability and complete PNG export coverage
 remain pending in the next atomic handoff.
+
+### B7 layout review and frame-readiness prerequisite
+
+The stopped, uncommitted layout/export draft passes independent G1/L1 (612 tests, all four metrics
+above 90%). After correcting test measurement timing, viewport clipping and the actual mobile
+cancel label, all new layout/contrast/mobile/PNG cases pass in an independent production-browser
+run. The full required gate remains rejected: 29/30 pass, and the existing GBA snapshot regression
+at `core-journeys.spec.ts:321` reads an empty initial frame after battery byte 1 is available.
+Waiting for stored battery bytes is not a guarantee that the next canvas sample contains a frame.
+
+The focused prerequisite above must wait for actual frame readiness before capturing the state-1
+baseline; it must not retry the whole test, skip a platform, relax assertions or add fixed sleeps.
+It receives its own implementation/review/documentation boundary in an independent clone. The
+four-file layout draft is retained unchanged and will resume against the accepted prerequisite.
+No product defect or product-code change is inferred from this sampling failure.
+
+The rejected run is retained under
+`b7-layout-preflight-64sdg5yw/run-positive-1788699182281387000`: report, trace, failure screenshot
+and all successful geometry/color/PNG measurements are available. Its 17 captured processes,
+owned groups, browser profile, runtime roots and lock are all gone. This is diagnostic evidence,
+not a passing B7 acceptance result.
 
 ## 5. Final acceptance record
 
