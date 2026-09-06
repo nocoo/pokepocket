@@ -203,6 +203,9 @@ plugin HTTP regressions separately.
     - Then `fix: retain push cancellation listeners`: apply the same lifecycle guarantee to the
       outer `npm run quality:push` entry, retaining the first signal status across repeat or mixed
       signals. Verify the real foreground npm group and all captured detached descendants.
+    - Finally `fix: retain commit and scanner signal listeners`: correct the same confirmed npm
+      forwarding defect in `quality:commit` and standalone `quality:g2`. Keep child-process and
+      scanner policies intact; test delayed cancellation with repeat/mixed signals in both wrappers.
 
 Review: scanner versions and scope, outgoing Git ranges, argument quoting, installation guidance,
 negative gate probes, isolation guards, and combined runtime under 3 minutes. **Milestone: Tier A.**
@@ -1232,6 +1235,20 @@ wrappers' listeners passes SIGTERM and SIGINT, with ten captured descendants, ze
 the L2 root removed in about three seconds. This additional design experiment is restored afterward.
 The next separate atomic correction retains the outer listeners and the initial signal status;
 B6 acceptance still requires the final committed outer-entry and installed-hook checks.
+
+The outer push correction `72b0dabd1aa5c6a1508dad3a54e37126587f28cd` retains both listeners through
+runner settlement and preserves the first process signal. Independent probes at that committed SHA
+pass through the real outer npm foreground group for SIGTERM and SIGINT: ten captured descendants
+per case, zero running survivors, correct 143/130 status, and the L2 root removed.
+
+The same audit covers the other two public npm commands. At `4195859`, both `quality:commit` and
+standalone `quality:g2` leave captured descendants alive after SIGTERM and SIGINT. The pre-commit
+hook also invokes its npm command, so this is a real entry-point defect. In an isolated temporary
+experiment, retaining listeners in those two wrappers makes all four scenarios pass with zero
+survivors and the original 143/130 status, settling in 1.03 seconds. The experiment changes no scanner
+or child-process algorithm and restores the checkout afterward. One final atomic lifecycle correction
+is required before the complete B6 installed-hook acceptance; these observations do not change the
+accepted scanner pins, scan scope, or previous coverage evidence.
 
 ## 5. Final acceptance record
 
