@@ -1,6 +1,6 @@
 # 6DQ Tier S execution
 
-Status: in progress, Tier A verified. B1 through B6 and B7's executable fixtures, snapshot correction, required journeys, authorization, browser ownership gates and navigation contrast are accepted. All four aggregate coverage metrics exceed 90%; installed commit and pre-push hooks and browser lifecycle checks pass independent verification. Layout/export coverage and CI/release alignment remain pending; Tier S is not yet verified.
+Status: in progress, Tier A verified. B1 through B7 are accepted, including all 30 required browser cases, authorization and ownership guards, navigation contrast, proportional fullscreen layout and PNG export. All four aggregate coverage metrics exceed 90%; installed commit and pre-push hooks and browser lifecycle checks pass independent verification. B8 CI/release alignment and final acceptance remain pending; Tier S is not yet verified.
 
 Started: 2026-09-06. Code baseline: `8a43e3c` (v1.1.0). Accepted assessment: `1979e8c`.
 The [original assessment](01-6dq-adoption-plan.md) records the nmem requirements and baseline gaps.
@@ -306,22 +306,22 @@ findings through additional atomic fixes, and commits the final implementation/e
 
 ## 4. Review ledger
 
-| Batch | State       | Implementation commits                                                                                                                                                                                                                           | Review and evidence                                                                                                               |
-| ----- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| B1    | Accepted    | `59bbfa2`, `d89ff9d`                                                                                                                                                                                                                             | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below                         |
-| B2    | Accepted    | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                                                                                                                                                                                            | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                                         |
-| B3    | Accepted    | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742`                                                                                                                                                                      | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass                                     |
-| B4a   | Accepted    | `fff1da2`, `8f9f008`                                                                                                                                                                                                                             | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed                              |
-| B4b   | Accepted    | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                                                                                                                                                                                            | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass                                 |
-| B4c1  | Accepted    | `8e1b53d`, `264675d`, `10d1e6e`                                                                                                                                                                                                                  | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed                                   |
-| B4c2  | Accepted    | `b1933ca`, `d08a034`                                                                                                                                                                                                                             | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                             |
-| B4c3  | Accepted    | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`, `6f93cc3`, `5fbd930`, `fc8bb52`, `f43069d`, `7d5383f`, `c3a1a36`, `bf8cc79`, `6d629ad`, `79d725c`, `76aea87`, `7ed6ad8`, `850c683`, `e984a6f`, `624322f`, `757a0ed`, `133afc8` | 286 unit tests; independent G1/coverage and modal checkpoint payload/recovery review pass; all B4c3 follow-ups accepted           |
-| B4c4  | Accepted    | `23f9198`, `7a534ed`, `d9295ec`, `38f5e03`, `6ef2389`, `dd4aca0`                                                                                                                                                                                 | 292 units; independent G1/coverage, input/lifecycle probes, negative guards, and descriptor cleanup pass                          |
-| B4d   | Accepted    | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`, `fbd52cc`, `8c24c5c`, `9a3545c`, `49a79ab`                                                                                                                                                           | 363 units; G1/build; all four metrics >=90%; actual hooks and failure/process probes pass; Tier B verified                        |
-| B5    | Accepted    | `8604276`, `0bfecb5`, `91685a6`, `cf2514d`, `759c65a`, `38cb1f5`, `d5ff4f9`                                                                                                                                                                      | 388 units; G1/L1, production build, 40 real HTTP contracts, independent bytes/authentication and inventory rejection pass         |
-| B6    | Accepted    | `48894ea`, `ca704a2`, `24ee4a1`, `cc58d97`, `4195859`, `72b0dab`, `0d3a3be`                                                                                                                                                                      | 467 units; all coverage metrics >=90%; installed push hook, real npm cancellation, L2/G2 pass; Tier A verified                    |
-| B7    | In progress | `a29eff5`, `0d60e83`, `19f0b0f`, `94cbe07`, `d563a35`, `cc48e66`, `f7e37bd`, `ac8f37f`, `9409642`                                                                                                                                                | Fixtures, snapshots, 24 required cases, authorization/ownership, navigation contrast and frame readiness accepted; layout pending |
-| B8    | Pending     | —                                                                                                                                                                                                                                                | —                                                                                                                                 |
+| Batch | State    | Implementation commits                                                                                                                                                                                                                           | Review and evidence                                                                                                            |
+| ----- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| B1    | Accepted | `59bbfa2`, `d89ff9d`                                                                                                                                                                                                                             | 74 unit tests; strict G1 and build pass; 11 independently verified browser cases; coverage baseline below                      |
+| B2    | Accepted | `85cd089`, `1995b59`, `b47caa6`, `d4123eb`, `e816964`                                                                                                                                                                                            | 111 unit tests; independent G1, build, 12 browser cases, and deferred command probes pass                                      |
+| B3    | Accepted | `ebe6901`, `76a6148`, `a9f7339`, `c052d68`, `ba035c8`, `242bd91`, `48d2742`                                                                                                                                                                      | 139 unit tests; independent G1, build, 27 browser cases, recovery and transaction probes pass                                  |
+| B4a   | Accepted | `fff1da2`, `8f9f008`                                                                                                                                                                                                                             | 169 unit tests; independent G1, coverage, and build pass; boundary tests and mock isolation reviewed                           |
+| B4b   | Accepted | `405f7a1`, `3d40fcc`, `8e44499`, `590f6da`, `bddd7e3`                                                                                                                                                                                            | 197 unit tests and one HTTP test; independent G1, coverage, build, and process-cleanup probe pass                              |
+| B4c1  | Accepted | `8e1b53d`, `264675d`, `10d1e6e`                                                                                                                                                                                                                  | 225 unit tests; independent G1, coverage, and build pass; device/input/dialog behavior reviewed                                |
+| B4c2  | Accepted | `b1933ca`, `d08a034`                                                                                                                                                                                                                             | 238 unit tests; independent G1, coverage, and build pass; library/save/confirmation behavior reviewed                          |
+| B4c3  | Accepted | `dcd1071`, `dcd2b64`, `4c24720`, `58c320b`, `5b32f30`, `afeff79`, `6f93cc3`, `5fbd930`, `fc8bb52`, `f43069d`, `7d5383f`, `c3a1a36`, `bf8cc79`, `6d629ad`, `79d725c`, `76aea87`, `7ed6ad8`, `850c683`, `e984a6f`, `624322f`, `757a0ed`, `133afc8` | 286 unit tests; independent G1/coverage and modal checkpoint payload/recovery review pass; all B4c3 follow-ups accepted        |
+| B4c4  | Accepted | `23f9198`, `7a534ed`, `d9295ec`, `38f5e03`, `6ef2389`, `dd4aca0`                                                                                                                                                                                 | 292 units; independent G1/coverage, input/lifecycle probes, negative guards, and descriptor cleanup pass                       |
+| B4d   | Accepted | `a5ceafa`, `c74d9bd`, `fbde21d`, `16e83e4`, `fbd52cc`, `8c24c5c`, `9a3545c`, `49a79ab`                                                                                                                                                           | 363 units; G1/build; all four metrics >=90%; actual hooks and failure/process probes pass; Tier B verified                     |
+| B5    | Accepted | `8604276`, `0bfecb5`, `91685a6`, `cf2514d`, `759c65a`, `38cb1f5`, `d5ff4f9`                                                                                                                                                                      | 388 units; G1/L1, production build, 40 real HTTP contracts, independent bytes/authentication and inventory rejection pass      |
+| B6    | Accepted | `48894ea`, `ca704a2`, `24ee4a1`, `cc58d97`, `4195859`, `72b0dab`, `0d3a3be`                                                                                                                                                                      | 467 units; all coverage metrics >=90%; installed push hook, real npm cancellation, L2/G2 pass; Tier A verified                 |
+| B7    | Accepted | `a29eff5`, `0d60e83`, `19f0b0f`, `94cbe07`, `d563a35`, `cc48e66`, `f7e37bd`, `ac8f37f`, `9409642`, `823bc49`                                                                                                                                     | 612 units; G1/L1; all 30 required cases, browser ownership, navigation/button contrast, fullscreen scaling and PNG export pass |
+| B8    | Pending  | —                                                                                                                                                                                                                                                | —                                                                                                                              |
 
 ### B1 review evidence
 
@@ -1670,6 +1670,43 @@ Evidence is retained under `b7-final-final-unit-jvg0o4go/result.json` and
 commit matches the reviewed file hash and was imported by fast-forward after normal hooks passed.
 The four-file layout/export draft now resumes from this accepted baseline in a fresh independent
 clone; its earlier 29/30 result remains a rejected checkpoint, not layout acceptance.
+
+### B7 layout and export acceptance
+
+Accepted implementation: `823bc49af271e25a071f7994a18fef53e499dcb7`. The preserved four-file
+draft was restored byte-for-byte into a fresh clone containing the accepted initial-frame fix.
+Only [layout.spec.ts](../tests/e2e/layout.spec.ts), [screenshot.spec.ts](../tests/e2e/screenshot.spec.ts),
+[contrast.ts](../tests/fixtures/contrast.ts) and the required inventory in
+[browser-shared.mjs](../scripts/browser-shared.mjs) changed. The inventory is now 30, retaining
+every previously required journey and adding three platform geometry cases, button contrast,
+mobile/dialog bounds and GBA export.
+
+Independent `quality:commit` passes in 7.99 seconds: 612 tests across 46 files, 119 Biome files,
+strict TypeScript and formatting with zero G1 errors or warnings. Coverage remains 94.72%
+statements, 90.22% branches, 94.95% functions and 95.68% lines. The complete production-browser
+gate passes 30/30 in 135.663 seconds, with zero failures, skips or flaky results and no local
+commercial ROM directories. Root also independently recalculated the attached measurements:
+
+- Native fullscreen and rejected-request fallback both center GB/GBC/GBA within 2 pixels, fit
+  the viewport and resize correctly. Initial shell scale factors are approximately 1.55, 1.527
+  and 1.753; real text ranges and action-button bounds follow the shell scale within 2%.
+- Twelve enabled pause/continue/overlay measurements cover default, hover and actual keyboard
+  focus. The minimum pixel-background contrast is 5.2355:1. The disabled A control remains
+  visibly legible at 5.9424:1; its requirement rejects invisible text without assigning a WCAG
+  minimum to disabled controls. Full text ranges must be inside the viewport before sampling.
+- At 390x844, Settings and Restart dialogs fit all four viewport edges and mobile controls fit
+  horizontally. The restart cancellation uses the actual dialog label.
+- Real downloaded PNGs decode to 1200x1080 for GB/GBC and 1620x1080 for GBA. Every pixel is opaque;
+  exported palettes match the native alternating black/white or red fixture frames. Native
+  snapshot thumbnail dimensions remain unchanged. These checks establish dimensions, opacity
+  and palette preservation, not a complete per-pixel resampling comparison.
+
+Evidence is retained under `b7-layout-final-unit-v3yqttf5/result.json` and
+`b7-layout-preflight-hfjzmwo6/run-positive-1788700410012084000` in the review directory. The latter
+contains the full report, `layout-measurements.json`, independent `layout-review.json`, and process
+capture. All 15 captured processes, owned groups, browser profile, runtime roots and port lock
+are gone. The committed bytes match the frozen manifest and were imported by fast-forward after
+normal hooks passed. B7 is accepted; B8 CI and release remain separate implementation handoffs.
 
 ## 5. Final acceptance record
 
