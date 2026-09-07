@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="assets/brand/icon-rounded.png" alt="Poké Pocket logo" width="180" height="180" />
+</p>
+
+<p align="center">
   <img src="docs/pokepocket.png" alt="Poké Pocket 卡带收藏盘" width="960" />
 </p>
 
@@ -169,3 +173,5 @@ batches, and current review evidence.
 mGBA WebAssembly 保持未修改，采用 **MPL-2.0**；分发包附带许可证与对应源码地址。角色 PNG 来自 `pret/pokeemerald` 指定提交，字体与其他依赖各自保留许可证。完整出处及许可边界见 **[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)**。
 
 架构和交互也参考 [Swift-plays-Pokemon](https://github.com/LiarPrincess/Swift-plays-Pokemon) 与 [PokeSwift](https://github.com/Dimillian/PokeSwift)。本项目使用 mGBA 核心，未移植这些项目的 Swift 模拟器实现。
+
+Logo assets and usage: [guide](docs/04-logo-usage.md) · [identity study](https://hexly.ai/logos/pokepocket).

@@ -1,0 +1,34 @@
+{
+  "project": "pokepocket",
+  "series": "character",
+  "study": "2026-09-07-03",
+  "finishing": "01",
+  "archive": "https://github.com/nocoo/hexly.ai/tree/main/artwork/logo-family/pokepocket/2026-09-07-03",
+  "review": "https://hexly.ai/logos/pokepocket",
+  "masters": {
+    "logo.png": {
+      "sha256": "eed19029ccc4a84efd6c4f9704566218820b98fee182fff93b628812b5fd278d",
+      "source": "artwork/logo-family/pokepocket/2026-09-07-03/finishing/01/exports/pokepocket-transparent-960.png",
+      "width": 960,
+      "height": 960
+    },
+    "assets/brand/icon.png": {
+      "sha256": "53346d03834b1aa20f454fef669c21a613fdd7a59f1960501b54ab57a722a621",
+      "source": "artwork/logo-family/pokepocket/2026-09-07-03/finishing/01/exports/pokepocket-icon-960.png",
+      "width": 960,
+      "height": 960
+    },
+    "assets/brand/icon-rounded.png": {
+      "sha256": "aee6c8f50699a4995a3a7d8bf13c5769231efb62fa3bfaf7bb6b1f0c8abd25c0",
+      "source": "artwork/logo-family/pokepocket/2026-09-07-03/finishing/01/exports/pokepocket-rounded-960.png",
+      "width": 960,
+      "height": 960
+    },
+    "assets/brand/background.png": {
+      "sha256": "028de74f83cb75ed870051b21e6177e5f56a2268dbce50011b2703f3b26c681f",
+      "source": "artwork/logo-family/pokepocket/2026-09-07-03/finishing/01/background.png",
+      "width": 960,
+      "height": 960
+    }
+  }
+}

@@ -645,7 +645,7 @@ export default function App() {
               returnToGallery();
             }}
           >
-            <img src="/favicon.svg" width="36" height="36" alt="" />
+            <img src="/logo-64.png" width="36" height="36" alt="" />
             <span>
               poké<span className="brand-light">pocket</span>
               <small>小小口袋，大大冒险。</small>
@@ -1083,7 +1083,7 @@ export default function App() {
             </button>
           </div>
           <div className="settings-about">
-            <img src="/favicon.svg" alt="" width="30" height="30" />
+            <img src="/logo-64.png" alt="" width="30" height="30" />
             <div>
               <strong>Poké Pocket v{APP_VERSION}</strong>
               <span>{game.coreVersion || `mGBA WASM ${CORE_VERSION}`} · 冒险始于一枚卡带</span>
