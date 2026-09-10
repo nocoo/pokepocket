@@ -8,7 +8,6 @@ worker-configuration.d.ts
 artifacts/
 test-results/
 playwright-report/
-package-lock.json
 bun.lock
 rom/
 roms/

@@ -42,4 +42,4 @@ Pokémon and associated characters, names, graphics and game content belong to N
 - DM Sans, Space Mono, Press Start 2P: SIL Open Font License 1.1, distributed via Fontsource; license files are included in their installed packages.
 - Cloudflare Vite plugin and Wrangler: Apache-2.0 or MIT as specified by the respective packages, https://github.com/cloudflare/workers-sdk
 
-Dependency versions and transitive dependencies are recorded in `bun.lock` and `package-lock.json`.
+Dependency versions and transitive dependencies are recorded in `bun.lock`.
