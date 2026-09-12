@@ -203,6 +203,11 @@ describe('isolated storage transactions', () => {
     expect(afterRetry?.playTime).toBe(155);
   });
 
+  it('skips play time update when the cartridge is missing', async () => {
+    await storage.recordPlayTime('missing-cart', 10);
+    expect(await storage.listCartridges()).toEqual([]);
+  });
+
   it('handles database open failure gracefully', async () => {
     const originalOpen = IDBFactory.prototype.open;
     IDBFactory.prototype.open = () => {

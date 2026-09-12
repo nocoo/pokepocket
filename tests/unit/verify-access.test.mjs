@@ -84,6 +84,32 @@ describe('deployment Access verification', () => {
 });
 
 describe('deployed version verification', () => {
+  it('cancels a non-json live body and retries until the version matches', async () => {
+    const cancel = vi.fn();
+    request
+      .mockResolvedValueOnce({
+        status: 200,
+        headers: { get: () => 'text/html' },
+        body: { cancel },
+        json: async () => ({}),
+      })
+      .mockResolvedValueOnce(Response.json({ status: 'ok', version: '1.1.0' }));
+    const verification = verifyReleaseVersion('1.1.0', { attempts: 2, delayMs: 1 });
+    await vi.runAllTimersAsync();
+    await verification;
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it('retries live fetch failures then accepts the matching version', async () => {
+    request
+      .mockRejectedValueOnce(new Error('socket hang up'))
+      .mockResolvedValueOnce(Response.json({ status: 'ok', version: '1.1.0' }));
+    const verification = verifyReleaseVersion('1.1.0', { attempts: 2, delayMs: 1 });
+    await vi.runAllTimersAsync();
+    await verification;
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
   it('waits until the requested version is live', async () => {
     request
       .mockResolvedValueOnce(Response.json({ status: 'ok', version: '1.0.0' }))

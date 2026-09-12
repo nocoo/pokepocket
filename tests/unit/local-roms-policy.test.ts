@@ -158,5 +158,42 @@ describe('development ROM discovery and inspect policy', () => {
     const notFoundRes = await pNotFound;
     expect(resNotFound.statusCode).toBe(404);
     expect(JSON.parse(notFoundRes.body as string)).toEqual({ error: 'Not found' });
+
+    // 6. HEAD known ROM -> headers only
+    const {
+      req: reqRomHead,
+      res: resRomHead,
+      headers: hRomHead,
+      endPromise: pRomHead,
+    } = createReqRes('/roms/pokeemerald.gba', 'HEAD');
+    dispatch(reqRomHead, resRomHead, () => {});
+    await pRomHead;
+    expect(resRomHead.statusCode).toBe(200);
+    expect(hRomHead['content-type']).toBe('application/octet-stream');
+    expect(hRomHead['content-length']).toBeDefined();
+
+    // 7. GET known ROM onto a non-stream response -> 503 catch path
+    const {
+      req: reqRomGet,
+      res: resRomGet,
+      endPromise: pRomGet,
+    } = createReqRes('/roms/pokeemerald.gba', 'GET');
+    (resRomGet as ServerResponse & { destroy: () => void; headersSent: boolean }).destroy = vi.fn();
+    (resRomGet as ServerResponse & { headersSent: boolean }).headersSent = false;
+    (resRomGet as ServerResponse & { removeHeader: (name: string) => void }).removeHeader = vi.fn();
+    dispatch(reqRomGet, resRomGet, () => {});
+    const getRes = await pRomGet;
+    expect(resRomGet.statusCode).toBe(503);
+    expect(JSON.parse(getRes.body as string)).toEqual({ error: 'Local cartridge unavailable' });
+
+    const { req: reqRomSent, res: resRomSent } = createReqRes('/roms/pokeemerald.gba', 'GET');
+    const destroy = vi.fn();
+    (resRomSent as ServerResponse & { destroy: () => void; headersSent: boolean }).destroy =
+      destroy;
+    (resRomSent as ServerResponse & { headersSent: boolean }).headersSent = true;
+    dispatch(reqRomSent, resRomSent, () => {});
+    await vi.waitFor(() => {
+      expect(destroy).toHaveBeenCalled();
+    });
   });
 });

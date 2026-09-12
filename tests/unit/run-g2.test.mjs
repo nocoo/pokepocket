@@ -1087,6 +1087,18 @@ describe('parseCliPrePushInput policy', () => {
       parseCliPrePushInput(['node', 'scripts/run-g2.mjs', '--pre-push'], failingStdin),
     ).toThrow(/Failed to read pre-push input from stdin: EPIPE on stdin/);
   });
+
+  it('CLI entry exits when --pre-push --input is missing a value', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const { fileURLToPath } = await import('node:url');
+    const root = fileURLToPath(new URL('../..', import.meta.url));
+    const res = spawnSync(process.execPath, ['scripts/run-g2.mjs', '--pre-push', '--input'], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    expect(res.status).toBe(1);
+    expect(res.stderr).toMatch(/Flag --input specified without an input value/);
+  });
 });
 
 describe('runProcessCapture child error and empty pid edge branches', () => {
