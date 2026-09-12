@@ -41,6 +41,7 @@ jobs:
         bun run build
         bun run verify:access
       wrangler-version: '4.129.0'
+      require-fresh-main: true
       environment: production
       concurrency-group: deploy-pokepocket-production
       timeout-minutes: 15
