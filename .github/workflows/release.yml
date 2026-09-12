@@ -31,7 +31,7 @@ jobs:
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main')
-    uses: nocoo/base-ci/.github/workflows/deploy-worker.yml@3d2e9e55fdd60aa756df454ded53ef6d06d6653f
+    uses: nocoo/base-ci/.github/workflows/deploy-worker.yml@2857469cc5206e7a4988171a1282209617996a67
     with:
       expected-workflow-path: ".github/workflows/ci.yml"
       expected-workflow-name: "CI"
@@ -41,7 +41,9 @@ jobs:
       runtime-version: "1.4.0"
       node-version: "22.12.0"
       install-policy: "project"
-      build-command: "bun run build && bun run verify:access"
+      build-command: |
+        bun run build
+        bun run verify:access
       wrangler-version: "4.129.0"
       environment: production
       concurrency-group: deploy-pokepocket-production
