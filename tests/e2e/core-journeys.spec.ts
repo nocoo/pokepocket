@@ -461,6 +461,10 @@ test.describe('Core Cartridge Journeys', () => {
 
       // Automatic restore verification:
       // Pause, set snapshot slot 0 with state 1 snapshot, put saved battery 2 in IndexedDB
+      // Wait until GBA/mGBA is producing frames so pause click is not blocked on a busy WASM turn.
+      await expect
+        .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0', 10))
+        .toBeGreaterThan(20);
       await page.getByRole('button', { name: '暂停游戏', exact: true }).click();
       await page.goto('/api/live');
       await page.evaluate(async (batteryBytes) => {
