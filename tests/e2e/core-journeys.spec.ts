@@ -586,22 +586,45 @@ test.describe('Core Cartridge Journeys', () => {
         }
       });
 
-      // Sample state 1 frame
-      const frame1Pixels = await sampleCanvasPixels(page);
+      // Poll until live canvas reflects meaningful opaque initial fixture frame, retaining sample as frame1Pixels
+      let frame1Pixels: number[] = [];
+      await expect
+        .poll(
+          async () => {
+            const sample = await sampleCanvasPixels(page);
+            if (isFixtureFrame(sample, system, 1)) {
+              frame1Pixels = sample;
+              return true;
+            }
+            return false;
+          },
+          { timeout: 15000 },
+        )
+        .toBe(true);
+      expect(frame1Pixels.some((v, i) => i % 4 !== 3 && v > 0)).toBe(true);
 
-      // Advance battery to byte 0 = 2 via A press
+      // Hold A until live canvas pixel frame changes to expected next frame, then release in finally
+      let frame2Pixels: number[] = [];
       await page.locator('#game-canvas').focus();
       try {
         await page.keyboard.down('KeyO');
         await expect
-          .poll(async () => JSON.stringify(await sampleCanvasPixels(page)), { timeout: 15000 })
-          .not.toBe(JSON.stringify(frame1Pixels));
+          .poll(
+            async () => {
+              const sample = await sampleCanvasPixels(page);
+              if (!isFixtureFrame(sample, system, 2)) return false;
+              frame2Pixels = sample;
+              return true;
+            },
+            { timeout: 15000 },
+          )
+          .toBe(true);
         await expect.poll(getBatteryByte0, { timeout: 15000 }).toBe(2);
       } finally {
         await page.keyboard.up('KeyO');
       }
 
-      const frame2Pixels = await sampleCanvasPixels(page);
+      expect(frame2Pixels).not.toEqual(frame1Pixels);
 
       // Export .sav
       await page.getByRole('button', { name: '我的存档', exact: true }).click();
