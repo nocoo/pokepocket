@@ -484,7 +484,7 @@ extend Vitest discovery rather than introducing a duplicate typechecking configu
    release/cancel/lost capture, keyboard activation/blur, inactive controls, shoulder availability,
    device states, canvas identity, proportional resize geometry, and observer cleanup. Verify dialog
    open/close and dismissal boundaries, accessible references, binding capture/conflicts, ignored
-   keys, cancellation/reset/secondary removal, and listener cleanup.
+   input, cancellation, reset, secondary binding removal, and listener cleanup.
 2. **B4c2 — library and save components.** Separate atomic commits for cartridge/series selection
    and for snapshot list/confirmation actions. Exercise real rendered controls, busy/disabled states,
    available and missing cartridges, sorting/display states, confirmation/cancellation, and retry

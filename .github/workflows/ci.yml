@@ -14,23 +14,23 @@ jobs:
   quality:
     uses: nocoo/base-ci/.github/workflows/quality.yml@ad43150de3a2be2fa464b5cd2f921dc4fa9f8f0f
     with:
-      runtime-version: "1.4.0"
-      node-version: "22.12.0"
-      install-policy: "project"
-      coverage-path: "coverage"
-      prepare-command: "npm run cf:typegen -- --check"
-      typecheck-command: "npm run quality:g1"
+      runtime-version: '1.4.0'
+      node-version: '22.12.0'
+      install-policy: 'project'
+      coverage-path: 'coverage'
+      prepare-command: 'npm run cf:typegen -- --check'
+      typecheck-command: 'npm run quality:g1'
       lint: false
       disabled-check-reasons: |-
         {
           "lint": "G1 static checks already run via quality:g1"
         }
-      test-command: "npm run quality:l1"
+      test-command: 'npm run quality:l1'
       l2: true
       l2-command: |
         npm run test:http
         npm run quality:l2
       l3: true
-      l3-command: "npm run quality:l3"
-      l3-browser: "chromium"
-      security-command: "npm run quality:g2"
+      l3-command: 'npm run quality:l3'
+      l3-browser: 'chromium'
+      security-command: 'npm run quality:g2'
