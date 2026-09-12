@@ -18,10 +18,6 @@ permissions:
   contents: read
   actions: read
 
-concurrency:
-  group: deploy-pokepocket-production
-  cancel-in-progress: false
-
 jobs:
   deploy:
     name: Deploy Worker
