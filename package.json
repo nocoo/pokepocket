@@ -74,5 +74,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/nocoo/pokepocket.git"
+  },
+  "overrides": {
+    "sharp": "0.35.4"
   }
 }
