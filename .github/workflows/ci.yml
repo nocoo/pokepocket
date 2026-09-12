@@ -34,4 +34,3 @@ jobs:
       l3-command: "npm run quality:l3"
       l3-browser: "chromium"
       security-command: "npm run quality:g2"
-    secrets: inherit
