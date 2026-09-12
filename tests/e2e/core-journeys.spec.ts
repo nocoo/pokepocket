@@ -95,8 +95,11 @@ test.describe('Core Cartridge Journeys', () => {
         .toBeGreaterThan(20);
 
       // Verify canvas rendered initial frame
-      const initialPixels = await sampleCanvasPixels(page);
-      expect(initialPixels.some((val, idx) => idx % 4 !== 3 && val > 0)).toBe(true);
+      await expect
+        .poll(async () =>
+          (await sampleCanvasPixels(page)).some((val, idx) => idx % 4 !== 3 && val > 0),
+        )
+        .toBe(true);
 
       // Pause game
       await page.getByRole('button', { name: '暂停游戏', exact: true }).click();
@@ -169,8 +172,11 @@ test.describe('Core Cartridge Journeys', () => {
       await expect
         .poll(async () => parseInt((await page.getByTestId('fps').textContent()) ?? '0', 10))
         .toBeGreaterThan(20);
-      const reloadedPixels = await sampleCanvasPixels(page);
-      expect(reloadedPixels.some((val, idx) => idx % 4 !== 3 && val > 0)).toBe(true);
+      await expect
+        .poll(async () =>
+          (await sampleCanvasPixels(page)).some((val, idx) => idx % 4 !== 3 && val > 0),
+        )
+        .toBe(true);
       await expect(page.getByRole('status')).toContainText('已继续上次的冒险');
       await expect(page.getByAltText('即时存档 1 的游戏画面')).toBeVisible();
     });
