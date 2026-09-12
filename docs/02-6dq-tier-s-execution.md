@@ -1760,11 +1760,20 @@ has been run for this acceptance. The release handoff is recorded below.
 
 ### B8 release acceptance
 
+The historical implementation below was replaced on 2026-09-12 by the pinned
+base-ci v2026.7 quality, test-job and deploy-worker workflows. CI retains
+G1/L1/L2/G2 and an independent L3 job with its JSON report, traces and
+screenshots. Release proves the successful CI source and current main commit,
+then uses the existing production environment, deployment lock and Access/version
+verification. Caller contract tests retain these requirements. The retired local
+source resolver, aggregate helper and their orphan tests were removed; the
+shared provider's source and aggregate suites now validate that implementation.
+
 Accepted implementation: `7022c6bc63c795a63e78580c9109adc525af9c58` plus additive correction
 `f26a6f862f7d35ee3fc3edd6e23eb36dff58a497`. The complete six-file change was reviewed in a new
 independent clone and imported by fast-forward; neither implementation commit was rewritten.
 
-[release-target.mjs](../scripts/release-target.mjs) resolves one immutable commit for each event.
+[release-target.mjs](https://github.com/nocoo/pokepocket/blob/f26a6f862f7d35ee3fc3edd6e23eb36dff58a497/scripts/release-target.mjs) resolves one immutable commit for each event.
 Automatic releases require successful push CI from the expected workflow name, path, matching
 positive safe IDs, same repository and main branch. Tag pushes use the original event object,
 peeling annotated tags; moved or deleted tag names cannot substitute a different commit. An
@@ -1774,7 +1783,7 @@ Package version is read from that resolved commit, with tag/version agreement en
 [release.yml](../.github/workflows/release.yml) sends the resolved SHA through the accepted quality
 workflow and checks out its tested-SHA output for deployment. After build and Access precheck,
 automatic releases explicitly fetch `refs/heads/main` into `refs/remotes/origin/main`, then
-[verify-deploy.mjs](../scripts/verify-deploy.mjs) checks tested, resolved and checked-out SHAs,
+[verify-deploy.mjs](https://github.com/nocoo/pokepocket/blob/f26a6f862f7d35ee3fc3edd6e23eb36dff58a497/scripts/verify-deploy.mjs) checks tested, resolved and checked-out SHAs,
 package version and current main freshness immediately before deployment. A stale automatic
 target fails without being replaced; tag/manual releases retain their explicit target semantics.
 Production serialization, deployment-only environment/secrets and exact version/Access postcheck

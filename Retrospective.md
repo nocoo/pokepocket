@@ -82,3 +82,27 @@ committed history was unaffected. The implementer was instructed to leave every 
 untouched, including during cleanup; an unrelated diff is never permission to restore or stash it.
 Documentation writes and commits now finish before dispatch or after the implementer stops at a
 handoff boundary, reducing exposure in the shared checkout. Handoff claims must match actual diffs.
+
+## 2026-09-12: Git fixtures inherited the hook repository
+
+During the shared CI migration, the legacy release-target tests set the repository's
+local Git identity to `Pokepocket Test <test@example.com>`. Their Git subprocesses
+changed `cwd` but inherited Git environment variables from the hook invocation.
+Four migration commits consequently used the fixture identity. The original
+checkout remained at `8698f1a` with its working tree preserved.
+
+Review removed those exact local identity overrides. A subsequent real commit
+hook exposed the same isolation defect in the remaining ROM scanner fixtures:
+`git init` set the shared repository's `core.bare` to `true`, fixture identity
+overrides returned, and five synthetic paths entered the task worktree's index.
+The hook failed before creating a commit. Recovery restored `core.bare=false`,
+removed only the exact fixture identity overrides and those five index entries,
+and preserved the staged documentation. The original checkout's HEAD and clean
+status were verified again. The four earlier commits remain unchanged.
+
+The unused release resolver and its fixture tests have been removed as part of
+the shared source-proof migration. The remaining ROM scanner tests now clear all
+inherited `GIT_*` variables through scoped Vitest environment stubs, covering both
+Git subprocesses and scanner calls in the test process, and restore them after
+each test. Unneeded fixture identity commands were removed. A temporary working
+directory alone does not isolate Git from the repository invoking a hook.

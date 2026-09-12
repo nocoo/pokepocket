@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,7 +11,13 @@ import {
 import { gbFixture, gbaFixture } from '../fixtures/headers';
 
 const roots = [];
+beforeEach(() => {
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith('GIT_')) vi.stubEnv(key, undefined);
+  }
+});
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(roots.splice(0).map((r) => rm(r, { recursive: true, force: true })));
 });
 
@@ -104,8 +110,6 @@ describe('check-no-roms distribution policy', () => {
     const root = await createTempRoot();
 
     execFileSync('git', ['init', '--quiet'], { cwd: root });
-    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: root });
-    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: root });
 
     // Stage clean and forbidden files
     await writeFile(path.join(root, 'clean.txt'), 'clean file');
@@ -128,8 +132,6 @@ describe('check-no-roms distribution policy', () => {
 
     // Initialize git repository in root
     execFileSync('git', ['init', '--quiet'], { cwd: root });
-    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: root });
-    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: root });
 
     // Set up default 'public' and 'dist' directories
     const publicDir = path.join(root, 'public');
