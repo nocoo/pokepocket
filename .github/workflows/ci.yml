@@ -12,6 +12,21 @@ permissions:
 
 jobs:
   quality:
-    uses: ./.github/workflows/quality.yml
+    uses: nocoo/base-ci/.github/workflows/quality.yml@3d2e9e55fdd60aa756df454ded53ef6d06d6653f
     with:
-      target-sha: ${{ github.sha }}
+      runtime-version: "1.4.0"
+      node-version: "22.12.0"
+      install-policy: "project"
+      coverage-path: "coverage"
+      prepare-command: "npm run cf:typegen -- --check"
+      typecheck-command: "npm run quality:g1"
+      lint: false
+      disabled-check-reasons: '{"lint":"G1 static checks already run via quality:g1"}'
+      test-command: "npm run quality:l1"
+      l2: true
+      l2-command: "npm run test:http && npm run quality:l2"
+      l3: true
+      l3-command: "npm run quality:l3"
+      l3-browser: "chromium"
+      security-command: "npm run quality:g2"
+    secrets: inherit

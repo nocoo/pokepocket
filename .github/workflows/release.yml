@@ -16,100 +16,37 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: deploy-pokepocket-production
   cancel-in-progress: false
 
 jobs:
-  resolve:
-    name: Resolve Release Target
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      target-sha: ${{ steps.resolve.outputs.target_sha }}
-      version: ${{ steps.resolve.outputs.version }}
-      event-type: ${{ steps.resolve.outputs.event_type }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.12.0'
-
-      - name: Resolve and validate target commit
-        id: resolve
-        run: node scripts/resolve-release.mjs
-        env:
-          EVENT_PATH: ${{ github.event_path }}
-          EVENT_NAME: ${{ github.event_name }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          INPUT_TAG: ${{ inputs.tag }}
-
-  quality:
-    name: Quality Gates
-    needs: [resolve]
-    uses: ./.github/workflows/quality.yml
-    with:
-      target-sha: ${{ needs.resolve.outputs.target-sha }}
-
   deploy:
     name: Deploy Worker
-    needs: [resolve, quality]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: production
-    steps:
-      - name: Checkout verified release commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.quality.outputs.tested-sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.12.0'
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: '1.4.0'
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build release assets
-        run: bun run build
-
-      - name: Verify Access before deploying
-        run: bun run verify:access
-
-      - name: Fetch current remote main tip for freshness check
-        if: github.event_name == 'workflow_run'
-        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-
-      - name: Check freshness and verify deploy target
-        run: node scripts/verify-deploy.mjs
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EXPECTED_SHA: ${{ needs.quality.outputs.tested-sha }}
-          RESOLVED_SHA: ${{ needs.resolve.outputs.target-sha }}
-          EXPECTED_VERSION: ${{ needs.resolve.outputs.version }}
-
-      - name: Deploy Worker
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          packageManager: bun
-          command: deploy
-
-      - name: Verify deployed version and Access
-        run: bun run verify:release
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    uses: nocoo/base-ci/.github/workflows/deploy-worker.yml@3d2e9e55fdd60aa756df454ded53ef6d06d6653f
+    with:
+      expected-workflow-path: ".github/workflows/ci.yml"
+      expected-workflow-name: "CI"
+      source-run-id: ${{ github.event_name == 'workflow_run' && format('{0}', github.event.workflow_run.id) || '' }}
+      tag: ${{ github.event_name == 'push' && github.ref_name || inputs.tag || '' }}
+      package-version-match: ${{ github.event_name != 'workflow_run' }}
+      runtime-version: "1.4.0"
+      node-version: "22.12.0"
+      install-policy: "project"
+      build-command: "bun run build && bun run verify:access"
+      wrangler-version: "4.129.0"
+      environment: production
+      concurrency-group: deploy-pokepocket-production
+      timeout-minutes: 15
+      verify-command: "bun run verify:release"
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
