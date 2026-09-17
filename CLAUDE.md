@@ -66,7 +66,7 @@ bun run deploy:check        # build + wrangler deploy --dry-run
 ## Verification
 
 Status: `enforced` | `planned` | `manual` | `N/A`.
-6DQ = L1/L2/L3 + G1/G2 + D1. Required L1 bar is four metrics each ≥ 95%. Current vitest thresholds are **90%** — do not label that as 95% enforced.
+6DQ = L1/L2/L3 + G1/G2 + D1. Required L1 bar is statements/branches/functions/lines each ≥95%; no skipped or focused tests. Current vitest thresholds are **90%** — do not label that as 95% enforced.
 
 | Change         | Proof                                                         | Status   | Evidence                                                                                                                  |
 | -------------- | ------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
