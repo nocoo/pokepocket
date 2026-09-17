@@ -80,12 +80,12 @@ Status: `enforced` | `planned` | `manual` | `N/A`.
 | Docs           | numbered docs if behavior changed                             | manual   | human review                                                                                                              |
 | Release        | version + Access live-check                                   | enforced | `release.yml` `verify:access` / `verify:release`                                                                          |
 
-| Hook       | Verifies                                   | Budget      | Runs           |
-| ---------- | ------------------------------------------ | ----------- | -------------- |
-| pre-commit | `npm run quality:commit` (index via husky) | <30s target | G1 + L1 at 90% |
-| pre-push   | stdin refs via `run-push.mjs --pre-push`   | <3min       | L2 ‖ G2        |
+| Hook       | Verifies                                                                           | Budget                    | Runs               |
+| ---------- | ---------------------------------------------------------------------------------- | ------------------------- | ------------------ |
+| pre-commit | working-tree `npm run quality:commit` (not `git checkout-index`)                   | target <30s (unmeasured)  | G1 + L1 at **90%** |
+| pre-push   | `run-push.mjs --pre-push` reads stdin refs for G2; L2 is working-tree `quality:l2` | target <3min (unmeasured) | L2 ‖ G2            |
 
-Hooks check-only. `--no-verify` forbidden.
+Target: full index-snapshot G1+L1; L2 also bound to stdin refs. Check-only; `--no-verify` forbidden.
 
 ## Resources / Isolation
 
