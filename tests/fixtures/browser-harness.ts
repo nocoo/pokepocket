@@ -1,4 +1,5 @@
 import { test as base, expect, type Page, type BrowserContext } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
 // @ts-expect-error production-runtime is a maintained mjs script without ambient declarations
 import { createProductionRuntime } from '../../scripts/production-runtime.mjs';
 import type { Snapshot } from '../../src/lib/storage';
@@ -20,11 +21,63 @@ export type StoredSnapshotRecord = Omit<Snapshot, 'data'> & {
 export const test = base.extend<
   {
     authorizedContext: BrowserContext;
+    nativeProfile: undefined;
   },
   {
     productionWorker: ProductionWorkerHarness;
   }
 >({
+  nativeProfile: [
+    async ({ page }, use, testInfo) => {
+      if (!testInfo.title.startsWith('GBC: snapshot regression')) {
+        await use(undefined);
+        return;
+      }
+      const browser = page.context().browser();
+      if (!browser) throw new Error('CPU trace requires the guarded browser');
+      const session = await browser.newBrowserCDPSession();
+      const traceEvents: unknown[] = [];
+      let complete = false;
+      session.on('Tracing.dataCollected', ({ value }) => {
+        for (const event of value) traceEvents.push(event);
+      });
+      try {
+        await session.send('Tracing.start', {
+          transferMode: 'ReportEvents',
+          traceConfig: {
+            recordMode: 'recordUntilFull',
+            traceBufferSizeInKb: 8192,
+            includedCategories: ['disabled-by-default-v8.cpu_profiler'],
+            excludedCategories: ['*'],
+          },
+        });
+        try {
+          await use(undefined);
+        } finally {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const completed = new Promise<void>((resolve, reject) => {
+            session.once('Tracing.tracingComplete', () => {
+              complete = true;
+              resolve();
+            });
+            timer = setTimeout(() => reject(new Error('CPU trace did not finish')), 5000);
+          });
+          try {
+            await Promise.all([session.send('Tracing.end'), completed]);
+          } finally {
+            clearTimeout(timer);
+            await writeFile(
+              testInfo.outputPath('native-profile.json'),
+              JSON.stringify({ complete, traceEvents }),
+            );
+          }
+        }
+      } finally {
+        await session.detach();
+      }
+    },
+    { auto: true },
+  ],
   // Worker-scoped fixture: spins up Miniflare on port 27047 for this test worker, disposes when worker finishes
   productionWorker: [
     // biome-ignore lint/correctness/noEmptyPattern: playwright fixtures require object destructuring
