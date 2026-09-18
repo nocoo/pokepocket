@@ -129,6 +129,80 @@ describe('PocketEmulator with injected dependencies', () => {
     expect(core.loadGame).toHaveBeenCalled();
   });
 
+  it('configures callbacks and settings while paused, including cartridge switches', async () => {
+    const core = createFakeCore();
+    let active = false;
+    const register = core.addCoreCallbacks;
+    core.loadGame = vi.fn(() => {
+      active = true;
+      return true;
+    });
+    core.pauseGame = vi.fn(() => {
+      active = false;
+    });
+    core.resumeGame = vi.fn(() => {
+      active = true;
+    });
+    core.addCoreCallbacks = vi.fn((callbacks) => {
+      if (active) throw new Error('Core thread is reading the callback list');
+      register(callbacks);
+    });
+    core.setCoreSettings = vi.fn(() => {
+      if (active) throw new Error('Core thread is reading core settings');
+    });
+    core.setVolume = vi.fn(() => {
+      if (active) throw new Error('Core thread is reading volume settings');
+    });
+    core.setFastForwardMultiplier = vi.fn(() => {
+      if (active) throw new Error('Core thread is reading timing settings');
+    });
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    for (const id of ['first-callback-owner', 'second-callback-owner']) {
+      await emulator.load(createCartridge(id), {} as HTMLCanvasElement);
+      expect(emulator.getSnapshot().status).toBe('running');
+      expect(emulator.getSnapshot().cartridge?.id).toBe(id);
+      expect(active).toBe(true);
+    }
+    expect(core.addCoreCallbacks).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the core paused if callback registration fails', async () => {
+    const core = createFakeCore();
+    let active = false;
+    core.loadGame = vi.fn(() => {
+      active = true;
+      return true;
+    });
+    core.pauseGame = vi.fn(() => {
+      active = false;
+    });
+    core.resumeGame = vi.fn(() => {
+      active = true;
+    });
+    core.addCoreCallbacks = vi.fn(() => {
+      throw new Error('Callback registration failed');
+    });
+    const emulator = new PocketEmulator({
+      createCore: async () => core,
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    await expect(emulator.load(createCartridge(), {} as HTMLCanvasElement)).rejects.toThrow(
+      'Callback registration failed',
+    );
+    expect(emulator.getSnapshot().status).toBe('error');
+    expect(active).toBe(false);
+    expect(core.resumeGame).not.toHaveBeenCalled();
+  });
+
   it('pauses and resumes cleanly', async () => {
     const core = createFakeCore();
     const emulator = new PocketEmulator({
@@ -783,6 +857,7 @@ describe('PocketEmulator with injected dependencies', () => {
     });
 
     await emulator.load(createCartridge('cart-deferred-persist'), {} as HTMLCanvasElement);
+    callOrder.length = 0;
     emulator.pause();
     expect(emulator.getSnapshot().status).toBe('paused');
     expect(corePaused).toBe(true);
@@ -948,7 +1023,13 @@ describe('PocketEmulator with injected dependencies', () => {
     });
 
     await emu1.load(cart, {} as HTMLCanvasElement, true);
-    expect(callOrder1).toEqual(['pauseGame', 'loadStateSlot:0:61:paused=true', 'resumeGame']);
+    expect(callOrder1).toEqual([
+      'pauseGame',
+      'resumeGame',
+      'pauseGame',
+      'loadStateSlot:0:61:paused=true',
+      'resumeGame',
+    ]);
     expect(core1.FS.writeFile).toHaveBeenCalledWith(
       '/states/cart-auto-lifecycle.ss0',
       new Uint8Array(autoData),

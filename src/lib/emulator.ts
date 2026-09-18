@@ -227,6 +227,8 @@ export class PocketEmulator {
       }
       this.savedataDirty = false;
 
+      // The native thread reads both the callback list and configuration during frames.
+      core.pauseGame();
       core.addCoreCallbacks({
         videoFrameEndedCallback: () => {
           if (this.loadGeneration === currentGeneration) {
@@ -246,10 +248,10 @@ export class PocketEmulator {
           }, 0);
         },
       });
-
       core.setCoreSettings({ allowOpposingDirections: false });
       core.setVolume(this.volume);
       core.setFastForwardMultiplier(this.state.speed);
+      core.resumeGame();
 
       const previous = snapshots.find((snapshot) => snapshot.slot === 0);
       let resumedAutomatically = false;
