@@ -5,6 +5,10 @@ import path from 'node:path';
 import { setupEmulator, REQUIRED_DEPENDENCIES } from '../../scripts/setup-emulator.mjs';
 
 const roots = [];
+const sdkRuntime = await readFile(
+  new URL('../../node_modules/@thenick775/mgba-wasm/dist/mgba.js', import.meta.url),
+  'utf8',
+);
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((r) => rm(r, { recursive: true, force: true })));
 });
@@ -21,7 +25,7 @@ describe('setup-emulator policy and asset preparation', () => {
     const source = path.join(root, 'node_modules/@thenick775/mgba-wasm');
     await mkdir(path.join(source, 'dist'), { recursive: true });
     await writeFile(path.join(source, 'package.json'), JSON.stringify({ version: '2.5.1' }));
-    await writeFile(path.join(source, 'dist/mgba.js'), '/* fake mgba.js */');
+    await writeFile(path.join(source, 'dist/mgba.js'), sdkRuntime);
     await writeFile(path.join(source, 'dist/mgba.wasm'), '/* fake mgba.wasm */');
 
     // Create mock node_modules dependencies with licenses
@@ -44,7 +48,9 @@ describe('setup-emulator policy and asset preparation', () => {
 
     // Check emulator assets
     const jsContent = await readFile(path.join(root, 'public/emulator/2.5.1/mgba.js'), 'utf8');
-    expect(jsContent).toBe('/* fake mgba.js */');
+    expect(jsContent).toContain('proxyToMainThread(80,0,1,fd)');
+    expect(jsContent).not.toContain('proxyToMainThread(80,0,2,fd)');
+    expect(jsContent).toContain('initializeMemoryFilesystem');
     const wasmContent = await readFile(path.join(root, 'public/emulator/2.5.1/mgba.wasm'), 'utf8');
     expect(wasmContent).toBe('/* fake mgba.wasm */');
 
@@ -61,7 +67,7 @@ describe('setup-emulator policy and asset preparation', () => {
     const source = path.join(root, 'node_modules/@thenick775/mgba-wasm');
     await mkdir(path.join(source, 'dist'), { recursive: true });
     await writeFile(path.join(source, 'package.json'), JSON.stringify({ version: '2.5.1' }));
-    await writeFile(path.join(source, 'dist/mgba.js'), '/* fake mgba.js */');
+    await writeFile(path.join(source, 'dist/mgba.js'), sdkRuntime);
     await writeFile(path.join(source, 'dist/mgba.wasm'), '/* fake mgba.wasm */');
     for (const dep of REQUIRED_DEPENDENCIES) {
       const depDir = path.join(root, 'node_modules', dep);
