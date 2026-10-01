@@ -134,3 +134,12 @@ edit, with that edit, and after `6fa1676` restored the original console source.
 The root cause is unproven. An earlier note in this file claimed the assertion
 reads untransformed layout boxes. That claim is false and is withdrawn. The
 scale edit was not shown to be required and was removed. Tests were not loosened.
+
+## 2026-10-01: missed generated Worker types after a Wrangler upgrade
+
+The dependency upgrade passed local lint, types, unit, HTTP and security gates,
+but its tracked `worker-configuration.d.ts` still came from the old Wrangler.
+CI run `36807759712` rejected it with `wrangler types --check` before L1/L2/L3
+could execute. Local TypeScript compilation did not prove generator freshness.
+Regenerate declarations with the pinned project generator and run the exact
+CI preparation command after every Wrangler upgrade, before publication.
