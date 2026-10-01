@@ -106,13 +106,10 @@ export function Console({
         viewport.clientWidth - parseFloat(padding.paddingLeft) - parseFloat(padding.paddingRight);
       const height =
         viewport.clientHeight - parseFloat(padding.paddingTop) - parseFloat(padding.paddingBottom);
-      const currentScale = Number.parseFloat(device.style.getPropertyValue('--console-scale')) || 1;
-      const bounds = device.getBoundingClientRect();
-      const naturalWidth = bounds.width / currentScale;
-      const naturalHeight = bounds.height / currentScale;
-      if (width <= 0 || height <= 0 || !naturalWidth || !naturalHeight) return;
+      if (width <= 0 || height <= 0 || !device.offsetWidth || !device.offsetHeight) return;
 
-      const scale = Math.min(width / naturalWidth, height / naturalHeight);
+      // Measure before transforms so resizing cannot feed back into the scale.
+      const scale = Math.min(width / device.offsetWidth, height / device.offsetHeight);
       device.style.setProperty('--console-scale', String(scale));
     };
     const observer = new ResizeObserver(fitConsole);

@@ -316,24 +316,8 @@ describe('Console and MobileControls components', () => {
 
     const consoleWrap = container.querySelector('.console-wrap') as HTMLElement;
     // Console element size 480 x 320 -> ratios: 960/480 = 2.0, 560/320 = 1.75 -> scale: 1.75 (limiting height)
-    vi.spyOn(consoleWrap, 'getBoundingClientRect').mockImplementation(() => {
-      const scale = Number.parseFloat(consoleWrap.style.getPropertyValue('--console-scale')) || 1;
-      const width = 480 * scale;
-      const height = 320 * scale;
-      return {
-        width,
-        height,
-        x: 0,
-        y: 0,
-        top: 0,
-        left: 0,
-        right: width,
-        bottom: height,
-        toJSON() {
-          return {};
-        },
-      } as DOMRect;
-    });
+    Object.defineProperty(consoleWrap, 'offsetWidth', { value: 480, configurable: true });
+    Object.defineProperty(consoleWrap, 'offsetHeight', { value: 320, configurable: true });
 
     // Assert both elements were observed (viewport and device)
     expect(observeSpy).toHaveBeenCalledWith(parent);
