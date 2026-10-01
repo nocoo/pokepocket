@@ -128,7 +128,6 @@ export async function createProductionRuntime(options = {}) {
       workers: [
         {
           config: {
-            type: 'worker',
             name: 'pokepocket-production-l2',
             compatibilityDate: wranglerConfig.compatibility_date,
             compatibilityFlags: wranglerConfig.compatibility_flags,
