@@ -281,6 +281,7 @@ for (const { system, ext, builder } of platforms) {
       await expect
         .poll(async () => (await measureGeometry()).viewport.width)
         .toBe(nativeFs.viewport.width);
+      await nativeResizeSession.send('Emulation.clearDeviceMetricsOverride');
 
       // Exit native fullscreen via 'F'
       await page.keyboard.press('KeyF');
@@ -288,6 +289,7 @@ for (const { system, ext, builder } of platforms) {
         () => !document.fullscreenElement && !document.querySelector('.focus-mode'),
       );
     } finally {
+      await nativeResizeSession.send('Emulation.clearDeviceMetricsOverride').catch(() => {});
       await nativeResizeSession.detach();
     }
 
