@@ -57,7 +57,7 @@
     "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "6.1.1",
+    "@vitejs/plugin-react": "6.1.2",
     "@vitest/coverage-v8": "5.0.1",
     "fake-indexeddb": "6.2.5",
     "happy-dom": "20.12.0",
