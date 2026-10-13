@@ -44,8 +44,8 @@
     "idb": "8.0.4",
     "jose": "6.2.12",
     "lucide-react": "1.55.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
