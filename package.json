@@ -68,7 +68,7 @@
     "typescript": "7.0.2",
     "vite": "8.3.4",
     "vitest": "5.0.4",
-    "wrangler": "4.149.0"
+    "wrangler": "4.151.3"
   },
   "license": "MIT",
   "repository": {
@@ -77,6 +77,7 @@
   },
   "overrides": {
     "sharp": "0.35.5",
-    "source-map-js": "1.2.2"
+    "source-map-js": "1.2.2",
+    "wrangler": "4.151.3"
   }
 }
