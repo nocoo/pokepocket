@@ -69,7 +69,7 @@ describe('quality and ci workflows policy', () => {
 
     it('uses the same install, runtime, prepare, browser, and quality:l3 command', () => {
       expect(l3Job.with['runtime-version']).toBe('1.4.0');
-      expect(l3Job.with['node-version']).toBe('22.12.0');
+      expect(l3Job.with['node-version']).toBe('22.23.4');
       expect(l3Job.with['install-policy']).toBe('project');
       expect(l3Job.with.browser).toBe('chromium');
       expect(l3Job.with['pre-command']).toBe('npm run cf:typegen -- --check');

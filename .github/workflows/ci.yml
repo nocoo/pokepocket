@@ -12,10 +12,10 @@ permissions:
 
 jobs:
   quality:
-    uses: nocoo/base-ci/.github/workflows/quality.yml@0394178ebcff0418c442d84a84119220f31f8987 # v2026.9
+    uses: nocoo/base-ci/.github/workflows/quality.yml@ac635753a869cb85fad1f52aae4ccbd6119f3cae # main 2026-10-22
     with:
       runtime-version: '1.4.0'
-      node-version: '22.12.0'
+      node-version: '22.23.4'
       install-policy: 'project'
       coverage-path: 'coverage'
       prepare-command: 'npm run cf:typegen -- --check'
@@ -34,10 +34,10 @@ jobs:
 
   l3:
     name: L3 Browser E2E
-    uses: nocoo/base-ci/.github/workflows/test-job.yml@0394178ebcff0418c442d84a84119220f31f8987 # v2026.9
+    uses: nocoo/base-ci/.github/workflows/test-job.yml@ac635753a869cb85fad1f52aae4ccbd6119f3cae # main 2026-10-22
     with:
       runtime-version: '1.4.0'
-      node-version: '22.12.0'
+      node-version: '22.23.4'
       install-policy: 'project'
       browser: chromium
       timeout-minutes: 20

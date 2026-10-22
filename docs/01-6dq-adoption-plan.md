@@ -46,7 +46,7 @@ Evidence:
 
 - [Project scripts](../package.json), [Vitest configuration](../vitest.config.ts),
   [TypeScript configuration](../tsconfig.app.json), and [CI caller](../.github/workflows/ci.yml).
-- The caller pins [base-ci at `b482fdee`](https://github.com/nocoo/base-ci/blob/b482fdee98ce1196c809ae158f116caabfc2475b/.github/workflows/bun-quality.yml).
+- The caller pins [base-ci at `ac635753`](https://github.com/nocoo/base-ci/blob/ac635753a869cb85fad1f52aae4ccbd6119f3cae/.github/workflows/bun-quality.yml).
   That revision runs OSV 2.3.5 against `bun.lock` and Gitleaks 8.30.1 against the checked-out tree.
   Neither scan is merely a named placeholder. Coverage upload and L2 are disabled in this project.
 - [Audited successful CI run](https://github.com/nocoo/pokepocket/actions/runs/33954676380) and its
