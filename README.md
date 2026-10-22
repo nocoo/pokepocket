@@ -57,7 +57,7 @@ ROM、存档与即时存档按 ROM 的 SHA-256 区分，保存在当前浏览器
 
 ## 开发
 
-需要 Node.js 22.12 或更新版本，推荐使用与 CI 一致的 Bun 1.4.0。安装时会准备未修改的 mGBA JavaScript / WASM 文件与运行依赖的许可证。
+需要 Node.js 22.23.4 或更新版本，推荐使用与 CI 一致的 Bun 1.4.0。安装时会准备未修改的 mGBA JavaScript / WASM 文件与运行依赖的许可证。
 
 ```bash
 git clone https://github.com/nocoo/pokepocket.git

@@ -57,7 +57,7 @@ Returning to the collection pauses and saves; switching cartridges retains the p
 
 ## Development
 
-Use Node.js 22.12 or newer, preferably with Bun 1.4.0 to match CI. Installation prepares the unmodified mGBA JavaScript / WASM files and runtime dependency licenses.
+Use Node.js 22.23.4 or newer, preferably with Bun 1.4.0 to match CI. Installation prepares the unmodified mGBA JavaScript / WASM files and runtime dependency licenses.
 
 ```bash
 git clone https://github.com/nocoo/pokepocket.git
