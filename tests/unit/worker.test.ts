@@ -72,7 +72,7 @@ describe('Cloudflare Access protects the whole Worker', () => {
     '/api/live/',
     '/api/live/catalog',
     '/art/rayquaza.png',
-    '/emulator/2.5.1/mgba.wasm',
+    '/emulator/2.6.0/mgba.wasm',
     '/roms/pokeemerald.gba',
   ])('denies unauthenticated %s before reading assets', async (path) => {
     const { env, assetFetch } = environment();
@@ -156,7 +156,7 @@ describe('Cloudflare Access protects the whole Worker', () => {
     expect(assetFetch).not.toHaveBeenCalled();
   });
 
-  it.each(['/', '/art/rayquaza.png', '/emulator/2.5.1/mgba.wasm'])(
+  it.each(['/', '/art/rayquaza.png', '/emulator/2.6.0/mgba.wasm'])(
     'serves %s only with a verified token and isolation headers',
     async (path) => {
       const { env, assetFetch } = environment();

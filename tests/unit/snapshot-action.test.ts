@@ -10,7 +10,7 @@ function createMockSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     thumbnail: 'data:image/png;base64,mock',
     data: new ArrayBuffer(16),
     updatedAt: 1000,
-    coreVersion: '2.5.1',
+    coreVersion: '2.6.0',
     ...overrides,
   };
 }

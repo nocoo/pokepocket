@@ -97,11 +97,11 @@ describe('native memory filesystem and durable application storage boundary', ()
 
   it('rejects SDK version or content drift before applying the runtime adapter', () => {
     expect(() => patchMgbaFilesystem(sdk, '2.5.0')).toThrow('Unreviewed mGBA');
-    expect(() => patchMgbaFilesystem(`${sdk}\n`, '2.5.1')).toThrow('Unreviewed mGBA');
+    expect(() => patchMgbaFilesystem(`${sdk}\n`, '2.6.0')).toThrow('Unreviewed mGBA');
   });
 
   it('emits an actual synchronous pthread proxy and returns without a Promise turn', () => {
-    const patched = patchMgbaFilesystem(sdk, '2.5.1');
+    const patched = patchMgbaFilesystem(sdk, '2.6.0');
     const body = patched.slice(patched.indexOf('var _fd_sync='), patched.indexOf('var doWritev='));
     const invoke = new Function(
       'FS',

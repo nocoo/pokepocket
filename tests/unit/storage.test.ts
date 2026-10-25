@@ -91,7 +91,7 @@ describe('isolated storage transactions', () => {
       data: new Uint8Array([5, 6, 7]).buffer,
       thumbnail: 'data:image/png;base64,mock',
       updatedAt: 54321,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     };
     await storage.putSnapshot(snapshot);
     const snapshots = await storage.listSnapshots('cart-crud');
@@ -130,7 +130,7 @@ describe('isolated storage transactions', () => {
       data: new Uint8Array([10]).buffer,
       thumbnail: '',
       updatedAt: 10,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     });
     await storage.putSnapshot({
       key: `${rom2}:1`,
@@ -139,7 +139,7 @@ describe('isolated storage transactions', () => {
       data: new Uint8Array([20]).buffer,
       thumbnail: '',
       updatedAt: 20,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     });
 
     const snaps1 = await storage.listSnapshots(rom1);
@@ -238,7 +238,7 @@ describe('isolated storage transactions', () => {
       data: new Uint8Array([0, 0, 0]).buffer,
       thumbnail: '',
       updatedAt: 100,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     });
     await storage.putSnapshot({
       key: `${targetRom}:1`,
@@ -247,7 +247,7 @@ describe('isolated storage transactions', () => {
       data: new Uint8Array([7, 7, 7]).buffer,
       thumbnail: '',
       updatedAt: 100,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     });
 
     // Seed other ROM battery, auto snapshot, and manual snapshot
@@ -263,7 +263,7 @@ describe('isolated storage transactions', () => {
       data: new Uint8Array([5, 0, 0]).buffer,
       thumbnail: '',
       updatedAt: 100,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     });
     await storage.putSnapshot({
       key: `${otherRom}:1`,
@@ -272,7 +272,7 @@ describe('isolated storage transactions', () => {
       data: new Uint8Array([5, 1, 1]).buffer,
       thumbnail: '',
       updatedAt: 100,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     });
 
     // 1. Failure phase: synchronous throw on snapshot delete

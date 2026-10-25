@@ -6,11 +6,11 @@ The MIT license in `LICENSE` applies only to the original application code and o
 
 ## mGBA and the WebAssembly port
 
-The emulator uses the unmodified `@thenick775/mgba-wasm` package, version 2.5.1.
+The emulator uses the unmodified `@thenick775/mgba-wasm` package, version 2.6.0.
 
 - mGBA upstream: https://github.com/mgba-emu/mgba
-- WebAssembly port and corresponding package source: https://github.com/thenick775/mgba/tree/e974b288bd7e5cfc7c7b96f8b4d32b673ddfb68c
-- Package source and build instructions: https://github.com/thenick775/mgba/tree/e974b288bd7e5cfc7c7b96f8b4d32b673ddfb68c/src/platform/wasm
+- WebAssembly port and corresponding package source: https://github.com/thenick775/mgba/tree/c0d196432c4437ff06827dccd1a785de2afab5b8
+- Package source and build instructions: https://github.com/thenick775/mgba/tree/c0d196432c4437ff06827dccd1a785de2afab5b8/src/platform/wasm
 - License: Mozilla Public License 2.0, included in `public/licenses/mgba-MPL-2.0.txt`.
 
 The postinstall script copies the upstream JavaScript and WebAssembly binaries without modification. These remain separate from the application bundle. The source and build instructions are available at the URLs above.
