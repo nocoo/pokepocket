@@ -89,7 +89,7 @@ test.describe('Production Worker authorization and browser application loading',
       const runtimeRes = await anonymousRequest.get('/api/runtime');
       expect(runtimeRes.status()).toBe(403);
 
-      const wasmRes = await anonymousRequest.get('/emulator/2.5.1/mgba.wasm');
+      const wasmRes = await anonymousRequest.get('/emulator/2.6.0/mgba.wasm');
       expect(wasmRes.status()).toBe(403);
 
       const artRes = await anonymousRequest.get('/art/rayquaza.png');
@@ -117,7 +117,7 @@ test.describe('Production Worker authorization and browser application loading',
       expect(clientAssetRes?.status()).toBe(403);
 
       // Verify direct anonymous navigation to WASM binary is denied 403
-      const wasmAssetRes = await anonPage.goto('/emulator/2.5.1/mgba.wasm');
+      const wasmAssetRes = await anonPage.goto('/emulator/2.6.0/mgba.wasm');
       expect(wasmAssetRes?.status()).toBe(403);
     } finally {
       await anonymousContext.close();
@@ -137,7 +137,7 @@ test.describe('Production Worker authorization and browser application loading',
     );
     const wasmResponsePromise = page.waitForResponse(
       (response) =>
-        response.status() === 200 && response.url().includes('/emulator/2.5.1/mgba.wasm'),
+        response.status() === 200 && response.url().includes('/emulator/2.6.0/mgba.wasm'),
     );
 
     // Navigate to protected root with authorizedContext (headers injected via browser-harness)

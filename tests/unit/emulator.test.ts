@@ -27,7 +27,7 @@ function createFakeCore(): mGBAEmulator {
   const callbacks: Record<string, () => void> = {};
 
   return {
-    version: { projectName: 'mGBA', projectVersion: '2.5.1' },
+    version: { projectName: 'mGBA', projectVersion: '2.6.0' },
     FSInit: vi.fn().mockResolvedValue(undefined),
     FSSync: vi.fn().mockResolvedValue(undefined),
     toggleInput: vi.fn(),
@@ -370,7 +370,7 @@ describe('PocketEmulator with injected dependencies', () => {
       data: new ArrayBuffer(4),
       thumbnail: '',
       updatedAt: 1000,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     });
 
     await Promise.all([savePromise, deletePromise]);
@@ -742,7 +742,7 @@ describe('PocketEmulator with injected dependencies', () => {
       data: new Uint8Array([1, 1, 1, 1]).buffer,
       thumbnail: '',
       updatedAt: 100,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     };
     await emulator.loadSlot(snap1);
     expect(callOrder).toEqual(['pauseGame', 'loadStateSlot:1:61:paused=true', 'resumeGame']);
@@ -878,7 +878,7 @@ describe('PocketEmulator with injected dependencies', () => {
       data: new Uint8Array([5, 6, 7, 8]).buffer,
       thumbnail: '',
       updatedAt: 200,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     };
 
     const slotPromise = emulator.loadSlot(snap).then(() => {
@@ -944,7 +944,7 @@ describe('PocketEmulator with injected dependencies', () => {
       data: new Uint8Array([11, 22, 33, 44]).buffer,
       thumbnail: '',
       updatedAt: 100,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     };
 
     // 1. Core loadStateSlot returns false
@@ -1011,7 +1011,7 @@ describe('PocketEmulator with injected dependencies', () => {
         data: autoData,
         thumbnail: '',
         updatedAt: 100,
-        coreVersion: '2.5.1',
+        coreVersion: '2.6.0',
       },
     ]);
 
@@ -1062,7 +1062,7 @@ describe('PocketEmulator with injected dependencies', () => {
         data: autoData,
         thumbnail: '',
         updatedAt: 100,
-        coreVersion: '2.5.1',
+        coreVersion: '2.6.0',
       },
     ]);
 
@@ -1131,7 +1131,7 @@ describe('PocketEmulator with injected dependencies', () => {
         data: autoData,
         thumbnail: '',
         updatedAt: 100,
-        coreVersion: '2.5.1',
+        coreVersion: '2.6.0',
       },
     ]);
 
@@ -1197,7 +1197,7 @@ describe('PocketEmulator with injected dependencies', () => {
       data: new ArrayBuffer(8),
       thumbnail: '',
       updatedAt: 100,
-      coreVersion: '2.5.1',
+      coreVersion: '2.6.0',
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -1220,7 +1220,7 @@ describe('PocketEmulator with injected dependencies', () => {
     let currentSave = new Uint8Array([1, 1, 1, 1]);
 
     const core: mGBAEmulator = {
-      version: { projectName: 'mGBA', projectVersion: '2.5.1' },
+      version: { projectName: 'mGBA', projectVersion: '2.6.0' },
       FSInit: vi.fn().mockResolvedValue(undefined),
       FSSync: vi.fn().mockResolvedValue(undefined),
       toggleInput: vi.fn(),
@@ -1341,7 +1341,7 @@ describe('PocketEmulator with injected dependencies', () => {
     let currentSave = new Uint8Array([1, 1, 1, 1]);
 
     const core: mGBAEmulator = {
-      version: { projectName: 'mGBA', projectVersion: '2.5.1' },
+      version: { projectName: 'mGBA', projectVersion: '2.6.0' },
       FSInit: vi.fn().mockResolvedValue(undefined),
       FSSync: vi.fn().mockResolvedValue(undefined),
       toggleInput: vi.fn(),
@@ -1581,7 +1581,7 @@ describe('PocketEmulator with injected dependencies', () => {
         data: new ArrayBuffer(4),
         thumbnail: '',
         updatedAt: 100,
-        coreVersion: '2.5.1',
+        coreVersion: '2.6.0',
       }),
     ).rejects.toThrow('即时存档读取失败');
   });
@@ -1606,7 +1606,7 @@ describe('PocketEmulator with injected dependencies', () => {
         data: new ArrayBuffer(4),
         thumbnail: '',
         updatedAt: 100,
-        coreVersion: '2.5.1',
+        coreVersion: '2.6.0',
       }),
     ).rejects.toThrow('只能清除手动即时存档');
 
@@ -1619,7 +1619,7 @@ describe('PocketEmulator with injected dependencies', () => {
         data: new ArrayBuffer(4),
         thumbnail: '',
         updatedAt: 100,
-        coreVersion: '2.5.1',
+        coreVersion: '2.6.0',
       }),
     ).rejects.toThrow('不属于当前卡带');
   });
@@ -1870,7 +1870,7 @@ describe('PocketEmulator with injected dependencies', () => {
     expect(autoSnap?.key).toBe('cart-autosnap:0');
     expect(autoSnap?.romId).toBe('cart-autosnap');
     expect(autoSnap?.slot).toBe(0);
-    expect(autoSnap?.coreVersion).toBe('2.5.1');
+    expect(autoSnap?.coreVersion).toBe('2.6.0');
     expect(new Uint8Array(autoSnap?.data ?? new ArrayBuffer(0))).toEqual(saveStateBytes);
 
     // 3. Pause emulator: timer tick while paused is strictly read-only
@@ -1981,7 +1981,7 @@ describe('PocketEmulator with injected dependencies', () => {
     expect(snap.key).toBe('cart-err-snap:0');
     expect(snap.romId).toBe('cart-err-snap');
     expect(snap.slot).toBe(0);
-    expect(snap.coreVersion).toBe('2.5.1');
+    expect(snap.coreVersion).toBe('2.6.0');
     expect(new Uint8Array(snap.data)).toEqual(saveStateBytes);
 
     const storedBat = batteryMap.get('cart-err-snap');
@@ -2239,7 +2239,7 @@ describe('PocketEmulator with injected dependencies', () => {
         data: new ArrayBuffer(4),
         thumbnail: '',
         updatedAt: 100,
-        coreVersion: '2.5.1',
+        coreVersion: '2.6.0',
       }),
     ).rejects.toThrow('不属于当前卡带');
 

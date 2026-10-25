@@ -24,7 +24,7 @@ describe('setup-emulator policy and asset preparation', () => {
     const root = await createTempRoot();
     const source = path.join(root, 'node_modules/@thenick775/mgba-wasm');
     await mkdir(path.join(source, 'dist'), { recursive: true });
-    await writeFile(path.join(source, 'package.json'), JSON.stringify({ version: '2.5.1' }));
+    await writeFile(path.join(source, 'package.json'), JSON.stringify({ version: '2.6.0' }));
     await writeFile(path.join(source, 'dist/mgba.js'), sdkRuntime);
     await writeFile(path.join(source, 'dist/mgba.wasm'), '/* fake mgba.wasm */');
 
@@ -37,21 +37,21 @@ describe('setup-emulator policy and asset preparation', () => {
     }
 
     const result = await setupEmulator({ root, source, silent: true });
-    expect(result.version).toBe('2.5.1');
-    expect(result.message).toContain('2.5.1');
+    expect(result.version).toBe('2.6.0');
+    expect(result.message).toContain('2.6.0');
 
     // Check version.json
     const versionContent = JSON.parse(
       await readFile(path.join(root, 'public/emulator/version.json'), 'utf8'),
     );
-    expect(versionContent.version).toBe('2.5.1');
+    expect(versionContent.version).toBe('2.6.0');
 
     // Check emulator assets
-    const jsContent = await readFile(path.join(root, 'public/emulator/2.5.1/mgba.js'), 'utf8');
+    const jsContent = await readFile(path.join(root, 'public/emulator/2.6.0/mgba.js'), 'utf8');
     expect(jsContent).toContain('proxyToMainThread(80,0,1,fd)');
     expect(jsContent).not.toContain('proxyToMainThread(80,0,2,fd)');
     expect(jsContent).toContain('initializeMemoryFilesystem');
-    const wasmContent = await readFile(path.join(root, 'public/emulator/2.5.1/mgba.wasm'), 'utf8');
+    const wasmContent = await readFile(path.join(root, 'public/emulator/2.6.0/mgba.wasm'), 'utf8');
     expect(wasmContent).toBe('/* fake mgba.wasm */');
 
     // Check licenses
@@ -66,7 +66,7 @@ describe('setup-emulator policy and asset preparation', () => {
     const root = await createTempRoot();
     const source = path.join(root, 'node_modules/@thenick775/mgba-wasm');
     await mkdir(path.join(source, 'dist'), { recursive: true });
-    await writeFile(path.join(source, 'package.json'), JSON.stringify({ version: '2.5.1' }));
+    await writeFile(path.join(source, 'package.json'), JSON.stringify({ version: '2.6.0' }));
     await writeFile(path.join(source, 'dist/mgba.js'), sdkRuntime);
     await writeFile(path.join(source, 'dist/mgba.wasm'), '/* fake mgba.wasm */');
     for (const dep of REQUIRED_DEPENDENCIES) {
@@ -77,7 +77,7 @@ describe('setup-emulator policy and asset preparation', () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       await setupEmulator({ root, source });
-      expect(spy).toHaveBeenCalledWith(expect.stringContaining('mGBA 2.5.1'));
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('mGBA 2.6.0'));
     } finally {
       spy.mockRestore();
     }

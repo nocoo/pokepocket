@@ -5,7 +5,7 @@ through `storage.ts`. The emulator filesystem is the working copy used by the na
 
 ## Why native filesystem operations must be synchronous
 
-The pinned mGBA 2.5.1 bundle uses Emscripten 6.0.5. Its `fd_sync` proxies from the emulator thread to
+The pinned mGBA 2.6.0 bundle uses Emscripten 6.0.5. Its `fd_sync` proxies from the emulator thread to
 the browser main thread in promise mode and waits for an asynchronous IDBFS flush. A simultaneous
 `pauseGame` or thread interrupt blocks the main thread until the emulator thread stops. The browser
 cannot deliver the IndexedDB completion while that synchronous call is waiting, so both threads

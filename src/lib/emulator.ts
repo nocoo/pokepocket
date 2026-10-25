@@ -3,7 +3,7 @@ import { romPath, type Cartridge } from './cartridge';
 import type { GameButton } from './input';
 import { copyBuffer, storage as defaultStorage, type BatterySave, type Snapshot } from './storage';
 
-export const CORE_VERSION = '2.5.1';
+export const CORE_VERSION = '2.6.0';
 export type EmulatorStatus = 'idle' | 'loading' | 'running' | 'paused' | 'error';
 
 export interface EmulatorState {
@@ -435,7 +435,7 @@ export class PocketEmulator {
   /**
    * Restores an active snapshot into running CPU/video/active SRAM memory.
    *
-   * In mGBA 2.5.1 (specifically GB/GBC _GBCoreSavedataRestore in src/gb/core.c),
+   * In mGBA 2.6.0 (specifically GB/GBC _GBCoreSavedataRestore in src/gb/core.c),
    * forced writeback (flags & SAVESTATE_SAVEDATA, used by loadState with SAVESTATE_ALL=31)
    * flushes to the backing VFile without refreshing live mapped SRAM. The non-writeback
    * path uses GBSavedataMask and immediately updates active SRAM memory.

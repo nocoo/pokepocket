@@ -454,7 +454,7 @@ describe('Production Worker HTTP Harness (L2)', () => {
       const match = indexHtml.match(/src="(\/assets\/index-[^"]+\.js)"/);
       expect(match).not.toBeNull();
       const jsAssetPath = match[1];
-      const wasmPath = '/emulator/2.5.1/mgba.wasm';
+      const wasmPath = '/emulator/2.6.0/mgba.wasm';
 
       const unauthenticatedPaths = ['/', jsAssetPath, wasmPath];
       for (const assetPath of unauthenticatedPaths) {
@@ -501,7 +501,7 @@ describe('Production Worker HTTP Harness (L2)', () => {
     });
 
     it('authenticated GET to WASM asset serves exact mGBA WASM binary bytes', async () => {
-      const wasmPath = '/emulator/2.5.1/mgba.wasm';
+      const wasmPath = '/emulator/2.6.0/mgba.wasm';
       const localWasmPath = path.join(process.cwd(), 'dist/client', wasmPath);
       const expectedWasmBytes = await readFile(localWasmPath);
 
@@ -516,7 +516,7 @@ describe('Production Worker HTTP Harness (L2)', () => {
     });
 
     it('HEAD to static asset serves empty body with shared security headers', async () => {
-      const res = await fetch(`${runtime.url}/emulator/2.5.1/mgba.wasm`, {
+      const res = await fetch(`${runtime.url}/emulator/2.6.0/mgba.wasm`, {
         method: 'HEAD',
         headers: { 'Cf-Access-Jwt-Assertion': validToken },
         signal: AbortSignal.timeout(5000),

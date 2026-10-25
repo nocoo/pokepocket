@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-const SDK_SHA256 = '98e6f460fa2f95846bf79c3b1c42ecf3acca0ce11937ba0d4aa693438402a473';
+const SDK_SHA256 = '9bb59a97e21175e1cf4f9e36eec88ec6a53f2f3a17002b9f460e6f0339b76b62';
 
 export function initializeMemoryFilesystem(FS) {
   return new Promise((resolve, reject) => {
@@ -68,7 +68,7 @@ export function syncMemoryFile(fd, FS, SYSCALLS) {
 }
 
 export function patchMgbaFilesystem(source, version) {
-  if (version !== '2.5.1' || createHash('sha256').update(source).digest('hex') !== SDK_SHA256) {
+  if (version !== '2.6.0' || createHash('sha256').update(source).digest('hex') !== SDK_SHA256) {
     throw new Error(
       'Unreviewed mGBA runtime: review the filesystem adapter before updating the SDK',
     );

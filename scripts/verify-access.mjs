@@ -6,7 +6,7 @@ export const ACCESS_PATHS = [
   '/',
   '/api/catalog',
   '/art/rayquaza.png',
-  '/emulator/2.5.1/mgba.wasm',
+  '/emulator/2.6.0/mgba.wasm',
   '/roms/pokeemerald.gba',
 ];
 export const DEFAULT_ATTEMPTS = 12;
