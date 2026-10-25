@@ -60,7 +60,7 @@
     "@vitejs/plugin-react": "6.1.2",
     "@vitest/coverage-v8": "5.0.5",
     "fake-indexeddb": "6.2.6",
-    "happy-dom": "20.12.0",
+    "happy-dom": "21.0.4",
     "husky": "9.1.7",
     "js-yaml": "4.3.2",
     "miniflare": "5.20261006.1-alpha",
