@@ -1,1 +1,83 @@
-npm run quality:commit
+# L1 against the Git index snapshot (unified L1 + former G1).
+set -e
+command -v git >/dev/null 2>&1 || {
+	echo "pre-commit: git is required" >&2
+	exit 1
+}
+command -v bun >/dev/null 2>&1 || {
+	echo "pre-commit: bun is required" >&2
+	exit 1
+}
+command -v npm >/dev/null 2>&1 || {
+	echo "pre-commit: npm is required" >&2
+	exit 1
+}
+
+snapshot=
+cleanup() {
+	status=$?
+	trap - EXIT INT TERM HUP
+	if [ -n "$snapshot" ]; then
+		rm -rf "$snapshot" || :
+		snapshot=
+	fi
+	exit "$status"
+}
+trap cleanup EXIT
+trap "exit 130" INT
+trap "exit 143" TERM
+trap "exit 129" HUP
+
+snapshot=$(mktemp -d "${TMPDIR:-/tmp}/pokepocket-index-XXXXXX")
+git checkout-index --all --prefix="$snapshot/"
+repo=$(git rev-parse --show-toplevel)
+
+if [ ! -d "$repo/node_modules" ]; then
+	echo "pre-commit: node_modules is required" >&2
+	exit 1
+fi
+if [ ! -f "$snapshot/package.json" ] || [ ! -f "$snapshot/bun.lock" ] || [ ! -f "$snapshot/package-lock.json" ]; then
+	echo "pre-commit: staged package.json, bun.lock, and package-lock.json are required" >&2
+	exit 1
+fi
+if ! cmp -s "$snapshot/package.json" "$repo/package.json" \
+	|| ! cmp -s "$snapshot/bun.lock" "$repo/bun.lock" \
+	|| ! cmp -s "$snapshot/package-lock.json" "$repo/package-lock.json"; then
+	echo "pre-commit: staged lockfiles and package.json must match the installed worktree copies" >&2
+	exit 1
+fi
+
+mkdir "$snapshot/node_modules"
+for entry in "$repo/node_modules"/*; do
+	[ -e "$entry" ] || continue
+	ln -s "$entry" "$snapshot/node_modules/${entry##*/}"
+done
+ln -s "$repo/node_modules/.bin" "$snapshot/node_modules/.bin"
+ln -s "$repo/.git" "$snapshot/.git"
+mkdir -p "$snapshot/node_modules/.vite" "$snapshot/node_modules/.vitest" "$snapshot/.cache"
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
+unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+export XDG_CACHE_HOME="$snapshot/.cache"
+export XDG_STATE_HOME="$snapshot/.cache"
+PATH="$snapshot/node_modules/.bin:$PATH"
+cd "$snapshot"
+
+if ! grep -Fq -- '--coverage' package.json; then
+	echo "pre-commit: quality:l1 or test:coverage must run vitest with --coverage" >&2
+	exit 1
+fi
+
+run_l1() {
+	npm run quality:commit
+}
+
+if [ -n "${POKEPOCKET_L1_TIMEOUT_SEC:-}" ]; then
+	if command -v timeout >/dev/null 2>&1; then
+		timeout --preserve-status --signal=TERM "$POKEPOCKET_L1_TIMEOUT_SEC" npm run quality:commit
+	else
+		echo "pre-commit: POKEPOCKET_L1_TIMEOUT_SEC requires coreutils timeout" >&2
+		exit 1
+	fi
+else
+	run_l1
+fi

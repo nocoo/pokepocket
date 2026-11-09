@@ -34,7 +34,8 @@
     "quality:l2": "node scripts/run-l2.mjs",
     "quality:push": "node scripts/run-push.mjs",
     "test:e2e:optional": "node scripts/run-l3-optional.mjs",
-    "quality:l3": "node scripts/run-l3.mjs"
+    "quality:l3": "node scripts/run-l3.mjs",
+    "test:l1-gate": "node tests/l1-gate/verify-l1-gate.mjs"
   },
   "dependencies": {
     "@fontsource/dm-sans": "5.3.0",
