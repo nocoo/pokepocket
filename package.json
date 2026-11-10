@@ -17,7 +17,6 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:http": "vitest run --config vitest.http.config.ts",
-    "test:e2e": "node scripts/run-l3.mjs",
     "postinstall": "node scripts/setup-emulator.mjs",
     "rom:build": "node scripts/build-rom.mjs",
     "format": "prettier --write .",
@@ -33,8 +32,6 @@
     "prepare": "husky",
     "quality:l2": "node scripts/run-l2.mjs",
     "quality:push": "node scripts/run-push.mjs",
-    "test:e2e:optional": "node scripts/run-l3-optional.mjs",
-    "quality:l3": "node scripts/run-l3.mjs",
     "test:l1-gate": "node tests/l1-gate/verify-l1-gate.mjs"
   },
   "dependencies": {
@@ -51,7 +48,6 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.6",
     "@cloudflare/vite-plugin": "1.66.0",
-    "@playwright/test": "1.65.0",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.8",

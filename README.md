@@ -93,17 +93,13 @@ Access 的 issuer 与团队校验在代码中固定为 `nocoo`，仅修改环境
 
 ## 测试
 
-| 测试层                                   | 命令                        |
-| ---------------------------------------- | --------------------------- |
-| 组件、模拟器封装、存储与 Worker 单元测试 | `bun run test`              |
-| 本地卡带服务 HTTP 测试                   | `bun run test:http`         |
-| 生产 Worker HTTP 合约测试                | `bun run quality:l2`        |
-| 必需浏览器流程                           | `bun run test:e2e`          |
-| 本机自备卡带的可选浏览器流程             | `bun run test:e2e:optional` |
+| 测试层                                   | 命令                 |
+| ---------------------------------------- | -------------------- |
+| 组件、模拟器封装、存储与 Worker 单元测试 | `bun run test`       |
+| 本地卡带服务 HTTP 测试                   | `bun run test:http`  |
+| 生产 Worker HTTP 合约测试                | `bun run quality:l2` |
 
-`bun run test:coverage` 生成覆盖率报告。HTTP 合约命令会先构建应用并使用端口 17048；浏览器命令会构建并使用独立端口 27047，运行前确保相应端口空闲。
-
-本地浏览器流程使用已安装的 Google Chrome；CI 使用 Playwright Chromium，可通过 `bunx playwright install --with-deps chromium` 准备。必需流程使用原创 GB / GBC / GBA 测试程序与临时签名令牌，不需要商业 ROM。可选流程需要本机完整的受支持卡带集合；这些测试不代替真实 Cloudflare SSO 登录验证或完整游戏通关。
+`bun run test:coverage` 生成覆盖率报告。HTTP 合约命令会先构建应用并使用端口 17048。
 
 ## 技术栈
 
@@ -118,7 +114,7 @@ Access 的 issuer 与团队校验在代码中固定为 `nocoo`，仅修改环境
 | 模拟器     | mGBA WebAssembly、Canvas、Web Audio、Gamepad API |
 | 本地数据   | IndexedDB / idb、localStorage                    |
 | 托管与认证 | Cloudflare Workers、Cloudflare Access、jose      |
-| 开发与测试 | Vite、Bun、Vitest、Testing Library、Playwright   |
+| 开发与测试 | Vite、Bun、Vitest、Testing Library               |
 
 ## 文档
 

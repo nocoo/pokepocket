@@ -58,15 +58,13 @@ describe('quality and ci workflows policy', () => {
       expect(qualityJob.with['build-command']).toBe('npm run build');
     });
 
-    it('enables S3 workflow lint and folds L3 into quality.yml', () => {
+    it('enables S3 workflow lint and keeps L3 browser E2E disabled', () => {
       expect(qualityJob.with['workflow-lint']).toBe(true);
       expect(qualityJob.with['workflow-lint-required-workflow']).toBe(
         'nocoo/base-ci/.github/workflows/deploy-worker.yml',
       );
-      expect(qualityJob.with.l3).toBe(true);
-      expect(qualityJob.with['l3-command']).toBe('npm run quality:l3');
-      expect(qualityJob.with['l3-artifact-name']).toBe('browser-failure-artifacts');
-      expect(qualityJob.with['l3-artifact-path']).toBe('test-results/');
+      expect(qualityJob.with.l3).toBeUndefined();
+      expect(qualityJob.with['l3-command']).toBeUndefined();
     });
 
     it('declares strict slot-status for all v1 slots', () => {
@@ -75,6 +73,7 @@ describe('quality and ci workflows policy', () => {
         ['B1', 'G1', 'G2', 'L1', 'L1.5', 'L2', 'L3', 'P1', 'S1', 'S2', 'S3', 'Z1'].sort(),
       );
       expect(slots.L2.status).toBe('impl');
+      expect(slots.L3.status).toBe('na');
       expect(slots['L1.5'].status).toBe('na');
       expect(slots.P1.status).toBe('na');
     });
