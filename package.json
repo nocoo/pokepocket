@@ -63,7 +63,7 @@
     "fake-indexeddb": "6.2.7",
     "happy-dom": "21.0.4",
     "husky": "9.1.7",
-    "js-yaml": "4.3.2",
+    "js-yaml": "5.5.0",
     "miniflare": "5.20261006.1-alpha",
     "prettier": "3.9.10",
     "typescript": "7.0.2",
