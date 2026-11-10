@@ -127,7 +127,7 @@ export function localCartridges(): Plugin {
             await handle.close();
             return response.end();
           }
-          const stream = handle.createReadStream({ start: 0 });
+          const stream = handle.createReadStream({ start: 0, autoClose: true });
           stream.on('error', () => response.destroy());
           response.on('close', () => stream.destroy());
           stream.pipe(response);
