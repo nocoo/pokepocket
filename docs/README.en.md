@@ -93,17 +93,13 @@ The Access issuer and team check are fixed to `nocoo` in code; environment varia
 
 ## Tests
 
-| Layer                                                       | Command                     |
-| ----------------------------------------------------------- | --------------------------- |
-| Component, emulator wrapper, storage, and Worker unit tests | `bun run test`              |
-| Local cartridge service HTTP tests                          | `bun run test:http`         |
-| Production Worker HTTP contracts                            | `bun run quality:l2`        |
-| Required browser journeys                                   | `bun run test:e2e`          |
-| Optional browser journeys with locally supplied cartridges  | `bun run test:e2e:optional` |
+| Layer                                                       | Command              |
+| ----------------------------------------------------------- | -------------------- |
+| Component, emulator wrapper, storage, and Worker unit tests | `bun run test`       |
+| Local cartridge service HTTP tests                          | `bun run test:http`  |
+| Production Worker HTTP contracts                            | `bun run quality:l2` |
 
-Run `bun run test:coverage` for a coverage report. The HTTP contract command builds the app and uses port 17048. Browser commands build it and use a separate server on 27047; keep the relevant port free before running.
-
-Local browser journeys use an installed Google Chrome. CI uses Playwright Chromium, which can be prepared with `bunx playwright install --with-deps chromium`. Required journeys use original GB / GBC / GBA test programs and temporary signed tokens, without commercial ROMs. Optional journeys require the complete supported cartridge set on your machine. These tests do not replace real Cloudflare SSO verification or complete game playthroughs.
+Run `bun run test:coverage` for a coverage report. The HTTP contract command builds the app and uses port 17048.
 
 ## Stack
 
@@ -118,7 +114,7 @@ Local browser journeys use an installed Google Chrome. CI uses Playwright Chromi
 | Emulator                   | mGBA WebAssembly, Canvas, Web Audio, Gamepad API |
 | Local data                 | IndexedDB / idb, localStorage                    |
 | Hosting and authentication | Cloudflare Workers, Cloudflare Access, jose      |
-| Development and tests      | Vite, Bun, Vitest, Testing Library, Playwright   |
+| Development and tests      | Vite, Bun, Vitest, Testing Library               |
 
 ## Documentation
 
