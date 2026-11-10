@@ -3,14 +3,13 @@ import path from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
+const BASE_CI_SHA = '1ea10ecab22b72512399485391603fe03a161016';
 const QUALITY_PIN = /^nocoo\/base-ci\/\.github\/workflows\/quality\.yml@[a-f0-9]{40}$/;
-const TEST_JOB_PIN = /^nocoo\/base-ci\/\.github\/workflows\/test-job\.yml@[a-f0-9]{40}$/;
 
 describe('quality and ci workflows policy', () => {
   const ciPath = path.resolve(process.cwd(), '.github/workflows/ci.yml');
   const ciYaml = load(readFileSync(ciPath, 'utf8'));
   const qualityJob = ciYaml.jobs.quality;
-  const l3Job = ciYaml.jobs.l3;
 
   it('does not restore the removed local quality.yml duplicate', () => {
     expect(existsSync(path.resolve(process.cwd(), '.github/workflows/quality.yml'))).toBe(false);
@@ -20,11 +19,11 @@ describe('quality and ci workflows policy', () => {
     it('has minimum read-only permissions and no deployment secrets', () => {
       expect(ciYaml.permissions).toEqual({ contents: 'read' });
       expect(qualityJob.secrets).toBeUndefined();
-      expect(l3Job.secrets).toBeUndefined();
     });
 
     it('pins immutable shared quality.yml by full commit SHA', () => {
       expect(qualityJob.uses).toMatch(QUALITY_PIN);
+      expect(qualityJob.uses).toContain(BASE_CI_SHA);
       expect(qualityJob.uses).not.toMatch(/@(main|master|latest|v\d)/);
     });
 
@@ -41,45 +40,43 @@ describe('quality and ci workflows policy', () => {
       expect(ciYaml.on.workflow_dispatch).toBeDefined();
     });
 
-    it('keeps required project quality commands and gates on quality.yml', () => {
+    it('calls only quality.yml (no standalone test-job or workflow-lint jobs)', () => {
+      expect(Object.keys(ciYaml.jobs)).toEqual(['quality']);
+    });
+
+    it('keeps required project quality commands on quality.yml', () => {
       expect(qualityJob.with['prepare-command']).toContain('npm run cf:typegen -- --check');
-      expect(qualityJob.with['typecheck-command']).toBe('npm run quality:g1');
+      expect(qualityJob.with['typecheck-command']).toBe('npm run typecheck');
+      expect(qualityJob.with['lint-command']).toBe('npm run lint && npm run format:check');
       expect(qualityJob.with['test-command']).toBe('npm run quality:l1');
       expect(qualityJob.with.l2).toBe(true);
       expect(qualityJob.with['l2-command']).toContain('npm run test:http');
       expect(qualityJob.with['l2-command']).toContain('npm run quality:l2');
       expect(qualityJob.with['security-command']).toBe('npm run quality:g2');
       expect(qualityJob.with['coverage-path']).toBe('coverage');
-      expect(qualityJob.with.l3).toBeUndefined();
-      expect(qualityJob.with['l3-command']).toBeUndefined();
+      expect(qualityJob.with.build).toBe(true);
+      expect(qualityJob.with['build-command']).toBe('npm run build');
     });
 
-    it('disables duplicate lint only with an explicit reason, not a fake-green command', () => {
-      expect(qualityJob.with.lint).toBe(false);
-      const reasons = JSON.parse(qualityJob.with['disabled-check-reasons']);
-      expect(reasons.lint).toMatch(/quality:g1/);
-    });
-  });
-
-  describe('l3 test-job caller', () => {
-    it('pins immutable shared test-job.yml by full commit SHA', () => {
-      expect(l3Job.uses).toMatch(TEST_JOB_PIN);
-      expect(l3Job.uses).not.toMatch(/@(main|master|latest|v\d)/);
+    it('enables S3 workflow lint and folds L3 into quality.yml', () => {
+      expect(qualityJob.with['workflow-lint']).toBe(true);
+      expect(qualityJob.with['workflow-lint-required-workflow']).toBe(
+        'nocoo/base-ci/.github/workflows/deploy-worker.yml',
+      );
+      expect(qualityJob.with.l3).toBe(true);
+      expect(qualityJob.with['l3-command']).toBe('npm run quality:l3');
+      expect(qualityJob.with['l3-artifact-name']).toBe('browser-failure-artifacts');
+      expect(qualityJob.with['l3-artifact-path']).toBe('test-results/');
     });
 
-    it('uses the same install, runtime, prepare, browser, and quality:l3 command', () => {
-      expect(l3Job.with['runtime-version']).toBe('1.4.0');
-      expect(l3Job.with['node-version']).toBe('26.12.1');
-      expect(l3Job.with['install-policy']).toBe('project');
-      expect(l3Job.with.browser).toBe('chromium');
-      expect(l3Job.with['pre-command']).toBe('npm run cf:typegen -- --check');
-      expect(l3Job.with.command).toBe('npm run quality:l3');
-    });
-
-    it('uploads test-results diagnostics with fail-closed missing-file policy', () => {
-      expect(l3Job.with['artifact-name']).toBe('browser-failure-artifacts');
-      expect(l3Job.with['artifact-path']).toBe('test-results/');
-      expect(l3Job.with['artifact-retention-days']).toBe(14);
+    it('declares strict slot-status for all v1 slots', () => {
+      const slots = JSON.parse(qualityJob.with['slot-status']);
+      expect(Object.keys(slots).sort()).toEqual(
+        ['B1', 'G1', 'G2', 'L1', 'L1.5', 'L2', 'L3', 'P1', 'S1', 'S2', 'S3', 'Z1'].sort(),
+      );
+      expect(slots.L2.status).toBe('impl');
+      expect(slots['L1.5'].status).toBe('na');
+      expect(slots.P1.status).toBe('na');
     });
   });
 });

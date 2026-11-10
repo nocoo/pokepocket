@@ -3,6 +3,7 @@ import path from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
+const BASE_CI_SHA = '1ea10ecab22b72512399485391603fe03a161016';
 const SHARED_PIN = /^nocoo\/base-ci\/\.github\/workflows\/deploy-worker\.yml@[a-f0-9]{40}$/;
 const SHA40 = /[a-f0-9]{40}/;
 
@@ -32,6 +33,7 @@ describe('release workflow definition and contract', () => {
 
   it('pins immutable shared deploy-worker.yml by full commit SHA', () => {
     expect(deployJob.uses).toMatch(SHARED_PIN);
+    expect(deployJob.uses).toContain(BASE_CI_SHA);
     expect(deployJob.uses).not.toMatch(/@(main|master|latest|v\d)/);
   });
 
