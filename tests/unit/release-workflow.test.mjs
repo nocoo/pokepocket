@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
 const SHARED_PIN = /^nocoo\/base-ci\/\.github\/workflows\/deploy-worker\.yml@[a-f0-9]{40}$/;
@@ -8,7 +8,7 @@ const SHA40 = /[a-f0-9]{40}/;
 
 describe('release workflow definition and contract', () => {
   const releasePath = path.resolve(process.cwd(), '.github/workflows/release.yml');
-  const releaseYaml = yaml.load(readFileSync(releasePath, 'utf8'));
+  const releaseYaml = load(readFileSync(releasePath, 'utf8'));
   const deployJob = releaseYaml.jobs.deploy;
 
   it('triggers on tag push, CI workflow_run completed on main, and workflow_dispatch with tag input', () => {

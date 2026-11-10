@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
 const QUALITY_PIN = /^nocoo\/base-ci\/\.github\/workflows\/quality\.yml@[a-f0-9]{40}$/;
@@ -8,7 +8,7 @@ const TEST_JOB_PIN = /^nocoo\/base-ci\/\.github\/workflows\/test-job\.yml@[a-f0-
 
 describe('quality and ci workflows policy', () => {
   const ciPath = path.resolve(process.cwd(), '.github/workflows/ci.yml');
-  const ciYaml = yaml.load(readFileSync(ciPath, 'utf8'));
+  const ciYaml = load(readFileSync(ciPath, 'utf8'));
   const qualityJob = ciYaml.jobs.quality;
   const l3Job = ciYaml.jobs.l3;
 
