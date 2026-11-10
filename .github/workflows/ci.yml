@@ -1,3 +1,5 @@
+# CI slot standard v1 (nocoo/base-ci docs/slots.md): impl S1, S2, S3, G1, G2, B1, L1, L2, L3, Z1 via quality.yml;
+# na L1.5, P1 in slot-status. nocoo/base-ci v2026.12: top-level slot jobs, L3 browsers/artifacts.
 name: CI
 
 on:
@@ -12,37 +14,44 @@ permissions:
 
 jobs:
   quality:
-    uses: nocoo/base-ci/.github/workflows/quality.yml@633a5545fcfec91b688840650d4edf3e9cc1abbd # v2026.10
+    uses: nocoo/base-ci/.github/workflows/quality.yml@1ea10ecab22b72512399485391603fe03a161016 # v2026.12
     with:
       runtime-version: '1.4.0'
       node-version: '26.12.1'
       install-policy: 'project'
       coverage-path: 'coverage'
       prepare-command: 'npm run cf:typegen -- --check'
-      typecheck-command: 'npm run quality:g1'
-      lint: false
-      disabled-check-reasons: |-
-        {
-          "lint": "G1 static checks already run via quality:g1"
-        }
+      typecheck-command: 'npm run typecheck'
+      lint-command: 'npm run lint && npm run format:check'
       test-command: 'npm run quality:l1'
+      security-command: 'npm run quality:g2'
+      gitleaks-config: .gitleaks.toml
+      build: true
+      build-command: 'npm run build'
+      workflow-lint: true
+      workflow-lint-required-workflow: nocoo/base-ci/.github/workflows/deploy-worker.yml
+      workflow-lint-yamllint: true
       l2: true
       l2-command: |
         npm run test:http
         npm run quality:l2
-      security-command: 'npm run quality:g2'
-
-  l3:
-    name: L3 Browser E2E
-    uses: nocoo/base-ci/.github/workflows/test-job.yml@633a5545fcfec91b688840650d4edf3e9cc1abbd # v2026.10
-    with:
-      runtime-version: '1.4.0'
-      node-version: '26.12.1'
-      install-policy: 'project'
-      browser: chromium
-      timeout-minutes: 20
-      pre-command: 'npm run cf:typegen -- --check'
-      command: 'npm run quality:l3'
-      artifact-name: browser-failure-artifacts
-      artifact-path: test-results/
-      artifact-retention-days: 14
+      l3: true
+      l3-browsers: chromium
+      l3-prepare-command: 'npm run cf:typegen -- --check'
+      l3-command: 'npm run quality:l3'
+      l3-artifact-name: browser-failure-artifacts
+      l3-artifact-path: test-results/
+      l3-artifact-retention-days: 14
+      slot-status: >-
+        {"S1": {"status": "impl"},
+        "S2": {"status": "impl"},
+        "S3": {"status": "impl"},
+        "G1": {"status": "impl"},
+        "G2": {"status": "impl"},
+        "B1": {"status": "impl"},
+        "L1": {"status": "impl"},
+        "L1.5": {"status": "na", "reason": "无 @cloudflare/vitest-pool-workers Worker 运行时测试套件；Worker HTTP 由 L2 Vitest 覆盖"},
+        "L2": {"status": "impl"},
+        "L3": {"status": "impl"},
+        "P1": {"status": "na", "reason": "package.json 为 private，不发布 npm 包"},
+        "Z1": {"status": "impl"}}
