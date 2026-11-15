@@ -128,9 +128,14 @@ export function localCartridges(): Plugin {
             return response.end();
           }
           const stream = handle.createReadStream({ start: 0, autoClose: true });
-          stream.on('error', () => response.destroy());
-          response.on('close', () => stream.destroy());
-          stream.pipe(response);
+          try {
+            stream.on('error', () => response.destroy());
+            response.on('close', () => stream.destroy());
+            stream.pipe(response);
+          } catch (error) {
+            stream.destroy();
+            throw error;
+          }
         })().catch(() => {
           if (response.headersSent) return response.destroy();
           response.removeHeader('Content-Length');
