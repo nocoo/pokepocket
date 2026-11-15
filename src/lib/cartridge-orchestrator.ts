@@ -1,5 +1,5 @@
 import { type Cartridge, readCartridge } from './cartridge';
-import { DEFAULT_EDITION, getEdition, type AvailableEdition } from './catalog';
+import { type AvailableEdition, DEFAULT_EDITION, getEdition } from './catalog';
 
 export interface CartridgePreferences {
   lastCartridgeId: string | null;

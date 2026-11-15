@@ -1,7 +1,7 @@
-import { useState, type CSSProperties } from 'react';
 import { ArrowRight, Check, ChevronRight, LoaderCircle, Search, ShieldCheck } from 'lucide-react';
-import { EDITIONS, type AvailableEdition, type PokemonEdition } from '../lib/catalog';
+import { type CSSProperties, useState } from 'react';
 import type { Cartridge } from '../lib/cartridge';
+import { type AvailableEdition, EDITIONS, type PokemonEdition } from '../lib/catalog';
 
 export function CartridgeArt({ edition }: { edition: PokemonEdition }) {
   return (

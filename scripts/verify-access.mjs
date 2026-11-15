@@ -1,5 +1,5 @@
-import { pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 
 export const DEFAULT_ORIGIN = 'https://pokepocket.hexly.ai';
 export const ACCESS_PATHS = [

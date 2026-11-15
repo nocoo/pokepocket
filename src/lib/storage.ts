@@ -1,5 +1,5 @@
-import { openDB, type DBSchema } from 'idb';
-import { parseHeader, type Cartridge } from './cartridge';
+import { type DBSchema, openDB } from 'idb';
+import { type Cartridge, parseHeader } from './cartridge';
 
 export interface Snapshot {
   key: string;

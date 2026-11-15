@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { setupEmulator, REQUIRED_DEPENDENCIES } from '../../scripts/setup-emulator.mjs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { REQUIRED_DEPENDENCIES, setupEmulator } from '../../scripts/setup-emulator.mjs';
 
 const roots = [];
 const sdkRuntime = await readFile(

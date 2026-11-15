@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SETTINGS, loadSettings } from '../../src/lib/settings';
 import { defaultBindings } from '../../src/lib/key-bindings';
+import { DEFAULT_SETTINGS, loadSettings } from '../../src/lib/settings';
 
 describe('settings persistence and boundaries', () => {
   beforeEach(() => {

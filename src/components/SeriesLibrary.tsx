@@ -1,4 +1,3 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Check,
   ChevronLeft,
@@ -9,8 +8,9 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react';
-import { EDITIONS, type AvailableEdition, type PokemonEdition } from '../lib/catalog';
-import { cartridgeTitle, type Cartridge } from '../lib/cartridge';
+import { type CSSProperties, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { type Cartridge, cartridgeTitle } from '../lib/cartridge';
+import { type AvailableEdition, EDITIONS, type PokemonEdition } from '../lib/catalog';
 import { CartridgeArt } from './CartridgeGallery';
 
 interface Props {

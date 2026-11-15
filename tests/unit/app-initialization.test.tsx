@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, cleanup, waitFor } from '@testing-library/react';
+
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   IDBCursor,
@@ -15,11 +15,12 @@ import {
   IDBTransaction,
   IDBVersionChangeEvent,
 } from 'fake-indexeddb';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../../src/App';
-import { storage } from '../../src/lib/storage';
 import { parseHeader } from '../../src/lib/cartridge';
-import { gbaFixture } from '../fixtures/headers';
 import type { EmulatorDependencies } from '../../src/lib/emulator';
+import { storage } from '../../src/lib/storage';
+import { gbaFixture } from '../fixtures/headers';
 import {
   createCartridge,
   createTestAppHarness,

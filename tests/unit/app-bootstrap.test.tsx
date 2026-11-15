@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { act } from '@testing-library/react';
-import type { Root, createRoot } from 'react-dom/client';
-import { EDITIONS, DEFAULT_EDITION, getEdition, identifyEdition } from '../../src/lib/catalog';
+import type { createRoot, Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_EDITION, EDITIONS, getEdition, identifyEdition } from '../../src/lib/catalog';
 
 type CreateRootArgs = Parameters<typeof createRoot>;
 

@@ -1,9 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import net from 'node:net';
-import { stat, mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { decodeJwt, decodeProtectedHeader } from 'jose';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   checkPortAvailable,
   createProductionRuntime,

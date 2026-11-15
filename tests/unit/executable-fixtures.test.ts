@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  createExecutableGbaCartridge,
+  createExecutableGbCartridge,
+  createExecutableGbcCartridge,
+  createInitialBattery,
   ORIGINAL_BATTERY_SIZE,
   ORIGINAL_GB_PROGRAM,
   ORIGINAL_GBA_PROGRAM,
-  createExecutableGbCartridge,
-  createExecutableGbcCartridge,
-  createExecutableGbaCartridge,
-  createInitialBattery,
 } from '../fixtures/executable';
 
 function sha256(data: Uint8Array): string {

@@ -1,13 +1,13 @@
-import { vi } from 'vitest';
 import type { mGBAEmulator } from '@thenick775/mgba-wasm';
+import { vi } from 'vitest';
+import { type Cartridge, parseHeader } from '../../src/lib/cartridge';
 import {
   CORE_VERSION,
   type EmulatorClock,
   type EmulatorStorageAdapter,
 } from '../../src/lib/emulator';
-import { parseHeader, type Cartridge } from '../../src/lib/cartridge';
-import { gbaFixture } from '../fixtures/headers';
 import type { BatterySave, Snapshot } from '../../src/lib/storage';
+import { gbaFixture } from '../fixtures/headers';
 
 export interface TestAppHarness {
   testCore: mGBAEmulator;

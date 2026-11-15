@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SaveSlots } from '../../src/components/SaveSlots';
 import { SnapshotConfirmation } from '../../src/components/SnapshotConfirmation';
 import type { Snapshot } from '../../src/lib/storage';

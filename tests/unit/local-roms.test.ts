@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import { discoverLocalCartridges } from '../../scripts/local-roms';
-import { gbFixture, gbaFixture } from '../fixtures/headers';
+import { gbaFixture, gbFixture } from '../fixtures/headers';
 
 const roots: string[] = [];
 afterEach(async () => {

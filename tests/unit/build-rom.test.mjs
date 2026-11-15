@@ -1,9 +1,9 @@
 import fs from 'node:fs';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildRoms,
   checkoutProject,

@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { CartridgeGallery, CartridgeArt } from '../../src/components/CartridgeGallery';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CartridgeArt, CartridgeGallery } from '../../src/components/CartridgeGallery';
 import { SeriesLibrary } from '../../src/components/SeriesLibrary';
-import { DEFAULT_EDITION, getEdition } from '../../src/lib/catalog';
 import type { Cartridge } from '../../src/lib/cartridge';
+import { DEFAULT_EDITION, getEdition } from '../../src/lib/catalog';
 
 function createMockCartridge(overrides: Partial<Cartridge> = {}): Cartridge {
   return {

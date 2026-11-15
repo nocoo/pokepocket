@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import {
   ALLOWED_TYPES,
   checkCommitMessageFile,
