@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { runParallelCommands, runPreCommitGate } from '../../scripts/run-parallel.mjs';
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

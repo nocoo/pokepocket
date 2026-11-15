@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  MAX_ROM_SIZE,
+  type Cartridge,
   cartridgeTitle,
+  MAX_ROM_SIZE,
   parseHeader,
   readCartridge,
   romPath,
-  validateBatterySave,
-  type Cartridge,
   type SaveType,
+  validateBatterySave,
 } from '../../src/lib/cartridge';
 import { GB_LOGO, readHardwareHeader } from '../../src/lib/rom-header';
-import { gbFixture, gbaFixture, updateGbChecksum } from '../fixtures/headers';
+import { gbaFixture, gbFixture, updateGbChecksum } from '../fixtures/headers';
 
 afterEach(() => {
   vi.restoreAllMocks();

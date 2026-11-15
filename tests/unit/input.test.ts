@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
 import { GlobalWindow } from 'happy-dom';
-import { BUTTONS, InputController, gamepadButtons, isEditing } from '../../src/lib/input';
+import { describe, expect, it, vi } from 'vitest';
+import { BUTTONS, gamepadButtons, InputController, isEditing } from '../../src/lib/input';
 
 describe('input controller and gamepad mapping', () => {
   const window = new GlobalWindow();

@@ -1,8 +1,8 @@
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import net from 'node:net';
-import { createRequire } from 'node:module';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 
 const require = createRequire(import.meta.url);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { EDITIONS } from '../../src/lib/catalog';
 import { parseHeader, readCartridge, romPath, validateBatterySave } from '../../src/lib/cartridge';
-import { gbFixture, gbaFixture, updateGbChecksum } from '../fixtures/headers';
+import { EDITIONS } from '../../src/lib/catalog';
+import { gbaFixture, gbFixture, updateGbChecksum } from '../fixtures/headers';
 
 describe('Pokémon GB / GBC / GBA cartridge recognition', () => {
   it.each([

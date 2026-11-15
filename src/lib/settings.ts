@@ -1,4 +1,4 @@
-import { defaultBindings, parseBindings, type KeyBindings } from './key-bindings';
+import { defaultBindings, type KeyBindings, parseBindings } from './key-bindings';
 
 export interface Settings {
   volume: number;

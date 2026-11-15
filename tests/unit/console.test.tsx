@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createRef, type ComponentProps } from 'react';
+import { type ComponentProps, createRef } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Console, MobileControls } from '../../src/components/Console';
-import { InputController, type GameButton } from '../../src/lib/input';
 import { DEFAULT_EDITION } from '../../src/lib/catalog';
+import { type GameButton, InputController } from '../../src/lib/input';
 
 describe('Console and MobileControls components', () => {
   afterEach(() => {

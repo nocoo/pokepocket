@@ -1,13 +1,4 @@
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type CSSProperties,
-} from 'react';
-import {
   ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
@@ -42,32 +33,41 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { Console, MobileControls } from './components/Console';
-import { SeriesLibrary } from './components/SeriesLibrary';
-import { CartridgeGallery } from './components/CartridgeGallery';
-import { KeyBindings } from './components/KeyBindings';
 import {
-  DEFAULT_EDITION,
-  getEdition,
-  type AvailableEdition,
-  type PokemonEdition,
-} from './lib/catalog';
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+import { CartridgeGallery } from './components/CartridgeGallery';
+import { Console, MobileControls } from './components/Console';
+import { KeyBindings } from './components/KeyBindings';
 import { Modal } from './components/Modal';
 import { SaveSlots } from './components/SaveSlots';
+import { SeriesLibrary } from './components/SeriesLibrary';
 import { SnapshotConfirmation } from './components/SnapshotConfirmation';
-import { createModalPauseController, type ModalName } from './lib/modal-pause';
-import { createSnapshotActionController, type SnapshotAction } from './lib/snapshot-action';
+import { type Cartridge, cartridgeTitle, validateBatterySave } from './lib/cartridge';
 import {
-  createCartridgeOrchestrator,
   type CartridgePreferences,
+  createCartridgeOrchestrator,
 } from './lib/cartridge-orchestrator';
-import { cartridgeTitle, validateBatterySave, type Cartridge } from './lib/cartridge';
-import { CORE_VERSION, PocketEmulator, message } from './lib/emulator';
-import { BUTTONS, InputController, gamepadButtons, isEditing, type GameButton } from './lib/input';
+import {
+  type AvailableEdition,
+  DEFAULT_EDITION,
+  getEdition,
+  type PokemonEdition,
+} from './lib/catalog';
+import { CORE_VERSION, message, PocketEmulator } from './lib/emulator';
+import { BUTTONS, type GameButton, gamepadButtons, InputController, isEditing } from './lib/input';
 import { bindingText, keyLabel, keyMap } from './lib/key-bindings';
-import { loadSettings, type Settings } from './lib/settings';
-import { download, storage, type Snapshot } from './lib/storage';
+import { createModalPauseController, type ModalName } from './lib/modal-pause';
 import { upscaleScreenshot } from './lib/screenshot';
+import { loadSettings, type Settings } from './lib/settings';
+import { createSnapshotActionController, type SnapshotAction } from './lib/snapshot-action';
+import { download, type Snapshot, storage } from './lib/storage';
 import { APP_VERSION } from './lib/version';
 
 type Toast = { text: string; error: boolean; id: number };

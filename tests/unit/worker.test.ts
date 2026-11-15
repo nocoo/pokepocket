@@ -1,8 +1,7 @@
+import { exportJWK, generateKeyPair, type JWTPayload, SignJWT } from 'jose';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { exportJWK, generateKeyPair, SignJWT, type JWTPayload } from 'jose';
-import worker from '../../worker/index';
 import { APP_VERSION } from '../../src/lib/version';
-import { AUTHORITATIVE_ROUTE_PATHS, PRODUCTION_API_ROUTES } from '../../worker/index';
+import worker, { AUTHORITATIVE_ROUTE_PATHS, PRODUCTION_API_ROUTES } from '../../worker/index';
 
 const issuer = 'https://nocoo.cloudflareaccess.com';
 const audience = '7dcaf6fb44b1245dfec144db9df69cc1335a526cd9a29829f33e35f78aa306dd';

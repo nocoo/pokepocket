@@ -1,7 +1,7 @@
-import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { generateKeyPair, SignJWT } from 'jose';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createProductionRuntime } from '../../scripts/production-runtime.mjs';
 import { AUTHORITATIVE_ROUTE_PATHS } from '../../worker/index.ts';
 

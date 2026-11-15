@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { patchMgbaFilesystem } from './mgba-memory-filesystem.mjs';
 
 export const REQUIRED_DEPENDENCIES = [

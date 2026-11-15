@@ -1,8 +1,8 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { stat, writeFile, mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { runL2Gate, runL2Default } from '../../scripts/run-l2.mjs';
+import { afterEach, describe, expect, it } from 'vitest';
 import { RUNTIME_RESOURCE_ROOT_ENV } from '../../scripts/production-runtime.mjs';
+import { runL2Default, runL2Gate } from '../../scripts/run-l2.mjs';
 
 describe('run-l2 gate runner policies', () => {
   const cleanups = [];

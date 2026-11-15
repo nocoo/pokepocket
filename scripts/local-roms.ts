@@ -1,13 +1,13 @@
 import { constants } from 'node:fs';
 import { lstat, open, readdir } from 'node:fs/promises';
-import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import path from 'node:path';
 import type { Plugin } from 'vite';
 import {
+  type AvailableEdition,
   DEFAULT_EDITION,
   EDITIONS,
   identifyEdition,
-  type AvailableEdition,
 } from '../src/lib/catalog.ts';
 import { readHardwareHeader } from '../src/lib/rom-header.ts';
 

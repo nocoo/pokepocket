@@ -1,11 +1,11 @@
 import type { mGBAEmulator } from '@thenick775/mgba-wasm';
 import { describe, expect, it, vi } from 'vitest';
+import { type Cartridge, parseHeader } from '../../src/lib/cartridge';
 import {
-  PocketEmulator,
   type EmulatorClock,
   type EmulatorStorageAdapter,
+  PocketEmulator,
 } from '../../src/lib/emulator';
-import { parseHeader, type Cartridge } from '../../src/lib/cartridge';
 import type { BatterySave, Snapshot } from '../../src/lib/storage';
 import { gbaFixture } from '../fixtures/headers';
 

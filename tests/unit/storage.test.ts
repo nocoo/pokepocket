@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   IDBCursor,
   IDBCursorWithValue,
@@ -12,8 +11,9 @@ import {
   IDBTransaction,
   IDBVersionChangeEvent,
 } from 'fake-indexeddb';
-import { storage, type BatterySave, type Snapshot } from '../../src/lib/storage';
-import { parseHeader, type Cartridge } from '../../src/lib/cartridge';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { type Cartridge, parseHeader } from '../../src/lib/cartridge';
+import { type BatterySave, type Snapshot, storage } from '../../src/lib/storage';
 import { gbaFixture } from '../fixtures/headers';
 
 function createCartridge(id = 'test-rom', overrides: Partial<Cartridge> = {}): Cartridge {

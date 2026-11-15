@@ -1,9 +1,9 @@
-import { afterEach, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { afterEach, expect, it } from 'vitest';
 import { gbaFixture } from '../fixtures/headers';
 
 const execute = promisify(execFile);

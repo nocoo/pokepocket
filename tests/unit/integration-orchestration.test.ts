@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSnapshotActionController } from '../../src/lib/snapshot-action';
+import { type Cartridge, parseHeader } from '../../src/lib/cartridge';
 import { createCartridgeOrchestrator } from '../../src/lib/cartridge-orchestrator';
-import { parseHeader, type Cartridge } from '../../src/lib/cartridge';
+import { createSnapshotActionController } from '../../src/lib/snapshot-action';
 import type { Snapshot } from '../../src/lib/storage';
 
 function fixtureGbaBytes(editionCode = 'BPEE') {

@@ -6,11 +6,11 @@ import {
   LoaderCircle,
   Play,
 } from 'lucide-react';
-import { useLayoutEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { type CSSProperties, type ReactNode, type RefObject, useLayoutEffect, useRef } from 'react';
 import type { PokemonEdition } from '../lib/catalog';
-import type { GameSystem } from '../lib/rom-header';
 import type { EmulatorStatus } from '../lib/emulator';
 import type { GameButton, InputController } from '../lib/input';
+import type { GameSystem } from '../lib/rom-header';
 
 interface ConsoleProps {
   edition: PokemonEdition | undefined;

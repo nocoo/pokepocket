@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { type Cartridge, parseHeader } from '../../src/lib/cartridge';
 import { createCartridgeOrchestrator } from '../../src/lib/cartridge-orchestrator';
-import { parseHeader, type Cartridge } from '../../src/lib/cartridge';
 
 function fixtureGbaBytes(editionCode = 'BPEE') {
   const data = new Uint8Array(1024);

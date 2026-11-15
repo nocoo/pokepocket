@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
 import { Keyboard, RotateCcw, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { GameButton } from '../lib/input';
 import {
   BINDING_LABELS,
+  type KeyBindings as Bindings,
   bindKey,
   defaultBindings,
   keyLabel,
-  type KeyBindings as Bindings,
 } from '../lib/key-bindings';
 
 export function KeyBindings({

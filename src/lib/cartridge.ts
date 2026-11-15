@@ -1,5 +1,5 @@
 import { getEdition, identifyEdition } from './catalog';
-import { readHardwareHeader, type HardwareHeader } from './rom-header';
+import { type HardwareHeader, readHardwareHeader } from './rom-header';
 
 export const MAX_ROM_SIZE = 32 * 1024 * 1024;
 export type SaveType = 'FLASH1M' | 'FLASH512' | 'EEPROM' | 'SRAM' | 'GB_RAM' | 'AUTO';

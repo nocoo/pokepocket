@@ -1,15 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ViteDevServer } from 'vite';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   discoverLocalCartridges,
   inspectCartridgeFile,
   localCartridges,
 } from '../../scripts/local-roms';
-import { gbFixture, gbaFixture } from '../fixtures/headers';
+import { gbaFixture, gbFixture } from '../fixtures/headers';
 
 const roots: string[] = [];
 afterEach(async () => {

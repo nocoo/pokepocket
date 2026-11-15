@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { buildPushCommands, parsePushCli, runPushGate } from '../../scripts/run-push.mjs';
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

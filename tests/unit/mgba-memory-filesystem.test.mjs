@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
 import { readFile } from 'node:fs/promises';
+import { describe, expect, it, vi } from 'vitest';
 import {
   initializeMemoryFilesystem,
   patchMgbaFilesystem,

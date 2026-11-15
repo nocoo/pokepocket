@@ -1,7 +1,7 @@
 import type { mGBAEmulator } from '@thenick775/mgba-wasm';
-import { romPath, type Cartridge } from './cartridge';
+import { type Cartridge, romPath } from './cartridge';
 import type { GameButton } from './input';
-import { copyBuffer, storage as defaultStorage, type BatterySave, type Snapshot } from './storage';
+import { type BatterySave, copyBuffer, storage as defaultStorage, type Snapshot } from './storage';
 
 export const CORE_VERSION = '2.6.0';
 export type EmulatorStatus = 'idle' | 'loading' | 'running' | 'paused' | 'error';
