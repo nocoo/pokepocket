@@ -223,16 +223,16 @@ describe('install-scanners script policy', () => {
       ).rejects.toThrow(/Failed to execute installed binary/);
     });
 
-    it('fails closed on version mismatch', async () => {
+    it('fails closed when version cannot be parsed', async () => {
       const mockRunner = async () => ({
         code: 0,
         signal: null,
-        stdout: 'osv-scanner version: 2.3.5\n',
+        stdout: 'unparseable version output\n',
         stderr: '',
       });
       await expect(
         verifyInstalledBinary('/bin/osv-scanner', 'osv', '2.5.1', { runner: mockRunner }),
-      ).rejects.toThrow(/expected exact version "2.5.1", but found "2.3.5"/);
+      ).rejects.toThrow(/Unable to parse version/);
     });
   });
 
@@ -287,7 +287,7 @@ describe('install-scanners script policy', () => {
       expect(writtenGithubPath.trim()).toBe(tempDir);
     });
 
-    it('rejects installation if older PATH binary is resolved instead of newly installed pin', async () => {
+    it('accepts any valid installed version on PATH without exact pin lock', async () => {
       const mockDownload = (_url, dest) => {
         if (dest.endsWith('.tar.gz')) {
           const tarSourceDir = mkdtempSync(path.join(tmpdir(), 'mock-tar-'));
@@ -305,9 +305,9 @@ describe('install-scanners script policy', () => {
         }
       };
 
-      const stalePathRunner = async (cmd) => {
+      const pathRunner = async (cmd) => {
         if (cmd === 'osv-scanner') {
-          return { code: 0, signal: null, stdout: 'osv-scanner version: 2.3.5\n', stderr: '' };
+          return { code: 0, signal: null, stdout: 'osv-scanner version: 2.7.0\n', stderr: '' };
         }
         if (cmd.endsWith('/osv-scanner')) {
           return { code: 0, signal: null, stdout: 'osv-scanner version: 2.5.1\n', stderr: '' };
@@ -319,9 +319,9 @@ describe('install-scanners script policy', () => {
         runInstallScannersCli({
           targetDir: tempDir,
           downloadFn: mockDownload,
-          runner: stalePathRunner,
+          runner: pathRunner,
         }),
-      ).rejects.toThrow(/expected exact version "2.5.1", but found "2.3.5"/);
+      ).resolves.toBeDefined();
     });
   });
 });

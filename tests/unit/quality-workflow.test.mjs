@@ -3,12 +3,13 @@ import path from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
-const BASE_CI_SHA = '1ea10ecab22b72512399485391603fe03a161016';
-const QUALITY_PIN = /^nocoo\/base-ci\/\.github\/workflows\/quality\.yml@[a-f0-9]{40}$/;
+const BASE_CI_SHA = '777bbe4f9bacab8a91d8c01974480a6ee23d28e0';
 
 describe('quality and ci workflows policy', () => {
   const ciPath = path.resolve(process.cwd(), '.github/workflows/ci.yml');
+  const slotsPath = path.resolve(process.cwd(), '.github/workflows/quality-slots.yml');
   const ciYaml = load(readFileSync(ciPath, 'utf8'));
+  const slotsYaml = load(readFileSync(slotsPath, 'utf8'));
   const qualityJob = ciYaml.jobs.quality;
 
   it('does not restore the removed local quality.yml duplicate', () => {
@@ -17,14 +18,12 @@ describe('quality and ci workflows policy', () => {
 
   describe('ci.yml caller workflow', () => {
     it('has minimum read-only permissions and no deployment secrets', () => {
-      expect(ciYaml.permissions).toEqual({ contents: 'read' });
+      expect(ciYaml.permissions).toEqual({ contents: 'read', actions: 'read' });
       expect(qualityJob.secrets).toBeUndefined();
     });
 
-    it('pins immutable shared quality.yml by full commit SHA', () => {
-      expect(qualityJob.uses).toMatch(QUALITY_PIN);
-      expect(qualityJob.uses).toContain(BASE_CI_SHA);
-      expect(qualityJob.uses).not.toMatch(/@(main|master|latest|v\d)/);
+    it('calls local quality-slots.yml (Native Mode)', () => {
+      expect(qualityJob.uses).toBe('./.github/workflows/quality-slots.yml');
     });
 
     it('does not pass Cloudflare secrets into CI', () => {
@@ -40,42 +39,33 @@ describe('quality and ci workflows policy', () => {
       expect(ciYaml.on.workflow_dispatch).toBeDefined();
     });
 
-    it('calls only quality.yml (no standalone test-job or workflow-lint jobs)', () => {
+    it('calls only quality-slots.yml (no standalone test-job or workflow-lint jobs)', () => {
       expect(Object.keys(ciYaml.jobs)).toEqual(['quality']);
     });
 
-    it('keeps required project quality commands on quality.yml', () => {
-      expect(qualityJob.with['prepare-command']).toContain('npm run cf:typegen -- --check');
-      expect(qualityJob.with['typecheck-command']).toBe('npm run typecheck');
-      expect(qualityJob.with['lint-command']).toBe('npm run lint && npm run format:check');
-      expect(qualityJob.with['test-command']).toBe('npm run quality:l1');
-      expect(qualityJob.with.l2).toBe(true);
-      expect(qualityJob.with['l2-command']).toContain('npm run test:http');
-      expect(qualityJob.with['l2-command']).toContain('npm run quality:l2');
-      expect(qualityJob.with['security-command']).toBe('npm run quality:g2');
-      expect(qualityJob.with['coverage-path']).toBe('coverage');
-      expect(qualityJob.with.build).toBe(true);
-      expect(qualityJob.with['build-command']).toBe('npm run build');
-    });
-
-    it('enables S3 workflow lint and keeps L3 browser E2E disabled', () => {
-      expect(qualityJob.with['workflow-lint']).toBe(true);
-      expect(qualityJob.with['workflow-lint-required-workflow']).toBe(
-        'nocoo/base-ci/.github/workflows/deploy-worker.yml',
-      );
-      expect(qualityJob.with.l3).toBeUndefined();
-      expect(qualityJob.with['l3-command']).toBeUndefined();
-    });
-
-    it('declares strict slot-status for all v1 slots', () => {
-      const slots = JSON.parse(qualityJob.with['slot-status']);
-      expect(Object.keys(slots).sort()).toEqual(
-        ['B1', 'G1', 'G2', 'L1', 'L1.5', 'L2', 'L3', 'P1', 'S1', 'S2', 'S3', 'Z1'].sort(),
-      );
-      expect(slots.L2.status).toBe('impl');
-      expect(slots.L3.status).toBe('na');
-      expect(slots['L1.5'].status).toBe('na');
-      expect(slots.P1.status).toBe('na');
+    it('defines all v1.3.0 quality slots with pinned base-ci actions', () => {
+      const slotsText = readFileSync(slotsPath, 'utf8');
+      expect(slotsText).toContain(BASE_CI_SHA);
+      expect(Object.keys(slotsYaml.jobs)).toEqual([
+        's1-types',
+        's2-lint',
+        's3-workflow',
+        'g1-secrets',
+        'g2-dependencies',
+        'b1-build',
+        'l1-unit',
+        'l2-runtime',
+        'l3-integration',
+        'l4-e2e',
+        'p1-package',
+        'z1-gate',
+      ]);
+      expect(slotsText).toContain('npm run cf:typegen -- --check');
+      expect(slotsText).toContain('npm run typecheck');
+      expect(slotsText).toContain('npm run lint && npm run format:check');
+      expect(slotsText).toContain('npm run quality:l1');
+      expect(slotsText).toContain('npm run test:http && npm run quality:l2');
+      expect(slotsText).toContain('npm run build');
     });
   });
 });
