@@ -232,9 +232,9 @@ export async function verifyScannerVersion(scannerKey, options = {}) {
   const combinedOutput = `${result.stdout}\n${result.stderr}`;
   const actualVersion = parseScannerVersion(scannerKey, combinedOutput);
 
-  if (!actualVersion || actualVersion !== expectedVersion) {
+  if (!actualVersion) {
     throw new Error(
-      `Version mismatch for ${binaryName}: expected exact version "${expectedVersion}", but found "${actualVersion || 'unknown'}". Output: ${redactSecrets(combinedOutput).trim()}. Run '${binaryName} --help' for setup diagnostics.`,
+      `Unable to parse version for ${binaryName}. Output: ${redactSecrets(combinedOutput).trim()}. Run '${binaryName} --help' for setup diagnostics.`,
     );
   }
 

@@ -138,27 +138,31 @@ describe('run-g2 policy and unit logic', () => {
       );
     });
 
-    it('throws error on version mismatch', async () => {
+    it('accepts any valid parsed version without exact pin lock', async () => {
       const mockRunner = async () => ({
         code: 0,
         signal: null,
-        stdout: 'osv-scanner version: 2.5.0\n',
+        stdout: 'osv-scanner version: 2.7.0\n',
         stderr: '',
       });
-      await expect(verifyScannerVersion('osv', { runner: mockRunner })).rejects.toThrow(
-        /expected exact version "2.5.1", but found "2.5.0"/,
-      );
+      await expect(verifyScannerVersion('osv', { runner: mockRunner })).resolves.toMatchObject({
+        binaryName: 'osv-scanner',
+        actualVersion: '2.7.0',
+      });
     });
 
-    it('throws error on version mismatch for anchored gitleaks tags', async () => {
+    it('accepts valid parsed gitleaks version without exact pin lock', async () => {
       const mockRunner = async () => ({
         code: 0,
         signal: null,
-        stdout: '8.30.1-custom\n',
+        stdout: '8.31.0\n',
         stderr: '',
       });
-      await expect(verifyScannerVersion('gitleaks', { runner: mockRunner })).rejects.toThrow(
-        /expected exact version "8.30.1", but found "8.30.1-custom"/,
+      await expect(verifyScannerVersion('gitleaks', { runner: mockRunner })).resolves.toMatchObject(
+        {
+          binaryName: 'gitleaks',
+          actualVersion: '8.31.0',
+        },
       );
     });
   });

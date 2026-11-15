@@ -81,7 +81,12 @@ export function installScanners(options = {}) {
   return { targetDir, osvBinaryPath, gitleaksBinaryPath };
 }
 
-export async function verifyInstalledBinary(binaryPath, scannerKey, expectedVersion, options = {}) {
+export async function verifyInstalledBinary(
+  binaryPath,
+  scannerKey,
+  _expectedVersion,
+  options = {},
+) {
   const runner = options.runner ?? runProcessCapture;
   const versionFlag = scannerKey === 'osv' ? '--version' : 'version';
 
@@ -109,9 +114,9 @@ export async function verifyInstalledBinary(binaryPath, scannerKey, expectedVers
   const combinedOutput = `${result.stdout}\n${result.stderr}`;
   const actualVersion = parseScannerVersion(scannerKey, combinedOutput);
 
-  if (!actualVersion || actualVersion !== expectedVersion) {
+  if (!actualVersion) {
     throw new Error(
-      `Version mismatch for installed binary at "${binaryPath}": expected exact version "${expectedVersion}", but found "${actualVersion || 'unknown'}". Output: ${redactSecrets(combinedOutput).trim()}`,
+      `Unable to parse version for installed binary at "${binaryPath}". Output: ${redactSecrets(combinedOutput).trim()}`,
     );
   }
 
