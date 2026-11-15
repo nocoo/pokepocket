@@ -64,28 +64,29 @@ bun run deploy:check        # build + wrangler deploy --dry-run
 
 ## Verification
 
-Status: `enforced` | `planned` | `manual` | `N/A`.
-6DQ = unified L1 (absorbing former G1) + L2 + G2 + D1. L3 browser E2E is **N/A** (项目不再积极维护). Required L1 bar is statements/branches/functions/lines each ≥95% plus strict static lanes, installed snapshot hooks and proven rejection; no skipped or focused tests. Current vitest thresholds are **90%** — do not label that as 95% enforced.
+Quality follows System1 v1.3.0 Native Mode (`nocoo/base-ci v2026.15`) in `.github/workflows/quality-slots.yml` and `.github/workflows/ci.yml`. Status: `enforced` | `planned` | `manual` | `N/A`.
 
-| Change                                 | Proof                                                                                                                        | Status   | Evidence                                                                                                                                                                                                              |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| L1 — complete unified contract         | All four coverage metrics ≥95% plus strict static lanes on an installed index-snapshot hook with proven rejection, under 30s | planned  | Vitest enforces 90%×4; pre-commit gates a `git checkout-index` snapshot via `npm run quality:commit` (parallel L1+G1, 28s bound); `test:l1-gate` proves rejection probes; 95% and measured <30s wall time remain open |
-| L1 subcheck — logic coverage           | L1 Vitest ≥ 95% four metrics; no `.skip`/`.only`                                                                             | planned  | `vitest.config.ts` 90; `quality:commit` / CI `quality:l1` enforce 90 only                                                                                                                                             |
-| L1 subcheck — static lanes (former G1) | Types/lint/format 0 error, 0 warning                                                                                         | enforced | `quality:g1` in CI typecheck-command; pre-commit runs G1 lanes on the index snapshot alongside coverage                                                                                                               |
-| API / schema                           | L2 real HTTP (`test:http` + `quality:l2`) 100% Worker surface                                                                | enforced | CI `l2: true`; pre-push `run-push.mjs`                                                                                                                                                                                |
-| UI path (L3)                           | —                                                                                                                            | N/A      | Playwright L3 removed; CI slot `na`                                                                                                                                                                                   |
-| Deps / secrets                         | G2 osv-scanner + gitleaks; missing binary fails                                                                              | enforced | `quality:g2` CI `security-command` + pre-push                                                                                                                                                                         |
-| Test isolation                         | D1 tmp dirs, no daily :7047                                                                                                  | enforced | `run-l2.mjs` mkdtemp `pokepocket-l2-gate-`. No `_test_marker` SQLite (no D1 product)                                                                                                                                  |
-| Bundler output                         | `bun run build`                                                                                                              | enforced | pre-push/CI via L2/build path                                                                                                                                                                                         |
-| Docs                                   | numbered docs if behavior changed                                                                                            | manual   | human review                                                                                                                                                                                                          |
-| Release                                | version + Access live-check                                                                                                  | enforced | `release.yml` `verify:access` / `verify:release`                                                                                                                                                                      |
+| Slot              | Status   | Evidence                                                               |
+| ----------------- | -------- | ---------------------------------------------------------------------- |
+| `S1` Types        | enforced | `npm run cf:typegen -- --check && npm run typecheck` (pre-commit + CI) |
+| `S2` Lint         | enforced | `npm run lint && npm run format:check` (pre-commit + CI)               |
+| `S3` Workflow     | enforced | SHA-pinned workflow action check in CI                                 |
+| `G1` Secrets      | enforced | `gitleaks` (`.gitleaks.toml`) in CI + pre-push                         |
+| `G2` Dependencies | enforced | `osv-scanner` (`bun.lock`) in CI + pre-push                            |
+| `B1` Build        | enforced | `npm run build` in CI                                                  |
+| `L1` Unit         | enforced | `npm run quality:l1` (Vitest thresholds 90%) + `npm run test:l1-gate`  |
+| `L2` Runtime      | N/A      | Worker HTTP covered by `L3` Vitest integration suite                   |
+| `L3` Integration  | enforced | `npm run test:http && npm run quality:l2` in CI + pre-push             |
+| `L4` E2E          | N/A      | Playwright browser E2E removed                                         |
+| `P1` Package      | N/A      | Private repo, not published to npm                                     |
+| `Z1` Gate         | enforced | `quality / Z1: Gate` required status check on `main`                   |
 
 | Hook       | Verifies                                                                           | Budget                    | Runs                                                                     |
 | ---------- | ---------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------ |
 | pre-commit | Husky → `git checkout-index` snapshot → `npm run quality:commit` (L1 ‖ G1, 28s)    | target <30s               | unified L1 lanes at **90%**; `npm run test:l1-gate` for isolation probes |
 | pre-push   | `run-push.mjs --pre-push` reads stdin refs for G2; L2 is working-tree `quality:l2` | target <3min (unmeasured) | L2 ‖ G2                                                                  |
 
-Target: full index-snapshot unified L1 (coverage plus static lanes); L2 also bound to stdin refs. Check-only; `--no-verify` forbidden. The owner merged former G1 into L1 on 2026-09-21; the framework keeps the 6DQ name.
+Check-only; `--no-verify` forbidden.
 
 ## Resources / Isolation
 
