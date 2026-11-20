@@ -1,118 +1,63 @@
 # Poké Pocket
 
-Browser GB/GBC/GBA cartridge tray and mGBA WASM player; Worker only authenticates and serves assets.
-Profile: ts-worker-web
-Direction: [docs/01-6dq-adoption-plan.md](docs/01-6dq-adoption-plan.md). Frameworks must not rewrite this file.
-
-## Sources of Truth
-
-This file is the **contract**. Hooks, CI, and config are **enforcement**. If they disagree, that is a failure — raise enforcement to match this file; never lower the contract to a weaker hook.
-
-| Fact           | Where                                                                      |
-| -------------- | -------------------------------------------------------------------------- |
-| Agent handbook | this file                                                                  |
-| Human docs     | README.md, `docs/NN-*.md`                                                  |
-| Version        | `package.json` `"version"` as `1.2.3`, display `v1.2.3`                    |
-| Enforcement    | `.husky/*`, `scripts/run-*.mjs`, `vitest.config.ts` (90% today), CI        |
-| Machine rules  | global `AGENTS.md`, `rules/git-commit.md`                                  |
-| Accidents      | [Retrospective.md](Retrospective.md)                                       |
-| Env files      | none for ROMs; Access audience is in `wrangler.jsonc` (not a secret token) |
-
-## Project Invariants
-
-- Never commit or ship ROMs, saves, or snapshots. `bun run build` / `check:distribution` must fail if they appear in `public` or `dist`.
-- Production Worker does not serve ROM routes, emulation, or save DBs. `GET /api/live` is the only public API.
-- Access issuer/team is hardcoded `nocoo`; env vars alone cannot move the team. `workers.dev` and preview URLs stay off.
-- ROM bytes, battery, and snapshots stay in IndexedDB (SHA-256 keyed). They never upload.
-- Dev :7047 is daily play (COOP/COEP). Preview :17047 keeps Access. Do not kill unowned Vite/workerd. Git tests must strip `GIT_*`.
-
-## Stack / Layout
-
-| Component       | Choice                                              |
-| --------------- | --------------------------------------------------- |
-| Language        | TypeScript strict (`tsc -b`)                        |
-| Package manager | Bun 1.4.0 recommended; npm scripts                  |
-| Runtime         | Vite + React; Cloudflare Worker (`worker/index.ts`) |
-| Lint            | Biome `--error-on-warnings` + Prettier `--check`    |
-| Tests           | Vitest L1, HTTP L2                                  |
-| Data            | browser IndexedDB; no D1                            |
-
-```
-src/{components,lib,data}  worker/
-tests/{unit,http}  scripts/
-```
-
-MVVM: viewmodels have no View/DOM imports; routes stay thin.
+Browser GB/GBC/GBA cartridge tray and mGBA WASM player (React + Vite, TypeScript strict); Cloudflare Worker (`worker/index.ts`) only authenticates via Cloudflare Access and serves assets.
+Docs: [README.md](README.md) · [Docs Index](docs/README.md) · [Native FS](docs/05-native-filesystem.md) · [Retrospective](Retrospective.md)
 
 ## Commands
 
-```bash
+Run from root with Node `>=26.12.1` and Bun `1.4.0` (matching CI). No `.env` is used for ROMs; non-secret Access vars (`ACCESS_TEAM`, `ACCESS_AUD`) live in `wrangler.jsonc`.
+
+```sh
 bun install --frozen-lockfile
-bun run dev                 # 127.0.0.1:7047
-bun run typecheck           # tsc -b
-bun run lint                # biome lint --error-on-warnings
-bun run format:check
-bun run quality:g1          # lint + typecheck + format:check
-bun run build               # emulator setup, ROM scan, typecheck, vite, ROM scan dist
-bun run test:coverage       # vitest unit --coverage
-bun run quality:l1          # same
-bun run test:http           # vitest.http.config.ts
-bun run quality:l2          # scripts/run-l2.mjs (tmp root, port 17048)
-bun run quality:g2          # scripts/run-g2.mjs
-bun run deploy:check        # build + wrangler deploy --dry-run
+bun run dev                   # 127.0.0.1:7047 (COOP/COEP, pokepocket.dev.hexly.ai)
+bun run preview               # 127.0.0.1:17047 (Access enabled)
+bun run cf:typegen -- --check # S1: verify worker-configuration.d.ts matches wrangler
+bun run typecheck             # S1: tsc -b
+bun run lint                  # S2: biome lint --error-on-warnings
+bun run format:check          # S2: prettier --check .
+bun run quality:g1            # lint + typecheck + format:check
+bun run test:coverage         # L1: vitest unit --coverage (alias: quality:l1)
+bun run test:l1-gate          # L1 pre-commit snapshot isolation probes
+bun run test:http             # L3: local cartridge HTTP suite
+bun run quality:l2            # L3: build + Miniflare Worker HTTP suite (:17048)
+bun run quality:g2            # G1/G2: osv-scanner + gitleaks
+bun run build                 # mGBA setup, ROM scan public, typecheck, vite, ROM scan dist
+bun run check:distribution    # verify no ROMs or saves in public/ or dist/
+bun run deploy:check          # build + wrangler deploy --dry-run
 ```
 
-## Verification
+Layout: `src/{components,lib,data}`, `worker/`, `tests/{unit,http,l2,l1-gate}`, `scripts/`.
 
-Quality follows System1 v1.3.0 Native Mode (`nocoo/base-ci v2026.15`) in `.github/workflows/quality-slots.yml` and `.github/workflows/ci.yml`. Status: `enforced` | `planned` | `manual` | `N/A`.
+## Invariants
 
-| Slot              | Status   | Evidence                                                               |
-| ----------------- | -------- | ---------------------------------------------------------------------- |
-| `S1` Types        | enforced | `npm run cf:typegen -- --check && npm run typecheck` (pre-commit + CI) |
-| `S2` Lint         | enforced | `npm run lint && npm run format:check` (pre-commit + CI)               |
-| `S3` Workflow     | enforced | SHA-pinned workflow action check in CI                                 |
-| `G1` Secrets      | enforced | `gitleaks` (`.gitleaks.toml`) in CI + pre-push                         |
-| `G2` Dependencies | enforced | `osv-scanner` (`bun.lock`) in CI + pre-push                            |
-| `B1` Build        | enforced | `npm run build` in CI                                                  |
-| `L1` Unit         | enforced | `npm run quality:l1` (Vitest thresholds 90%) + `npm run test:l1-gate`  |
-| `L2` Runtime      | N/A      | Worker HTTP covered by `L3` Vitest integration suite                   |
-| `L3` Integration  | enforced | `npm run test:http && npm run quality:l2` in CI + pre-push             |
-| `L4` E2E          | N/A      | Playwright browser E2E removed                                         |
-| `P1` Package      | N/A      | Private repo, not published to npm                                     |
-| `Z1` Gate         | enforced | `quality / Z1: Gate` required status check on `main`                   |
+- Never commit or ship ROMs, saves, or snapshots; `bun run build` and `bun run check:distribution` must fail if any appear in `public/` or `dist/`.
+- Production Worker serves no ROM routes, emulation, or save DBs (`GET /api/live` is the only public API); `workers.dev` and `preview_urls` stay `false`.
+- Cloudflare Access issuer/team is hardcoded `nocoo` (env vars cannot move it); ROM bytes, battery saves, and snapshots stay in browser IndexedDB (SHA-256 keyed, no D1) and never upload.
+- MVVM: viewmodels import no View/DOM modules and Worker routes stay thin; mGBA `fd_sync` stays synchronous on MEMFS ([Native FS](docs/05-native-filesystem.md)).
+- `package.json` `"version"` (`X.Y.Z`, displayed `vX.Y.Z`) is authoritative; regenerate `worker-configuration.d.ts` (`bun run cf:typegen`) after every `wrangler` upgrade.
+- Never kill unowned Vite/workerd processes; Git test fixtures must strip inherited `GIT_*` env vars; use local Miniflare for HTTP gates and never deploy remote `-test`.
+- Do not amend or rewrite handed-off commits, and leave unassigned paths untouched.
+- Production release (`bun run deploy` or `v*.*.*` tag via `.github/workflows/release.yml`, owner Access/API token, `verify:access` + `verify:release`, see [README.md](README.md)) requires authorization.
 
-| Hook       | Verifies                                                                           | Budget                    | Runs                                                                     |
-| ---------- | ---------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------ |
-| pre-commit | Husky → `git checkout-index` snapshot → `npm run quality:commit` (L1 ‖ G1, 28s)    | target <30s               | unified L1 lanes at **90%**; `npm run test:l1-gate` for isolation probes |
-| pre-push   | `run-push.mjs --pre-push` reads stdin refs for G2; L2 is working-tree `quality:l2` | target <3min (unmeasured) | L2 ‖ G2                                                                  |
+## Quality & Local Gates
 
-Check-only; `--no-verify` forbidden.
+Follows `system1-quality`; CI slots and pinned `base-ci` live in `.github/workflows/quality-slots.yml` (called by `.github/workflows/ci.yml`; `quality / Z1: Gate` required on `main`). Raise enforcement to match this contract; status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
 
-## Resources / Isolation
+- **Exceptions / gaps**: `L2 Runtime` (`N/A`, covered by `L3`), `L4 E2E` (`N/A`, Playwright removed), `P1 Package` (`N/A`, private repo); `L1 Unit` enforces 90% thresholds (`vitest.config.ts`).
+- **Local hooks**: installed via `bun run prepare` (`.husky/`); check-only, `--no-verify` forbidden.
+- **Commit gates**: `pre-commit` snapshots staged index (`git checkout-index`, matching worktree lockfiles) and runs `bun run quality:commit` (`quality:l1` || `quality:g1`, 28s).
+- **Commit message**: `commit-msg` (`scripts/check-commit-message.mjs`) enforces all-lowercase `<type>: <desc>` headers (no scope, max 50 chars).
+- **Push gate**: `pre-push` (`scripts/run-push.mjs --pre-push`) reads stdin refs and runs working-tree `quality:l2` || `scripts/run-g2.mjs` (`osv-scanner` + `gitleaks` on pushed refs, 180s).
 
-| Purpose | Port / resource  | Isolation                               |
-| ------- | ---------------- | --------------------------------------- |
-| Dev     | 7047 `127.0.0.1` | daily play; do not recycle as L2        |
-| Preview | 17047            | Access on; not L2                       |
-| L2      | 17048            | per-run tmp resource root; local Worker |
+## Resources & Isolation
 
-Use local Wrangler/Miniflare for HTTP gates; never deploy remote `-test`.
-
-## Operations / Release
-
-- Entry: `bun run deploy` / tag `v*.*.*`
-- Auth: Cloudflare Access + API token (owner)
-- Before ship: `verify:access`; no ROMs in dist
-- Runbook: README hosting section + `release.yml`
+| Lane    | Endpoint / State                             | Boundary                                               |
+| ------- | -------------------------------------------- | ------------------------------------------------------ |
+| Dev     | `127.0.0.1:7047` (`pokepocket.dev.hexly.ai`) | Daily play (COOP/COEP); never recycle for tests        |
+| Preview | `127.0.0.1:17047`                            | Access enabled; never recycle for tests                |
+| L3 / L2 | `127.0.0.1:17048`, per-run tmp root          | Isolated Miniflare Worker; never deploy remote `-test` |
+| Prod    | `https://pokepocket.hexly.ai`                | Access-protected Worker; read-only unless authorized   |
 
 ## Retrospective
 
-| Kind                                  | Where                                |
-| ------------------------------------- | ------------------------------------ |
-| Accident narrative                    | [Retrospective.md](Retrospective.md) |
-| Project-specific rule that will recur | one line here (cap ~10)              |
-| Cross-project lesson                  | nmem / global `AGENTS.md` / `rules/` |
-| Deterministically checkable rule      | hook or test, not prose              |
-
-- Do not rewrite handed-off commits. Git fixtures must clear inherited `GIT_*`.
-- Leave unassigned paths untouched.
+Record incident narratives in [Retrospective.md](Retrospective.md); promote recurring project constraints to `Invariants` above and enforceable safeguards to tests/hooks.
