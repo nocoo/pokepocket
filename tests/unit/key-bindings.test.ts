@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  bindKey,
   bindingText,
+  bindKey,
   defaultBindings,
   keyLabel,
   keyMap,

@@ -1,5 +1,11 @@
 export type ModalName =
-  'settings' | 'saves' | 'help' | 'restart' | 'import-save' | 'snapshot' | null;
+  | 'settings'
+  | 'saves'
+  | 'help'
+  | 'restart'
+  | 'import-save'
+  | 'snapshot'
+  | null;
 
 export interface ModalPauseState {
   modal: ModalName;

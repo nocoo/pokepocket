@@ -13,9 +13,9 @@ bun run dev                   # 127.0.0.1:7047 (COOP/COEP, pokepocket.dev.hexly.
 bun run preview               # 127.0.0.1:17047 (Access enabled)
 bun run cf:typegen -- --check # S1: verify worker-configuration.d.ts matches wrangler
 bun run typecheck             # S1: tsc -b
-bun run lint                  # S2: biome lint --error-on-warnings
-bun run format:check          # S2: prettier --check .
-bun run quality:g1            # lint + typecheck + format:check
+bun run lint                  # S2: biome check --error-on-warnings .
+bun run format:check          # S2: biome format .
+bun run quality:g1            # lint + typecheck
 bun run test:coverage         # L1: vitest unit --coverage (alias: quality:l1)
 bun run test:l1-gate          # L1 pre-commit snapshot isolation probes
 bun run test:http             # L3: local cartridge HTTP suite

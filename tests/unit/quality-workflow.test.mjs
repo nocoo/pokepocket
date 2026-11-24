@@ -62,7 +62,7 @@ describe('quality and ci workflows policy', () => {
       ]);
       expect(slotsText).toContain('npm run cf:typegen -- --check');
       expect(slotsText).toContain('npm run typecheck');
-      expect(slotsText).toContain('npm run lint && npm run format:check');
+      expect(slotsText).toContain('npm run lint');
       expect(slotsText).toContain('npm run quality:l1');
       expect(slotsText).toContain('npm run test:http && npm run quality:l2');
       expect(slotsText).toContain('npm run build');

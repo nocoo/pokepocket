@@ -22,16 +22,16 @@ import { pathToFileURL } from 'node:url';
 const defaultRepo = join(import.meta.dirname, '../..');
 
 export const fixtureSource = `export function gateReady(value: unknown): boolean {
-  return typeof value === "string" && value.trim().length > 0;
+  return typeof value === 'string' && value.trim().length > 0;
 }
 `;
 
-export const passingTest = `import { expect, it } from "vitest";
-import { gateReady } from "../src/gate-fixture";
+export const passingTest = `import { expect, it } from 'vitest';
+import { gateReady } from '../src/gate-fixture';
 
-it("accepts trimmed text", () => {
-  expect(gateReady("a")).toBe(true);
-  expect(gateReady("  ")).toBe(false);
+it('accepts trimmed text', () => {
+  expect(gateReady('a')).toBe(true);
+  expect(gateReady('  ')).toBe(false);
 });
 `;
 
@@ -69,9 +69,20 @@ export default defineConfig({
 `;
 
 export const gateBiome = {
-  $schema: 'https://biomejs.dev/schemas/2.6.4/schema.json',
+  $schema: 'https://biomejs.dev/schemas/2.6.8/schema.json',
   files: { includes: ['src/**/*.ts', 'tests/**/*.ts'] },
-  formatter: { enabled: false },
+  formatter: {
+    enabled: true,
+    indentStyle: 'space',
+    indentWidth: 2,
+    lineWidth: 100,
+  },
+  javascript: {
+    formatter: {
+      quoteStyle: 'single',
+      trailingCommas: 'all',
+    },
+  },
   linter: { enabled: true, rules: { preset: 'recommended' } },
 };
 
@@ -96,9 +107,9 @@ export function buildFixturePackageJson(repoRoot) {
     scripts: {
       ...base.scripts,
       typecheck: 'tsc -p tsconfig.gate.json',
-      lint: 'biome lint --error-on-warnings src tests',
-      'format:check': 'prettier --check src tests',
-      'quality:g1': 'npm run lint && npm run typecheck && npm run format:check',
+      lint: 'biome check --error-on-warnings src tests',
+      'format:check': 'biome format src tests',
+      'quality:g1': 'npm run lint && npm run typecheck',
       'quality:l1': 'vitest run --config vitest.gate.config.ts --coverage',
       'quality:commit': 'node scripts/run-parallel.mjs',
     },
@@ -266,7 +277,7 @@ export async function runL1GateProbes(options = {}) {
     );
 
     const typesDir = createFixture(repoRoot, owned, 'type-error', {
-      badTypes: `export const gateTypes: number = "not-a-number";
+      badTypes: `export const gateTypes: number = 'not-a-number';
 `,
     });
     const types = runHook(typesDir);

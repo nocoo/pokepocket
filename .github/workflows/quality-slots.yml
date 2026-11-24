@@ -39,7 +39,7 @@ jobs:
           runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: project
-      - run: npm run lint && npm run format:check
+      - run: npm run lint
 
   s3-workflow:
     name: 'S3: Workflow'
