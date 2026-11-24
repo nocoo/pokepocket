@@ -2331,4 +2331,57 @@ describe('PocketEmulator with injected dependencies', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('notifies subscribers on state updates until unsubscribed, and deduplicates concurrent init calls', async () => {
+    const core = createFakeCore();
+    const createCore = vi.fn(async () => core);
+    const emulator = new PocketEmulator({
+      createCore,
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    const listener = vi.fn();
+    const unsubscribe = emulator.subscribe(listener);
+
+    // resume() while idle is a no-op
+    emulator.resume();
+    expect(listener).not.toHaveBeenCalled();
+
+    const p1 = emulator.load(createCartridge('cart-sub-1'), {} as HTMLCanvasElement);
+    await p1;
+    expect(createCore).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalled();
+
+    // Subsequent load reuses initialized core
+    await emulator.load(createCartridge('cart-sub-2'), {} as HTMLCanvasElement);
+    expect(createCore).toHaveBeenCalledTimes(1);
+
+    const callsBeforeUnsub = listener.mock.calls.length;
+    unsubscribe();
+    emulator.pause();
+    expect(listener.mock.calls.length).toBe(callsBeforeUnsub);
+
+    // reset() while paused auto-resumes emulator
+    await emulator.reset();
+    expect(emulator.getSnapshot().status).toBe('running');
+  });
+
+  it('formats non-Error rejections with String(error)', async () => {
+    const emulator = new PocketEmulator({
+      createCore: async () => Promise.reject('core-string-err'),
+      checkCrossOriginIsolated: () => true,
+      storage: createStorageDouble(),
+      clock: createClockDouble(),
+    });
+
+    await expect(
+      emulator.load(createCartridge('cart-str-err'), {} as HTMLCanvasElement),
+    ).rejects.toBe('core-string-err');
+    expect(emulator.getSnapshot()).toMatchObject({
+      status: 'error',
+      error: 'core-string-err',
+    });
+  });
 });

@@ -129,4 +129,15 @@ describe('modal-pause controller', () => {
       runningIntent: false,
     });
   });
+
+  it('preserves initial runningIntent when openModal is called while another modal is already open', () => {
+    const controller = createModalPauseController();
+    controller.openModal('saves', { isRunning: true });
+    controller.openModal('help', { isRunning: false });
+
+    expect(controller.getState()).toEqual({
+      modal: 'help',
+      runningIntent: true,
+    });
+  });
 });

@@ -677,4 +677,340 @@ describe('cartridge orchestrator', () => {
     expect(notifySpy).toHaveBeenCalledWith('Load cartridge crashed', true);
     expect(orchestrator.getState().busy).toBe(false);
   });
+
+  it('setDependencies updates handlers dynamically', async () => {
+    const initialNotify = vi.fn();
+    const updatedNotify = vi.fn();
+    const updatedOpenPicker = vi.fn();
+    const orchestrator = createCartridgeOrchestrator({ notify: initialNotify });
+
+    orchestrator.setDependencies({
+      notify: updatedNotify,
+      openPicker: updatedOpenPicker,
+    });
+
+    expect(orchestrator.openCartridgePicker()).toBe(true);
+    expect(updatedOpenPicker).toHaveBeenCalledTimes(1);
+
+    const invalidFile = new File([new Uint8Array(8)], 'bad.gba');
+    expect(await orchestrator.insertCartridgeFile(invalidFile)).toBe(false);
+    expect(initialNotify).not.toHaveBeenCalled();
+    expect(updatedNotify).toHaveBeenCalled();
+  });
+
+  it('refreshLibrary reports storage errors when active and stays silent after cancel', async () => {
+    const errorSpy = vi.fn();
+    const shouldThrow = { current: true };
+    const orchestrator = createCartridgeOrchestrator({
+      storage: {
+        listCartridges: async () => {
+          if (shouldThrow.current) throw new Error('Read failed');
+          return [createMockCartridge()];
+        },
+        putCartridge: vi.fn(),
+      },
+      onStorageError: errorSpy,
+    });
+
+    await orchestrator.refreshLibrary();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+
+    orchestrator.cancel();
+    await orchestrator.refreshLibrary();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+
+    shouldThrow.current = false;
+    await orchestrator.refreshLibrary();
+    expect(orchestrator.getState().library).toEqual([]);
+  });
+
+  it('handles selectEdition in play view for unknown editions, paused switching, catalog starts, and picker fallback', async () => {
+    const emerald = createMockCartridge({
+      id: 'cart-emerald',
+      header: { ...createMockCartridge().header, editionId: 'emerald' },
+    });
+    const loadSpy = vi.fn().mockResolvedValue(undefined);
+    const releaseInputSpy = vi.fn();
+    const openPickerSpy = vi.fn();
+    const mockCanvas = { focus: vi.fn() } as unknown as HTMLCanvasElement;
+    const originalFetch = globalThis.fetch;
+
+    try {
+      globalThis.fetch = async () =>
+        new Response(fixtureGbaBytes('AXVE').buffer, {
+          headers: { 'Content-Type': 'application/octet-stream' },
+        });
+
+      const orchestrator = createCartridgeOrchestrator({
+        storage: {
+          listCartridges: async () => [emerald],
+          putCartridge: vi.fn(),
+        },
+        fetchCatalog: async () => [{ id: 'ruby', available: true, url: '/roms/ruby.gba' }],
+        emulator: {
+          getSnapshot: () => ({
+            status: 'paused',
+            cartridge: createMockCartridge({ id: 'cart-other' }),
+          }),
+          load: loadSpy,
+          resume: vi.fn(),
+          pause: vi.fn(),
+          persist: vi.fn(),
+        },
+        getCanvas: () => mockCanvas,
+        releaseInput: releaseInputSpy,
+        openPicker: openPickerSpy,
+      });
+
+      await orchestrator.initialize();
+      orchestrator.setView('play');
+
+      // Unknown edition falls back to default (emerald) and loads owned cartridge while paused
+      expect(await orchestrator.selectEdition('unknown-edition')).toBe(true);
+      expect(orchestrator.getState().selectedEditionId).toBe('emerald');
+      expect(releaseInputSpy).toHaveBeenCalledTimes(1);
+      expect(loadSpy).toHaveBeenCalledWith(emerald, mockCanvas);
+
+      // Unowned edition available in catalog delegates to startAdventure
+      expect(await orchestrator.selectEdition('ruby')).toBe(true);
+      expect(loadSpy).toHaveBeenCalledTimes(2);
+
+      // Unowned edition unavailable in catalog opens cartridge picker
+      expect(await orchestrator.selectEdition('sapphire')).toBe(true);
+      expect(openPickerSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('handles selectCartridge busy guard, missing editionId fallback, and missing canvas in play view', async () => {
+    const externalBusy = { current: true };
+    const loadSpy = vi.fn();
+    const savePrefsSpy = vi.fn();
+    const orchestrator = createCartridgeOrchestrator({
+      isExternalBusy: () => externalBusy.current,
+      savePreferences: savePrefsSpy,
+      emulator: {
+        getSnapshot: () => ({
+          status: 'paused',
+          cartridge: createMockCartridge({ id: 'cart-other' }),
+        }),
+        load: loadSpy,
+        resume: vi.fn(),
+        pause: vi.fn(),
+        persist: vi.fn(),
+      },
+      getCanvas: () => null,
+    });
+
+    const base = createMockCartridge({ id: 'cart-no-edition' });
+    const noEditionCart: Cartridge = {
+      ...base,
+      header: { ...base.header, editionId: null },
+    };
+
+    expect(await orchestrator.selectCartridge(noEditionCart)).toBe(false);
+
+    externalBusy.current = false;
+    orchestrator.setView('play');
+    expect(await orchestrator.selectCartridge(noEditionCart)).toBe(true);
+    expect(orchestrator.getState().selectedEditionId).toBe('emerald');
+    expect(savePrefsSpy).toHaveBeenCalledWith({
+      lastCartridgeId: 'cart-no-edition',
+      lastEditionId: 'emerald',
+    });
+    expect(loadSpy).not.toHaveBeenCalled();
+  });
+
+  it('covers startAdventure guards, resume branch, missing canvas, and catalog errors', async () => {
+    const emerald = createMockCartridge({
+      id: 'cart-em',
+      header: { ...createMockCartridge().header, editionId: 'emerald' },
+    });
+    const resumeSpy = vi.fn();
+    const openPickerSpy = vi.fn();
+    const notifySpy = vi.fn();
+    const scrollToSpy = vi.fn();
+    const mockCanvas = { focus: vi.fn() } as unknown as HTMLCanvasElement;
+    const externalBusy = { current: true };
+    let snapshot: { status: string; cartridge: Cartridge | null } = {
+      status: 'loading',
+      cartridge: null,
+    };
+    let canvasRef: HTMLCanvasElement | null = mockCanvas;
+    let catalog: { id: string; available: boolean; url: string | null }[] = [];
+    let library: Cartridge[] = [];
+
+    const originalWindow = globalThis.window;
+    const originalFetch = globalThis.fetch;
+
+    try {
+      vi.stubGlobal('window', { scrollTo: scrollToSpy });
+
+      const orchestrator = createCartridgeOrchestrator({
+        isExternalBusy: () => externalBusy.current,
+        storage: {
+          listCartridges: async () => library,
+          putCartridge: vi.fn(),
+        },
+        fetchCatalog: async () => catalog,
+        emulator: {
+          getSnapshot: () => snapshot,
+          load: vi.fn(),
+          resume: resumeSpy,
+          pause: vi.fn(),
+          persist: vi.fn(),
+        },
+        getCanvas: () => canvasRef,
+        openPicker: openPickerSpy,
+        notify: notifySpy,
+      });
+
+      // Busy guard
+      expect(await orchestrator.startAdventure()).toBe(false);
+      externalBusy.current = false;
+
+      // Loading guard
+      expect(await orchestrator.startAdventure()).toBe(false);
+
+      // Neither selected nor available -> open picker
+      snapshot = { status: 'idle', cartridge: null };
+      expect(await orchestrator.startAdventure()).toBe(true);
+      expect(openPickerSpy).toHaveBeenCalledTimes(1);
+
+      // Selected resolves via selectedEditionId fallback + paused -> resume + scrollTo
+      library = [emerald];
+      await orchestrator.initialize();
+      snapshot = { status: 'paused', cartridge: emerald };
+      expect(await orchestrator.startAdventure()).toBe(true);
+      expect(resumeSpy).toHaveBeenCalledTimes(1);
+      expect(mockCanvas.focus).toHaveBeenCalledWith({ preventScroll: true });
+      expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'instant' });
+
+      // Selected present but getCanvas returns null
+      snapshot = { status: 'idle', cartridge: null };
+      canvasRef = null;
+      expect(await orchestrator.startAdventure()).toBe(false);
+      expect(notifySpy).toHaveBeenCalledWith('游戏画面尚未就绪，请重试。', true);
+
+      // Local available with null URL
+      library = [];
+      catalog = [{ id: 'emerald', available: true, url: null }];
+      await orchestrator.initialize();
+      expect(await orchestrator.startAdventure()).toBe(false);
+      expect(notifySpy).toHaveBeenCalledWith('本地目录中未找到这枚卡带，请导入你的 ROM。', true);
+
+      // Local available with text/html response
+      catalog = [{ id: 'emerald', available: true, url: '/roms/emerald.gba' }];
+      await orchestrator.initialize();
+      globalThis.fetch = async () =>
+        new Response('<html>404</html>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        });
+      expect(await orchestrator.startAdventure()).toBe(false);
+      expect(notifySpy).toHaveBeenCalledWith('无法读取本地卡带，请检查文件后刷新页面。', true);
+    } finally {
+      globalThis.window = originalWindow;
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('covers insertCartridgeFile busy guard, duplicate id reuse, missing canvas, non-Error throw, and storage.persist', async () => {
+    const bytes = fixtureGbaBytes('BPEE');
+    const file = new File([bytes.buffer], 'pokeemerald.gba');
+    const existingCart = createMockCartridge({
+      id: (await (await import('../../src/lib/cartridge')).readCartridge(file)).id,
+    });
+    const notifySpy = vi.fn();
+    const putSpy = vi.fn().mockResolvedValue(undefined);
+    const persistSpy = vi.fn().mockRejectedValue(new Error('denied'));
+    const externalBusy = { current: true };
+    let canvasRef: HTMLCanvasElement | null = null;
+    const originalNavigator = globalThis.navigator;
+
+    try {
+      vi.stubGlobal('navigator', { storage: { persist: persistSpy } });
+      const orchestrator = createCartridgeOrchestrator({
+        isExternalBusy: () => externalBusy.current,
+        storage: {
+          listCartridges: async () => [existingCart],
+          putCartridge: putSpy,
+        },
+        getCanvas: () => canvasRef,
+        notify: notifySpy,
+      });
+
+      expect(await orchestrator.insertCartridgeFile(file)).toBe(false);
+      externalBusy.current = false;
+
+      // Existing cartridge reused + missing canvas error
+      expect(await orchestrator.insertCartridgeFile(file)).toBe(false);
+      expect(putSpy).toHaveBeenCalledWith(existingCart);
+      expect(notifySpy).toHaveBeenCalledWith('游戏画面尚未就绪，请重试。', true);
+
+      // Success triggers navigator.storage.persist() and swallows rejection
+      canvasRef = { focus: vi.fn() } as unknown as HTMLCanvasElement;
+      expect(await orchestrator.insertCartridgeFile(file)).toBe(true);
+      expect(persistSpy).toHaveBeenCalledTimes(1);
+
+      // Non-Error failure falls back to default notification string
+      putSpy.mockRejectedValueOnce('non-error-string');
+      expect(await orchestrator.insertCartridgeFile(file)).toBe(false);
+      expect(notifySpy).toHaveBeenCalledWith('操作失败，请检查文件或稍后重试。', true);
+    } finally {
+      vi.stubGlobal('navigator', originalNavigator);
+    }
+  });
+
+  it('covers returnToGallery guards, fullscreen exit, null cartridge, and finishCartridgePicker paused no-op', async () => {
+    const resumeSpy = vi.fn();
+    const persistSpy = vi.fn();
+    const exitFullscreenSpy = vi.fn().mockRejectedValue(new Error('exit blocked'));
+    const scrollToSpy = vi.fn();
+    const externalBusy = { current: true };
+    let status = 'loading';
+    const cartridge: Cartridge | null = null;
+
+    try {
+      vi.stubGlobal('window', { scrollTo: scrollToSpy });
+      vi.stubGlobal('document', {
+        fullscreenElement: {},
+        exitFullscreen: exitFullscreenSpy,
+      });
+
+      const orchestrator = createCartridgeOrchestrator({
+        isExternalBusy: () => externalBusy.current,
+        emulator: {
+          getSnapshot: () => ({ status, cartridge }),
+          load: vi.fn(),
+          resume: resumeSpy,
+          pause: vi.fn(),
+          persist: persistSpy,
+        },
+      });
+
+      expect(await orchestrator.returnToGallery()).toBe(false);
+      externalBusy.current = false;
+
+      // Loading / already in library view
+      expect(await orchestrator.returnToGallery()).toBe(false);
+      orchestrator.setView('play');
+      expect(await orchestrator.returnToGallery()).toBe(false);
+
+      // Paused with null cartridge exits fullscreen, skips persist, scrolls top
+      status = 'paused';
+      expect(await orchestrator.returnToGallery()).toBe(true);
+      expect(exitFullscreenSpy).toHaveBeenCalledTimes(1);
+      expect(persistSpy).not.toHaveBeenCalled();
+      expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'instant' });
+
+      // Picker opened while already paused does not resume on finish
+      expect(orchestrator.openCartridgePicker()).toBe(true);
+      orchestrator.finishCartridgePicker();
+      expect(resumeSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

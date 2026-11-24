@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { bindKey, defaultBindings, keyMap, parseBindings } from '../../src/lib/key-bindings';
+import {
+  bindKey,
+  bindingText,
+  defaultBindings,
+  keyLabel,
+  keyMap,
+  parseBindings,
+} from '../../src/lib/key-bindings';
 import { loadSettings } from '../../src/lib/settings';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -70,5 +77,13 @@ describe('persistent keyboard mappings', () => {
     }
     vi.stubGlobal('localStorage', { getItem: () => '{' });
     expect(loadSettings().bindings).toEqual(defaultBindings());
+  });
+
+  it('formats digit, numpad, named, fallback keys and binding summaries', () => {
+    expect(keyLabel('Digit5')).toBe('5');
+    expect(keyLabel('Numpad3')).toBe('Num 3');
+    expect(keyLabel('ArrowUp')).toBe('↑');
+    expect(keyLabel('F12')).toBe('F12');
+    expect(bindingText(defaultBindings(), 'Up')).toBe('↑ / W');
   });
 });
