@@ -21,7 +21,7 @@ async function settleChildren(pids, timeoutMs = 4000) {
   return pids.filter(isAlive);
 }
 
-describe('runParallelCommands runner', () => {
+describe.concurrent('runParallelCommands subprocess execution', () => {
   it('resolves on empty commands list', async () => {
     await expect(runParallelCommands([])).resolves.toBeUndefined();
   });
@@ -91,7 +91,7 @@ describe('runParallelCommands runner', () => {
             args: ['-e', 'setTimeout(() => { process.exit(0); }, 3000)'],
           },
         ],
-        { escalationGraceMs: 200 },
+        { escalationGraceMs: 100 },
       ),
     ).rejects.toThrow('exited with code 2');
   });
@@ -100,7 +100,7 @@ describe('runParallelCommands runner', () => {
     await expect(
       runParallelCommands(
         [{ command: 'node', args: ['-e', 'process.kill(process.pid, "SIGTERM")'] }],
-        { escalationGraceMs: 200 },
+        { escalationGraceMs: 100 },
       ),
     ).rejects.toThrow('terminated by signal SIGTERM');
   });
@@ -108,20 +108,20 @@ describe('runParallelCommands runner', () => {
   it('rejects when execution times out', async () => {
     await expect(
       runParallelCommands([{ command: 'node', args: ['-e', 'setTimeout(() => {}, 5000)'] }], {
-        timeoutMs: 150,
-        escalationGraceMs: 100,
+        timeoutMs: 100,
+        escalationGraceMs: 50,
       }),
-    ).rejects.toThrow('timed out after 150ms');
+    ).rejects.toThrow('timed out after 100ms');
   });
 
   it('rejects when aborted via AbortSignal', async () => {
     const controller = new AbortController();
-    setTimeout(() => controller.abort(), 100);
+    setTimeout(() => controller.abort(), 80);
 
     await expect(
       runParallelCommands([{ command: 'node', args: ['-e', 'setTimeout(() => {}, 5000)'] }], {
         signal: controller.signal,
-        escalationGraceMs: 100,
+        escalationGraceMs: 50,
       }),
     ).rejects.toThrow('aborted');
 
@@ -136,7 +136,9 @@ describe('runParallelCommands runner', () => {
 
   it('handles command spawn errors (e.g. non-existent command)', async () => {
     await expect(
-      runParallelCommands([{ command: 'non_existent_binary_xyz_123', args: [] }]),
+      runParallelCommands([{ command: 'non_existent_binary_xyz_123', args: [] }], {
+        escalationGraceMs: 50,
+      }),
     ).rejects.toThrow();
   });
 
@@ -207,7 +209,7 @@ describe('runParallelCommands runner', () => {
               ],
             },
           ],
-          { spawn: spawnWithCapture, escalationGraceMs: 300 },
+          { spawn: spawnWithCapture, escalationGraceMs: 150 },
         ),
       ).rejects.toThrow('exited with code 1');
 
@@ -280,7 +282,7 @@ describe('runParallelCommands runner', () => {
             ],
           },
         ],
-        { spawn: spawnWithCapture, signal: abortController.signal, escalationGraceMs: 300 },
+        { spawn: spawnWithCapture, signal: abortController.signal, escalationGraceMs: 150 },
       );
       runPromise.catch(() => {});
 
@@ -324,6 +326,170 @@ describe('runParallelCommands runner', () => {
     }
   });
 
+  it('preserves first error deterministically using peer readiness signal and SIGTERM exit 3', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'parallel-first-err-'));
+    const peerReadyFile = path.join(tempDir, 'peer-ready');
+
+    try {
+      await expect(
+        runParallelCommands(
+          [
+            // Peer installs SIGTERM handler that exits 3 upon receiving SIGTERM, and signals ready
+            {
+              command: 'node',
+              args: [
+                '-e',
+                `
+              import fs from 'node:fs';
+              const readyFile = process.argv[1];
+              process.on('SIGTERM', () => {
+                process.exit(3);
+              });
+              fs.writeFileSync(readyFile, 'ready');
+              setInterval(() => {}, 1000);
+              `,
+                peerReadyFile,
+              ],
+            },
+            // Job waits for peer readiness, then exits 2 (triggering cleanup SIGTERM to peer)
+            {
+              command: 'node',
+              args: [
+                '-e',
+                `
+              import fs from 'node:fs';
+              const readyFile = process.argv[1];
+              const start = Date.now();
+              while (!fs.existsSync(readyFile)) {
+                if (Date.now() - start > 4000) process.exit(1);
+                Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+              }
+              process.exit(2);
+              `,
+                peerReadyFile,
+              ],
+            },
+          ],
+          { escalationGraceMs: 100 },
+        ),
+      ).rejects.toThrow('exited with code 2');
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('honors custom cwd, env, and stdio options with real child output', async () => {
+    const { realpath } = await import('node:fs/promises');
+    const tempDir = await realpath(await mkdtemp(path.join(tmpdir(), 'parallel-cwd-env-')));
+    const outFile = path.join(tempDir, 'out.txt');
+
+    try {
+      await runParallelCommands([
+        {
+          command: 'node',
+          args: [
+            '-e',
+            `
+            import fs from 'node:fs';
+            fs.writeFileSync(process.argv[1], process.cwd() + '|' + process.env.TEST_FOO);
+            `,
+            outFile,
+          ],
+          cwd: tempDir,
+          env: { TEST_FOO: 'pokepocket-parallel-env' },
+          stdio: 'pipe',
+        },
+        {
+          command: 'node',
+          args: ['-e', 'process.exit(0)'],
+        },
+      ]);
+
+      const content = await readFile(outFile, 'utf8');
+      expect(content).toBe(`${tempDir}|pokepocket-parallel-env`);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('cleans up running peers on synchronous spawn rejection and stops scheduling subsequent jobs', async () => {
+    const { spawn } = await import('node:child_process');
+    const capturedPids = [];
+    let subsequentSpawnAttempted = false;
+
+    const callThroughSpawn = (command, args, options) => {
+      if (command === 'marker-sync-fail') {
+        throw new Error('Synchronous spawn failure injected');
+      }
+      if (command === 'marker-subsequent') {
+        subsequentSpawnAttempted = true;
+      }
+      const child = spawn(command, args, options);
+      if (typeof child.pid === 'number') {
+        capturedPids.push(child.pid);
+      }
+      return child;
+    };
+
+    try {
+      await expect(
+        runParallelCommands(
+          [
+            // Job 1: Real Node child process that stays alive
+            { command: 'node', args: ['-e', 'setInterval(() => {}, 1000)'] },
+            // Job 2: Synchronous spawn rejection
+            { command: 'marker-sync-fail', args: [] },
+            // Job 3: Subsequent job that must not be spawned
+            { command: 'marker-subsequent', args: [] },
+          ],
+          { spawn: callThroughSpawn, escalationGraceMs: 100 },
+        ),
+      ).rejects.toThrow('Synchronous spawn failure injected');
+
+      expect(subsequentSpawnAttempted).toBe(false);
+      expect(capturedPids.length).toBe(1);
+      const survivors = await settleChildren(capturedPids, 2000);
+      expect(survivors).toEqual([]);
+    } finally {
+      for (const pid of capturedPids) {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {}
+      }
+    }
+  });
+
+  it('formats error message without args array using owned executable fixtures for exit code and signal', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'parallel-exec-format-'));
+    const exit4Script = path.join(tempDir, 'exit4.sh');
+    const sigtermScript = path.join(tempDir, 'sigterm.sh');
+
+    try {
+      await writeFile(exit4Script, '#!/bin/sh\nexit 4\n');
+      await chmod(exit4Script, 0o755);
+
+      await writeFile(
+        sigtermScript,
+        '#!/bin/sh\nkill -TERM $$ 2>/dev/null || true\nwhile true; do sleep 1; done\n',
+      );
+      await chmod(sigtermScript, 0o755);
+
+      // Command without args terminating with exit code 4
+      await expect(
+        runParallelCommands([{ command: exit4Script }], { escalationGraceMs: 100 }),
+      ).rejects.toThrow(`Command "${exit4Script}" exited with code 4`);
+
+      // Command without args terminating with SIGTERM
+      await expect(
+        runParallelCommands([{ command: sigtermScript }], { escalationGraceMs: 100 }),
+      ).rejects.toThrow(`Command "${sigtermScript}" terminated by signal SIGTERM`);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('runPreCommitGate and signal policy', () => {
   it('runPreCommitGate policy runs runner, handles errors and signal interruption without modifying process.exitCode', async () => {
     const savedExitCode = process.exitCode;
     try {
@@ -689,167 +855,5 @@ describe('runParallelCommands runner', () => {
       silent: true,
     });
     expect(res).toBe(true);
-  });
-
-  it('preserves first error deterministically using peer readiness signal and SIGTERM exit 3', async () => {
-    const tempDir = await mkdtemp(path.join(tmpdir(), 'parallel-first-err-'));
-    const peerReadyFile = path.join(tempDir, 'peer-ready');
-
-    try {
-      await expect(
-        runParallelCommands(
-          [
-            // Peer installs SIGTERM handler that exits 3 upon receiving SIGTERM, and signals ready
-            {
-              command: 'node',
-              args: [
-                '-e',
-                `
-              import fs from 'node:fs';
-              const readyFile = process.argv[1];
-              process.on('SIGTERM', () => {
-                process.exit(3);
-              });
-              fs.writeFileSync(readyFile, 'ready');
-              setInterval(() => {}, 1000);
-              `,
-                peerReadyFile,
-              ],
-            },
-            // Job waits for peer readiness, then exits 2 (triggering cleanup SIGTERM to peer)
-            {
-              command: 'node',
-              args: [
-                '-e',
-                `
-              import fs from 'node:fs';
-              const readyFile = process.argv[1];
-              const start = Date.now();
-              while (!fs.existsSync(readyFile)) {
-                if (Date.now() - start > 4000) process.exit(1);
-                Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
-              }
-              process.exit(2);
-              `,
-                peerReadyFile,
-              ],
-            },
-          ],
-          { escalationGraceMs: 200 },
-        ),
-      ).rejects.toThrow('exited with code 2');
-    } finally {
-      await rm(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  it('honors custom cwd, env, and stdio options with real child output', async () => {
-    const { realpath } = await import('node:fs/promises');
-    const tempDir = await realpath(await mkdtemp(path.join(tmpdir(), 'parallel-cwd-env-')));
-    const outFile = path.join(tempDir, 'out.txt');
-
-    try {
-      await runParallelCommands([
-        {
-          command: 'node',
-          args: [
-            '-e',
-            `
-            import fs from 'node:fs';
-            fs.writeFileSync(process.argv[1], process.cwd() + '|' + process.env.TEST_FOO);
-            `,
-            outFile,
-          ],
-          cwd: tempDir,
-          env: { TEST_FOO: 'pokepocket-parallel-env' },
-          stdio: 'pipe',
-        },
-        {
-          command: 'node',
-          args: ['-e', 'process.exit(0)'],
-        },
-      ]);
-
-      const content = await readFile(outFile, 'utf8');
-      expect(content).toBe(`${tempDir}|pokepocket-parallel-env`);
-    } finally {
-      await rm(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  it('cleans up running peers on synchronous spawn rejection and stops scheduling subsequent jobs', async () => {
-    const { spawn } = await import('node:child_process');
-    const capturedPids = [];
-    let subsequentSpawnAttempted = false;
-
-    const callThroughSpawn = (command, args, options) => {
-      if (command === 'marker-sync-fail') {
-        throw new Error('Synchronous spawn failure injected');
-      }
-      if (command === 'marker-subsequent') {
-        subsequentSpawnAttempted = true;
-      }
-      const child = spawn(command, args, options);
-      if (typeof child.pid === 'number') {
-        capturedPids.push(child.pid);
-      }
-      return child;
-    };
-
-    try {
-      await expect(
-        runParallelCommands(
-          [
-            // Job 1: Real Node child process that stays alive
-            { command: 'node', args: ['-e', 'setInterval(() => {}, 1000)'] },
-            // Job 2: Synchronous spawn rejection
-            { command: 'marker-sync-fail', args: [] },
-            // Job 3: Subsequent job that must not be spawned
-            { command: 'marker-subsequent', args: [] },
-          ],
-          { spawn: callThroughSpawn, escalationGraceMs: 200 },
-        ),
-      ).rejects.toThrow('Synchronous spawn failure injected');
-
-      expect(subsequentSpawnAttempted).toBe(false);
-      expect(capturedPids.length).toBe(1);
-      const survivors = await settleChildren(capturedPids, 2000);
-      expect(survivors).toEqual([]);
-    } finally {
-      for (const pid of capturedPids) {
-        try {
-          process.kill(pid, 'SIGKILL');
-        } catch {}
-      }
-    }
-  });
-
-  it('formats error message without args array using owned executable fixtures for exit code and signal', async () => {
-    const tempDir = await mkdtemp(path.join(tmpdir(), 'parallel-exec-format-'));
-    const exit4Script = path.join(tempDir, 'exit4.sh');
-    const sigtermScript = path.join(tempDir, 'sigterm.sh');
-
-    try {
-      await writeFile(exit4Script, '#!/bin/sh\nexit 4\n');
-      await chmod(exit4Script, 0o755);
-
-      await writeFile(
-        sigtermScript,
-        '#!/bin/sh\nkill -TERM $$ 2>/dev/null || true\nwhile true; do sleep 1; done\n',
-      );
-      await chmod(sigtermScript, 0o755);
-
-      // Command without args terminating with exit code 4
-      await expect(
-        runParallelCommands([{ command: exit4Script }], { escalationGraceMs: 100 }),
-      ).rejects.toThrow(`Command "${exit4Script}" exited with code 4`);
-
-      // Command without args terminating with SIGTERM
-      await expect(
-        runParallelCommands([{ command: sigtermScript }], { escalationGraceMs: 100 }),
-      ).rejects.toThrow(`Command "${sigtermScript}" terminated by signal SIGTERM`);
-    } finally {
-      await rm(tempDir, { recursive: true, force: true });
-    }
   });
 });

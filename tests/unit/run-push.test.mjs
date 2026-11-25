@@ -498,7 +498,7 @@ const rootLog = process.env.POKEPOCKET_TEST_ROOTS_LOG;
 const pidsLog = process.env.POKEPOCKET_TEST_PIDS_LOG;
 
 const customRm = async (target, opts) => {
-  await new Promise((res) => setTimeout(res, 1300));
+  await new Promise((res) => setTimeout(res, 200));
   return baseRm(target, opts);
 };
 
@@ -519,6 +519,7 @@ const commandRunner = (cmds, opts = {}) => {
 
   return runParallelCommands(cmds, {
     ...opts,
+    escalationGraceMs: 150,
     spawn: customSpawn,
   });
 };
@@ -574,7 +575,7 @@ if (!ok && process.exitCode === undefined) {
         runner: outerParallelRunner,
         commands: testCommands,
         signal: outerController.signal,
-        escalationGraceMs: 3000,
+        escalationGraceMs: 900,
         silent: true,
         listenToProcess: false,
       });

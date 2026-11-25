@@ -3,7 +3,7 @@
  * Isolated negative/positive probes for `.husky/pre-commit` (index-snapshot L1).
  * Uses temporary git repos under TMPDIR; does not mutate the real index.
  */
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -206,15 +206,41 @@ function createFixture(repoRoot, owned, name, extra = {}) {
 
 function runHook(dir, { env = {}, timeout } = {}) {
   const scratch = scratchOf(dir);
-  return resultOf(
-    scratch,
-    spawnSync('sh', ['.husky/pre-commit'], {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn('sh', ['.husky/pre-commit'], {
       cwd: dir,
       env: { ...process.env, TMPDIR: scratch, ...env },
-      encoding: 'utf8',
-      timeout,
-    }),
-  );
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    child.stdout?.on('data', (chunk) => {
+      stdout += chunk.toString('utf8');
+    });
+    child.stderr?.on('data', (chunk) => {
+      stderr += chunk.toString('utf8');
+    });
+    const timer =
+      timeout !== undefined
+        ? setTimeout(() => {
+            timedOut = true;
+            child.kill('SIGKILL');
+          }, timeout)
+        : undefined;
+    child.once('error', (err) => {
+      if (timer) clearTimeout(timer);
+      rejectPromise(err);
+    });
+    child.once('close', (status, signal) => {
+      if (timer) clearTimeout(timer);
+      if (timedOut) {
+        rejectPromise(new Error(`pre-commit timed out after ${timeout}ms`));
+        return;
+      }
+      resolvePromise(resultOf(scratch, { status, signal, stdout, stderr }));
+    });
+  });
 }
 
 export async function runL1GateProbes(options = {}) {
@@ -228,7 +254,44 @@ export async function runL1GateProbes(options = {}) {
 
   try {
     const healthyDir = createFixture(repoRoot, owned, 'healthy');
-    const healthy = runHook(healthyDir);
+    const utDir = createFixture(repoRoot, owned, 'ut-fail', {
+      test: failingTest,
+      worktreeTest: passingTest,
+    });
+    const lintDir = createFixture(repoRoot, owned, 'lint-error', {
+      badLint: `export function gateLint() {
+  debugger;
+}
+`,
+    });
+    const typesDir = createFixture(repoRoot, owned, 'type-error', {
+      badTypes: `export const gateTypes: number = 'not-a-number';
+`,
+    });
+
+    const gapBody = `export function gateGap() {
+  if (Math.random() > 2) return 1;
+  return 0;
+}
+`;
+    const coverageVitest = gateVitest.replace(
+      'include: ["src/gate-fixture.ts"]',
+      'include: ["src/gate-fixture.ts", "src/gate-gap.ts"]',
+    );
+    const coverageDir = createFixture(repoRoot, owned, 'coverage-low', {
+      vitest: coverageVitest,
+    });
+    writeFileSync(join(coverageDir, 'src/gate-gap.ts'), gapBody);
+    execFileSync('git', ['add', '--', 'src/gate-gap.ts'], { cwd: coverageDir });
+
+    const [healthy, ut, lint, types, coverage] = await Promise.all([
+      runHook(healthyDir),
+      runHook(utDir),
+      runHook(lintDir),
+      runHook(typesDir),
+      runHook(coverageDir),
+    ]);
+
     recordProbeCheck(state, 'healthy index snapshot exits 0', healthy.status === 0, healthy.output);
     recordProbeCheck(
       state,
@@ -237,11 +300,6 @@ export async function runL1GateProbes(options = {}) {
       healthy.leftovers.join(','),
     );
 
-    const utDir = createFixture(repoRoot, owned, 'ut-fail', {
-      test: failingTest,
-      worktreeTest: passingTest,
-    });
-    const ut = runHook(utDir);
     recordProbeCheck(
       state,
       'staged unit test failure rejects',
@@ -262,13 +320,6 @@ export async function runL1GateProbes(options = {}) {
       }).includes('toBe(false)'),
     );
 
-    const lintDir = createFixture(repoRoot, owned, 'lint-error', {
-      badLint: `export function gateLint() {
-  debugger;
-}
-`,
-    });
-    const lint = runHook(lintDir);
     recordProbeCheck(
       state,
       'biome lint error rejects',
@@ -276,11 +327,6 @@ export async function runL1GateProbes(options = {}) {
       lint.output,
     );
 
-    const typesDir = createFixture(repoRoot, owned, 'type-error', {
-      badTypes: `export const gateTypes: number = 'not-a-number';
-`,
-    });
-    const types = runHook(typesDir);
     recordProbeCheck(
       state,
       'staged type error rejects',
@@ -288,21 +334,6 @@ export async function runL1GateProbes(options = {}) {
       types.output,
     );
 
-    const gapBody = `export function gateGap() {
-  if (Math.random() > 2) return 1;
-  return 0;
-}
-`;
-    const coverageVitest = gateVitest.replace(
-      'include: ["src/gate-fixture.ts"]',
-      'include: ["src/gate-fixture.ts", "src/gate-gap.ts"]',
-    );
-    const coverageDir = createFixture(repoRoot, owned, 'coverage-low', {
-      vitest: coverageVitest,
-    });
-    writeFileSync(join(coverageDir, 'src/gate-gap.ts'), gapBody);
-    execFileSync('git', ['add', '--', 'src/gate-gap.ts'], { cwd: coverageDir });
-    const coverage = runHook(coverageDir);
     recordProbeCheck(
       state,
       'coverage below floor rejects',
