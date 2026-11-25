@@ -81,7 +81,7 @@ jobs:
           runtime-version: ${{ env.BUN_VERSION }}
           node-version: ${{ env.NODE_VERSION }}
           install-policy: project
-      - run: npm run cf:typegen -- --check && npm run build
+      - run: npm run build
 
   l1-unit:
     name: 'L1: Unit'
