@@ -16,6 +16,7 @@
     "deploy:check": "npm run build && wrangler deploy --dry-run",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "test:http": "vitest run --config vitest.http.config.ts",
     "postinstall": "node scripts/setup-emulator.mjs",
     "rom:build": "node scripts/build-rom.mjs",
@@ -48,6 +49,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.8",
     "@cloudflare/vite-plugin": "1.70.1",
+    "@playwright/test": "1.65.1",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.13",

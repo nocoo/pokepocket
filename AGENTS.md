@@ -20,13 +20,14 @@ bun run test:coverage         # L1: vitest unit --coverage (alias: quality:l1)
 bun run test:l1-gate          # L1 pre-commit snapshot isolation probes
 bun run test:http             # L3: local cartridge HTTP suite
 bun run quality:l2            # L3: build + Miniflare Worker HTTP suite (:17048)
+bun run test:e2e              # L4: Playwright Chromium smoke against built Worker + assets
 bun run quality:g2            # G1/G2: osv-scanner + gitleaks
 bun run build                 # mGBA setup, ROM scan public, typecheck, vite, ROM scan dist
 bun run check:distribution    # verify no ROMs or saves in public/ or dist/
 bun run deploy:check          # build + wrangler deploy --dry-run
 ```
 
-Layout: `src/{components,lib,data}`, `worker/`, `tests/{unit,http,l2,l1-gate}`, `scripts/`.
+Layout: `src/{components,lib,data}`, `worker/`, `tests/{unit,http,l2,l1-gate,e2e}`, `scripts/`.
 
 ## Invariants
 
@@ -43,7 +44,7 @@ Layout: `src/{components,lib,data}`, `worker/`, `tests/{unit,http,l2,l1-gate}`, 
 
 Follows `system1-quality`; CI slots and pinned `base-ci` live in `.github/workflows/quality-slots.yml` (called by `.github/workflows/ci.yml`; `quality / Z1: Gate` required on `main`). Raise enforcement to match this contract; status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
 
-- **Exceptions / gaps**: `L2 Runtime` (`N/A`, covered by `L3`), `L4 E2E` (`N/A`, Playwright removed), `P1 Package` (`N/A`, private repo); `L1 Unit` enforces 80% thresholds on `src/lib/**` and `worker/**` (`vitest.config.ts` excludes View `.tsx` and `scripts/**`, with `allowOnly: false` / `passWithNoTests: false`).
+- **Exceptions / gaps**: `L2 Runtime` (`N/A`, covered by `L3`); `L4 E2E` (`enforced`, 2 Playwright Chromium smoke tests reusing `B1` `dist` via isolated Miniflare + ephemeral Access JWT); `P1 Package` (`enforced`, `check:distribution` + `wrangler deploy --dry-run` reusing `B1` `dist`); `L1 Unit` enforces 80% thresholds on `src/lib/**` and `worker/**` (`vitest.config.ts` excludes View `.tsx` and `scripts/**`, with `allowOnly: false` / `passWithNoTests: false`).
 - **Local hooks**: installed via `bun run prepare` (`.husky/`); check-only, `--no-verify` forbidden.
 - **Commit gates**: `pre-commit` snapshots staged index (`git checkout-index`, matching worktree lockfiles) and runs `bun run quality:commit` (`quality:l1` || `quality:g1`, 28s).
 - **Commit message**: `commit-msg` (`scripts/check-commit-message.mjs`) enforces all-lowercase `<type>: <desc>` headers (no scope, max 50 chars).

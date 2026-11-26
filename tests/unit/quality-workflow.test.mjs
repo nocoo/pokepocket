@@ -3,7 +3,7 @@ import path from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
-const BASE_CI_SHA = 'dc858360aa7812db61fd9d825943e4efd4dcd0e7';
+const BASE_CI_SHA = 'bfaac83b5a4d5c7ed26320bb5b09f3ca0a01932c';
 
 describe('quality and ci workflows policy', () => {
   const ciPath = path.resolve(process.cwd(), '.github/workflows/ci.yml');
@@ -66,6 +66,22 @@ describe('quality and ci workflows policy', () => {
       expect(slotsText).toContain('npm run quality:l1');
       expect(slotsText).toContain('npm run test:http && npm run quality:l2');
       expect(slotsText).toContain('npm run build');
+      expect(slotsText).toContain('bun run test:e2e');
+      expect(slotsText).toContain('wrangler deploy --dry-run -c dist/pokepocket/wrangler.json');
+
+      expect(slotsYaml.jobs['l4-e2e'].needs).toEqual(['b1-build']);
+      expect(slotsYaml.jobs['p1-package'].needs).toEqual(['b1-build']);
+
+      for (const [id, job] of Object.entries(slotsYaml.jobs)) {
+        if (id === 'l2-runtime') continue;
+        expect(job.outputs?.['tested-sha'], `${id} must emit tested-sha`).toBeDefined();
+      }
+
+      const gateStep = slotsYaml.jobs['z1-gate'].steps[0];
+      expect(gateStep.uses).toContain(`nocoo/base-ci/.github/actions/z1-gate@${BASE_CI_SHA}`);
+      expect(gateStep.with['required-jobs']).toContain('l4-e2e');
+      expect(gateStep.with['required-jobs']).toContain('p1-package');
+      expect(gateStep.with['skipped-jobs']).toContain('l2-runtime');
     });
   });
 });
