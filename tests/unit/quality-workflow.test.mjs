@@ -3,7 +3,7 @@ import path from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
-const BASE_CI_SHA = 'bfaac83b5a4d5c7ed26320bb5b09f3ca0a01932c';
+const BASE_CI_SHA = '98fc023423f82b010f17e0ebbc9dd580fe68736a';
 
 describe('quality and ci workflows policy', () => {
   const ciPath = path.resolve(process.cwd(), '.github/workflows/ci.yml');

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
-const BASE_CI_SHA = 'bfaac83b5a4d5c7ed26320bb5b09f3ca0a01932c';
+const BASE_CI_SHA = '98fc023423f82b010f17e0ebbc9dd580fe68736a';
 const SHARED_PIN = /^nocoo\/base-ci\/\.github\/workflows\/deploy-worker\.yml@[a-f0-9]{40}$/;
 const SHA40 = /[a-f0-9]{40}/;
 
@@ -56,7 +56,6 @@ describe('release workflow definition and contract', () => {
   it('passes production environment and wrangler secrets explicitly, never inherit', () => {
     expect(deployJob.secrets).toEqual({
       CLOUDFLARE_API_TOKEN: '${{ ' + 'secrets.CLOUDFLARE_API_TOKEN }}',
-      CLOUDFLARE_ACCOUNT_ID: '${{ ' + 'secrets.CLOUDFLARE_ACCOUNT_ID }}',
     });
     expect(JSON.stringify(deployJob)).not.toContain('secrets: inherit');
   });
