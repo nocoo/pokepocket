@@ -3,7 +3,7 @@ import path from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
-const BASE_CI_SHA = '98fc023423f82b010f17e0ebbc9dd580fe68736a';
+const BASE_CI_SHA = 'e5876a604547b1ddb0916f16dd841a4f832609a0';
 const SHARED_PIN = /^nocoo\/base-ci\/\.github\/workflows\/deploy-worker\.yml@[a-f0-9]{40}$/;
 const SHA40 = /[a-f0-9]{40}/;
 
