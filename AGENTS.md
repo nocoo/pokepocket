@@ -38,11 +38,11 @@ Layout: `src/{components,lib,data}`, `worker/`, `tests/{unit,http,l2,l1-gate,e2e
 - `package.json` `"version"` (`X.Y.Z`, displayed `vX.Y.Z`) is authoritative; regenerate `worker-configuration.d.ts` (`bun run cf:typegen`) after every `wrangler` upgrade.
 - Never kill unowned Vite/workerd processes; Git test fixtures must strip inherited `GIT_*` env vars; use local Miniflare for HTTP gates and never deploy remote `-test`.
 - Do not amend or rewrite handed-off commits, and leave unassigned paths untouched.
-- Production release (`bun run deploy` or `v*.*.*` tag via `.github/workflows/release.yml`, owner Access/API token, `verify:access` + `verify:release`, see [README.md](README.md)) requires authorization.
+- Production release (`bun run deploy` or `main` push / `workflow_dispatch` `deploy=true` via `.github/workflows/pipeline.yml`, owner Access/API token, `verify:release`, see [README.md](README.md)) requires authorization.
 
 ## Quality & Local Gates
 
-Follows `system1-quality`; CI slots and pinned `base-ci` live in `.github/workflows/quality-slots.yml` (called by `.github/workflows/ci.yml`; `quality / Z1: Gate` required on `main`). Raise enforcement to match this contract; status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
+Follows `system1-quality`; CI slots and pinned `base-ci` live in `.github/workflows/quality-slots.yml` (called alongside `D1`–`D5` Worker deploy reusing `B1` `dist-${{ github.sha }}` by `.github/workflows/pipeline.yml`; `quality / Z1: Gate` required on `main`). Raise enforcement to match this contract; status vocabulary: `enforced`, `planned`, `manual`, `N/A`.
 
 - **Exceptions / gaps**: `L2 Runtime` (`N/A`, covered by `L3`); `L4 E2E` (`enforced`, 2 Playwright Chromium smoke tests reusing `B1` `dist` via isolated Miniflare + ephemeral Access JWT); `P1 Package` (`enforced`, `check:distribution` + `wrangler deploy --dry-run` reusing `B1` `dist`); `L1 Unit` enforces 80% thresholds on `src/lib/**` and `worker/**` (`vitest.config.ts` excludes View `.tsx` and `scripts/**`, with `allowOnly: false` / `passWithNoTests: false`).
 - **Local hooks**: installed via `bun run prepare` (`.husky/`); check-only, `--no-verify` forbidden.

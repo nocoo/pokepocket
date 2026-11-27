@@ -3,22 +3,24 @@ import path from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
-const BASE_CI_SHA = 'e5876a604547b1ddb0916f16dd841a4f832609a0';
+const BASE_CI_SHA = '3703a073693d598159e87f77f99587e586c14cfe';
 
-describe('quality and ci workflows policy', () => {
-  const ciPath = path.resolve(process.cwd(), '.github/workflows/ci.yml');
+describe('quality and pipeline workflows policy', () => {
+  const pipelinePath = path.resolve(process.cwd(), '.github/workflows/pipeline.yml');
   const slotsPath = path.resolve(process.cwd(), '.github/workflows/quality-slots.yml');
-  const ciYaml = load(readFileSync(ciPath, 'utf8'));
+  const pipelineYaml = load(readFileSync(pipelinePath, 'utf8'));
   const slotsYaml = load(readFileSync(slotsPath, 'utf8'));
-  const qualityJob = ciYaml.jobs.quality;
+  const qualityJob = pipelineYaml.jobs.quality;
 
-  it('does not restore the removed local quality.yml duplicate', () => {
+  it('does not keep retired ci.yml, release.yml, or local quality.yml', () => {
+    expect(existsSync(path.resolve(process.cwd(), '.github/workflows/ci.yml'))).toBe(false);
+    expect(existsSync(path.resolve(process.cwd(), '.github/workflows/release.yml'))).toBe(false);
     expect(existsSync(path.resolve(process.cwd(), '.github/workflows/quality.yml'))).toBe(false);
   });
 
-  describe('ci.yml caller workflow', () => {
-    it('has minimum read-only permissions and no deployment secrets', () => {
-      expect(ciYaml.permissions).toEqual({ contents: 'read', actions: 'read' });
+  describe('pipeline.yml quality caller job', () => {
+    it('has minimum read-only permissions and no deployment secrets on quality', () => {
+      expect(pipelineYaml.permissions).toEqual({ contents: 'read', actions: 'read' });
       expect(qualityJob.secrets).toBeUndefined();
     });
 
@@ -26,21 +28,22 @@ describe('quality and ci workflows policy', () => {
       expect(qualityJob.uses).toBe('./.github/workflows/quality-slots.yml');
     });
 
-    it('does not pass Cloudflare secrets into CI', () => {
-      const dump = JSON.stringify(ciYaml.jobs);
-      expect(dump).not.toContain('CLOUDFLARE_API_TOKEN');
-      expect(dump).not.toContain('CLOUDFLARE_ACCOUNT_ID');
-      expect(dump).not.toContain('secrets: inherit');
+    it('does not pass secrets into quality job or use secrets: inherit', () => {
+      const qualityDump = JSON.stringify(qualityJob);
+      expect(qualityDump).not.toContain('CLOUDFLARE_API_TOKEN');
+      expect(qualityDump).not.toContain('CLOUDFLARE_ACCOUNT_ID');
+      expect(JSON.stringify(pipelineYaml.jobs)).not.toContain('secrets: inherit');
     });
 
-    it('triggers on push, pull_request, and workflow_dispatch', () => {
-      expect(ciYaml.on.push?.branches).toContain('main');
-      expect(ciYaml.on.pull_request?.branches).toContain('main');
-      expect(ciYaml.on.workflow_dispatch).toBeDefined();
+    it('triggers on main push, pull_request, and workflow_dispatch deploy input without tags', () => {
+      expect(pipelineYaml.on.push?.branches).toContain('main');
+      expect(pipelineYaml.on.push?.tags).toBeUndefined();
+      expect(pipelineYaml.on.pull_request).toBeDefined();
+      expect(pipelineYaml.on.workflow_dispatch?.inputs?.deploy?.type).toBe('boolean');
     });
 
-    it('calls only quality-slots.yml (no standalone test-job or workflow-lint jobs)', () => {
-      expect(Object.keys(ciYaml.jobs)).toEqual(['quality']);
+    it('defines quality and deploy jobs only', () => {
+      expect(Object.keys(pipelineYaml.jobs)).toEqual(['quality', 'deploy']);
     });
 
     it('defines all v1.3.0 quality slots with pinned base-ci actions', () => {

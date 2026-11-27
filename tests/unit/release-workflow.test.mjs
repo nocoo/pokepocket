@@ -3,32 +3,17 @@ import path from 'node:path';
 import { load } from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 
-const BASE_CI_SHA = 'e5876a604547b1ddb0916f16dd841a4f832609a0';
+const BASE_CI_SHA = '3703a073693d598159e87f77f99587e586c14cfe';
 const SHARED_PIN = /^nocoo\/base-ci\/\.github\/workflows\/deploy-worker\.yml@[a-f0-9]{40}$/;
 const SHA40 = /[a-f0-9]{40}/;
 
-describe('release workflow definition and contract', () => {
-  const releasePath = path.resolve(process.cwd(), '.github/workflows/release.yml');
-  const releaseYaml = load(readFileSync(releasePath, 'utf8'));
-  const deployJob = releaseYaml.jobs.deploy;
+describe('pipeline deploy workflow definition and contract', () => {
+  const pipelinePath = path.resolve(process.cwd(), '.github/workflows/pipeline.yml');
+  const pipelineYaml = load(readFileSync(pipelinePath, 'utf8'));
+  const deployJob = pipelineYaml.jobs.deploy;
 
-  it('triggers on tag push, CI workflow_run completed on main, and workflow_dispatch with tag input', () => {
-    expect(releaseYaml.on.push?.tags).toContain('v*.*.*');
-    expect(releaseYaml.on.workflow_run?.workflows).toContain('CI');
-    expect(releaseYaml.on.workflow_run?.types).toContain('completed');
-    expect(releaseYaml.on.workflow_run?.branches).toContain('main');
-    expect(releaseYaml.on.workflow_dispatch?.inputs?.tag).toBeDefined();
-    expect(releaseYaml.on.workflow_dispatch?.inputs?.tag?.required).toBe(true);
-  });
-
-  it('grants contents read and actions read for source-proof, nothing write', () => {
-    expect(releaseYaml.permissions).toEqual({ contents: 'read', actions: 'read' });
-  });
-
-  it('does not keep the retired resolve -> quality -> deploy caller jobs', () => {
-    expect(Object.keys(releaseYaml.jobs)).toEqual(['deploy']);
-    expect(releaseYaml.jobs.resolve).toBeUndefined();
-    expect(releaseYaml.jobs.quality).toBeUndefined();
+  it('grants contents read and actions read, nothing write', () => {
+    expect(pipelineYaml.permissions).toEqual({ contents: 'read', actions: 'read' });
   });
 
   it('pins immutable shared deploy-worker.yml by full commit SHA', () => {
@@ -37,15 +22,17 @@ describe('release workflow definition and contract', () => {
     expect(deployJob.uses).not.toMatch(/@(main|master|latest|v\d)/);
   });
 
-  it('proves a successful CI run by path, name, and string run id', () => {
-    expect(deployJob.with['expected-workflow-path']).toBe('.github/workflows/ci.yml');
-    expect(deployJob.with['expected-workflow-name']).toBe('CI');
-    expect(String(deployJob.with['source-run-id'])).toContain('github.event.workflow_run.id');
-    expect(String(deployJob.with['source-run-id'])).toContain("format('{0}'");
+  it('gates deploy behind quality on main push or explicit dispatch', () => {
+    expect(deployJob.needs).toEqual(['quality']);
+    expect(deployJob.if).toContain("github.ref == 'refs/heads/main'");
+    expect(deployJob.if).toContain('inputs.deploy == true');
   });
 
-  it('keeps require-fresh-main fail-closed for continuous deploys', () => {
-    expect(deployJob.with['require-fresh-main']).toBe(true);
+  it('reuses the same-run B1 artifact with zero rebuild', () => {
+    expect(deployJob.with['artifact-name']).toBe('dist-$' + '{{ github.sha }}');
+    expect(deployJob.with['artifact-path']).toBe('dist');
+    expect(deployJob.with['wrangler-config']).toBe('dist/pokepocket/wrangler.json');
+    expect(deployJob.with['build-command']).toBeUndefined();
   });
 
   it('serializes production deploys without cancelling in-progress runs', () => {
@@ -60,24 +47,12 @@ describe('release workflow definition and contract', () => {
     expect(JSON.stringify(deployJob)).not.toContain('secrets: inherit');
   });
 
-  it('skips failed CI workflow_run conclusions', () => {
-    expect(deployJob.if).toContain("github.event.workflow_run.conclusion == 'success'");
-  });
-
-  it('builds and verifies access before deploy, then verifies live release', () => {
-    expect(deployJob.with['build-command']).toContain('bun run build');
-    expect(deployJob.with['build-command']).toContain('bun run verify:access');
+  it('verifies live release and access boundaries', () => {
     expect(deployJob.with['verify-command']).toBe('bun run verify:release');
   });
 
-  it('matches package version on tag deploys', () => {
-    expect(String(deployJob.with['package-version-match'])).toContain(
-      "github.event_name != 'workflow_run'",
-    );
-  });
-
   it('does not embed provider composite pins or recreate local quality.yml', () => {
-    const text = readFileSync(releasePath, 'utf8');
+    const text = readFileSync(pipelinePath, 'utf8');
     expect(text).not.toContain('./.github/workflows/quality.yml');
     expect(text).not.toContain('scripts/resolve-release.mjs');
     expect(SHA40.test(deployJob.uses.split('@')[1])).toBe(true);
