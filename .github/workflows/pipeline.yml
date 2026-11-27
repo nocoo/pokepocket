@@ -1,0 +1,41 @@
+name: Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy after quality gate passes
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  quality:
+    uses: ./.github/workflows/quality-slots.yml
+
+  deploy:
+    name: Deploy Worker
+    needs: [quality]
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.deploy == true)
+    uses: nocoo/base-ci/.github/workflows/deploy-worker.yml@3703a073693d598159e87f77f99587e586c14cfe # v2026.24
+    with:
+      runtime-version: '1.4.0'
+      node-version: '26.12.1'
+      install-policy: 'project'
+      artifact-name: dist-${{ github.sha }}
+      artifact-path: dist
+      wrangler-config: dist/pokepocket/wrangler.json
+      environment: production
+      concurrency-group: deploy-pokepocket-production
+      timeout-minutes: 15
+      verify-command: 'bun run verify:release'
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
