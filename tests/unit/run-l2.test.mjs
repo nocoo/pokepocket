@@ -574,4 +574,16 @@ describe('run-l2 gate runner policies', () => {
       { command: 'npm', args: ['run', 'build'] },
     ]);
   });
+
+  it('runL2Default skips build when skipBuild is true (CI reusing B1 artifact)', async () => {
+    const executed = [];
+    const commandRunner = async (commands) => {
+      executed.push(commands[0]);
+    };
+
+    await runL2Default({ commandRunner, skipBuild: true });
+    expect(executed.map((c) => ({ command: c.command, args: c.args }))).toEqual([
+      { command: 'npx', args: ['vitest', 'run', '--config', 'vitest.l2.config.ts'] },
+    ]);
+  });
 });

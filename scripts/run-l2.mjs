@@ -87,9 +87,12 @@ export async function runL2Gate(options = {}) {
 export async function runL2Default(options = {}) {
   const commandRunner = options.commandRunner ?? runParallelCommands;
   const commandOptions = { signal: options.signal };
+  const skipBuild = options.skipBuild ?? process.env.POKEPOCKET_L2_SKIP_BUILD === '1';
 
-  // Step 1: Sequential build of production bundle
-  await commandRunner([{ command: 'npm', args: ['run', 'build'] }], commandOptions);
+  // Step 1: Sequential build of production bundle (skipped when B1 artifact is already staged)
+  if (!skipBuild) {
+    await commandRunner([{ command: 'npm', args: ['run', 'build'] }], commandOptions);
+  }
 
   // Step 2: Run L2 test suite against built bundle with owned resource root passed to child env
   const childEnv = options.resourceRoot
